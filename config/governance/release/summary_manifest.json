@@ -1,0 +1,40 @@
+{
+  "schema_version": 2,
+  "paths": {
+    "config_summary": "host_control_plane:setup/config_summary.json",
+    "deployment_acceptance_state": "host_control_plane:setup/deployment_acceptance.json",
+    "ingress_boundary_evidence": "host_control_plane:setup/ingress_boundary_evidence.json",
+    "latest_json": "runtime_path:one_click_deploy_latest_summary_json",
+    "latest_markdown": "runtime_path:one_click_deploy_latest_summary_markdown"
+  },
+  "summary_fields": [
+    "deploy_run",
+    "fixed_latest_summary",
+    "deploy_env_summary",
+    "private_ingress",
+    "selected_images",
+    "ingress_boundary_evidence",
+    "deployment_acceptance",
+    "release_status",
+    "next_steps"
+  ],
+  "profiles": {
+    "one_click_deploy": {
+      "latest_json": "runtime_path:one_click_deploy_latest_summary_json",
+      "latest_markdown": "runtime_path:one_click_deploy_latest_summary_markdown",
+      "producers": [
+        "bash ./scripts/setup/one_click_deploy.sh",
+        "bash ./scripts/runtime/run_openclaw_python_tool.sh setup flow deploy-success write-success-summary",
+        "bash ./scripts/runtime/run_openclaw_python_tool.sh setup flow deploy-failure write-failure-summary"
+      ]
+    },
+    "one_click_test_full": {
+      "latest_json": "runtime_path:one_click_test_full_latest_summary_json",
+      "latest_markdown": "runtime_path:one_click_test_full_latest_summary_markdown",
+      "producers": [
+        "bash ./scripts/setup/one_click_test_full.sh",
+        "bash ./scripts/runtime/run_openclaw_python_tool.sh full-test-surface write-summary"
+      ]
+    }
+  }
+}

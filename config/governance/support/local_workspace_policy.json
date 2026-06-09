@@ -1,0 +1,86 @@
+{
+  "schemaVersion": 1,
+  "targets": [
+    {
+      "id": "idea_project",
+      "path": ".idea",
+      "class": "disposable_local",
+      "cleanupByDefault": true
+    },
+    {
+      "id": "artifacts_root",
+      "path": "artifacts",
+      "class": "disposable_local",
+      "cleanupByDefault": true
+    },
+    {
+      "id": "tmp_root",
+      "path": "tmp",
+      "class": "disposable_local",
+      "cleanupByDefault": true
+    },
+    {
+      "id": "host_state_root",
+      "truthRef": "host_state_root",
+      "class": "managed_runtime_state",
+      "cleanupByDefault": false
+    },
+    {
+      "id": "deploy_nginx_certs",
+      "path": "deploy/nginx/certs",
+      "class": "managed_runtime_state",
+      "cleanupByDefault": false
+    },
+    {
+      "id": "image_artifacts_cache",
+      "path": "state/image_artifacts",
+      "class": "managed_input_cache",
+      "cleanupByDefault": false
+    },
+    {
+      "id": "image_pull_cache",
+      "path": "state/image_pull",
+      "class": "disposable_runtime_cache",
+      "cleanupByDefault": true
+    },
+    {
+      "id": "remote_first_install_state",
+      "path": "state/remote_first_install",
+      "class": "disposable_runtime_cache",
+      "cleanupByDefault": true
+    },
+    {
+      "id": "release_history_cache",
+      "path": "release/history",
+      "class": "disposable_runtime_cache",
+      "cleanupByDefault": true
+    }
+  ],
+  "derivedGlobs": [
+    "**/__pycache__/**",
+    "*.pyc",
+    "*.pyo",
+    "**/.pytest_cache/**",
+    "**/.mypy_cache/**",
+    "**/.ruff_cache/**",
+    "**/.nox/**",
+    "**/.tox/**",
+    "**/.cache/**",
+    "**/htmlcov/**",
+    "**/dist/**",
+    "**/build/**",
+    "**/.venv/**",
+    "**/venv/**",
+    "**/extension_envs/**",
+    "**/wheelhouse/extensions/**",
+    "**/pip-cache/**",
+    ".coverage",
+    ".coverage.*",
+    "python/tmp/**",
+    "agent/extensions/*/python/tmp/**",
+    ".DS_Store",
+    "Thumbs.db",
+    "tmp-*",
+    "tmp-*/**"
+  ]
+}

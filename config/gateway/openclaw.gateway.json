@@ -1,0 +1,38 @@
+{
+  "browser": {
+    "defaultProfile": "openclaw",
+    "ssrfPolicy": {
+      "dangerouslyAllowPrivateNetwork": false,
+      "allowedHostnames": [
+        "localhost"
+      ],
+      "hostnameAllowlist": []
+    }
+  },
+  "gateway": {
+    "mode": "local",
+    "auth": {
+      "mode": "token",
+      "token": "${OPENCLAW_GATEWAY_TOKEN}",
+      "rateLimit": {
+        "maxAttempts": 10,
+        "windowMs": 60000,
+        "lockoutMs": 300000,
+        "exemptLoopback": true
+      }
+    },
+    "controlUi": {
+      "allowedOrigins": [
+        "https://${OPENCLAW_TLS_CN}"
+      ]
+    },
+    "bind": "lan"
+  },
+  "plugins": {
+    "entries": {
+      "browser": {
+        "enabled": true
+      }
+    }
+  }
+}

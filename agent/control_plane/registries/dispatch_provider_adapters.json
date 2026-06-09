@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "adapters": [
+    {
+      "id": "synthetic_webhook",
+      "title": "Synthetic Webhook",
+      "description": "基座发布面的 synthetic provider adapter，用于验证 webhook 分发、签名和响应评估合同。",
+      "transport": "webhook",
+      "module": "openclaw.control_plane.dispatch.provider_adapters.synthetic_webhook",
+      "endpointValidator": "validate_endpoint",
+      "payloadBuilder": "build_message_payload",
+      "responseEvaluator": "evaluate_delivery_response"
+    }
+  ]
+}

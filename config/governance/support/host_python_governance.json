@@ -1,0 +1,148 @@
+{
+  "schemaVersion": 1,
+  "mode": "enforce",
+  "baselinePath": "config/governance/validation/host_python_baseline.json",
+  "shell_scan_manifest": {
+    "self": [
+      "scripts/runtime/verify_python_runtime_container.sh",
+      "scripts/lib/python_runtime_guard.sh",
+      "tests/smoke/helpers/docker"
+    ],
+    "skip": [
+      "scripts/doctor/check_host_python_governance.sh",
+      "scripts/runtime/run_python_container.sh",
+      "scripts/lib/run_static_python.sh",
+      "scripts/setup/fix_permissions.sh",
+      "scripts/lib/image_env.sh"
+    ]
+  },
+  "deleted_stub_ref_scan_roots": [
+    "README.md",
+    "config",
+    "scripts",
+    "deploy",
+    "tests",
+    "tools",
+    "docs/README.md",
+    "docs/architecture",
+    "docs/getting-started",
+    "docs/operations"
+  ],
+  "agent_launcher_manifest": [],
+  "agent_readme_manifest": [],
+  "runner_binding_manifest": [
+    {
+      "rootVar": "ROOT_DIR",
+      "relPath": "scripts/doctor/check_openclaw_official_runtime_contract.sh"
+    },
+    {
+      "rootVar": "ROOT_DIR",
+      "relPath": "scripts/runtime/run_openclaw_python_tool.sh"
+    },
+    {
+      "rootVar": "ROOT_DIR",
+      "relPath": "scripts/runtime/sync_workspace_templates.sh"
+    }
+  ],
+  "runner_surface_literal_manifest": [
+    {
+      "relPath": "scripts/setup/update_dispatch_target_lifecycle.sh",
+      "literal": "PYTHON_RUNNER=\"${PYTHON_RUNNER:-$ROOT_DIR/scripts/runtime/run_python_container.sh}\""
+    },
+    {
+      "relPath": "scripts/setup/lib/full_test_group_registry.sh",
+      "literal": "local python_runner=\"${PYTHON_RUNNER:-$FULL_TEST_GROUP_REGISTRY_ROOT/scripts/runtime/run_python_container.sh}\""
+    },
+    {
+      "relPath": "scripts/setup/lib/full_test_group_runner.sh",
+      "literal": "local config_path='' item='' python_runner=\"${PYTHON_RUNNER:-$ROOT_DIR/scripts/runtime/run_python_container.sh}\""
+    },
+    {
+      "relPath": "scripts/doctor/check_model_profile_connectivity.sh",
+      "literal": "python_runner=\"${PYTHON_RUNNER:-$ROOT_DIR/scripts/runtime/run_python_container.sh}\""
+    },
+    {
+      "relPath": "scripts/runtime/verify_python_runtime_container.sh",
+      "literal": "bash \"$ROOT_DIR/scripts/runtime/run_python_container.sh\" --workdir \"$ROOT_DIR\" -- -"
+    },
+    {
+      "relPath": "scripts/doctor/check_host_python_governance.sh",
+      "literal": "exec bash \"$ROOT_DIR/scripts/runtime/run_python_container.sh\" \\"
+    },
+    {
+      "relPath": "scripts/images/check_openclaw_overlay_contract.sh",
+      "literal": "exec bash \"$ROOT_DIR/scripts/runtime/run_python_container.sh\" \\"
+    },
+    {
+      "relPath": "scripts/lib/host_python_shell_guard.sh",
+      "literal": "RUNNER=(bash \"$ROOT_DIR/scripts/runtime/run_python_container.sh\" --workdir \"$ROOT_DIR\" \"${REPO_PYTHON_ENV_ARGS[@]}\")"
+    },
+    {
+      "relPath": "scripts/lib/control_plane_config_paths.sh",
+      "literal": "bash \"$OPENCLAW_CONTROL_PLANE_CONFIG_PATHS_ROOT/scripts/runtime/run_python_container.sh\""
+    },
+    {
+      "relPath": "scripts/lib/repo_python_env.sh",
+      "literal": "bash \"$OPENCLAW_REPO_PYTHON_ENV_ROOT_DIR/scripts/runtime/run_python_container.sh\""
+    },
+    {
+      "relPath": "scripts/setup/lib/setup_failure_surface_shell.sh",
+      "literal": "printf '%s\\n' \"${PYTHON_RUNNER:-$SETUP_FAILURE_SURFACE_LIB_ROOT/scripts/runtime/run_python_container.sh}\""
+    }
+  ],
+  "runner_surface_allowlist": [
+    "scripts/lib/python_runtime_guard.sh",
+    "scripts/lib/run_static_python.sh",
+    "scripts/runtime/run_python_container.sh",
+    "scripts/setup/apply_ingress_boundary_rules.sh",
+    "scripts/setup/one_click_deploy.sh",
+    "scripts/doctor/check_ingress_boundary_evidence.sh",
+    "scripts/doctor/check_runtime_compose_contract.sh",
+    "scripts/gateway/run_shadow_upgrade_verify.sh",
+    "scripts/images/check_deployment_image_contract.sh",
+    "scripts/runtime/check_runtime_evidence_prereqs.sh",
+    "scripts/runtime/runtime_target_lib.sh",
+    "scripts/setup/render_local_ro_mirror.sh"
+  ],
+  "doc_scan_roots": [
+    "README.md",
+    "config/governance/docs",
+    "docs/README.md",
+    "docs/architecture",
+    "docs/getting-started",
+    "docs/operations",
+    "release",
+    "scripts/README.md",
+    "tools",
+    "agent/extensions"
+  ],
+  "doc_category_roots": {
+    "generated_doc_example": [
+      "config/governance/docs",
+      "scripts/README.md"
+    ],
+    "extension_doc_example": [
+      "agent/extensions"
+    ]
+  },
+  "shell_indirect_patterns": [
+    {
+      "id": "python_bin_helper_resolution",
+      "pattern": "\\$\\((openclaw_repo_default_python_bin|openclaw_local_workspace_policy_python_bin|openclaw_control_plane_python_bin)\\)"
+    },
+    {
+      "id": "python_bin_exec_upper",
+      "pattern": "(^|[[:space:]])(exec[[:space:]]+)?\\\"?\\$\\{?PYTHON_BIN\\}?\\\"?[[:space:]]+-B([[:space:]]|$)"
+    },
+    {
+      "id": "python_bin_exec_lower",
+      "pattern": "(^|[[:space:]])(exec[[:space:]]+)?\\\"?\\$\\{?python_bin\\}?\\\"?[[:space:]]+-B([[:space:]]|$)"
+    }
+  ],
+  "doc_command_policy": {
+    "allowed_families": [
+      "repo_host",
+      "unittest_openclaw"
+    ]
+  }
+}

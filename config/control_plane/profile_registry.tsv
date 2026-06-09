@@ -1,0 +1,3 @@
+# profile_id	config_path
+base	config/control_plane/service.json
+agent_platform	config/control_plane/profiles/agent_platform.service.json

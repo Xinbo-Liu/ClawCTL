@@ -1,0 +1,441 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://openclaw.local/control-plane/model.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "id",
+    "title",
+    "activation",
+    "provider",
+    "channel",
+    "modelRef",
+    "capabilities",
+    "timeoutPolicy",
+    "costPolicy",
+    "rateLimits"
+  ],
+  "allOf": [
+    {
+      "if": {
+        "required": [
+          "channel"
+        ],
+        "properties": {
+          "channel": {
+            "required": [
+              "kind"
+            ],
+            "properties": {
+              "kind": {
+                "const": "http"
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "channel": {
+            "properties": {
+              "api": {
+                "enum": [
+                  "openai-chat-completions",
+                  "anthropic-messages",
+                  "ollama-chat"
+                ]
+              }
+            },
+            "required": [
+              "baseUrlEnv"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "channel"
+        ],
+        "properties": {
+          "channel": {
+            "required": [
+              "kind"
+            ],
+            "properties": {
+              "kind": {
+                "const": "local_process"
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "channel": {
+            "required": [
+              "localProcess"
+            ],
+            "properties": {
+              "api": {
+                "const": "local-process-json"
+              },
+              "localProcess": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "command"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "commandEnv"
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "properties": {
+    "schemaVersion": {
+      "type": "integer",
+      "const": 1
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9_]+$",
+      "minLength": 3
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "activation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "enabledExtensionIds"
+      ],
+      "properties": {
+        "enabledExtensionIds": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "provider": {
+      "type": "string",
+      "minLength": 1
+    },
+    "channel": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "http",
+            "local_process"
+          ]
+        },
+        "api": {
+          "type": "string",
+          "enum": [
+            "openai-chat-completions",
+            "anthropic-messages",
+            "ollama-chat",
+            "local-process-json"
+          ]
+        },
+        "baseUrlEnv": {
+          "type": "string",
+          "minLength": 1
+        },
+        "apiKeyEnv": {
+          "type": "string",
+          "minLength": 1
+        },
+        "auth": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "none",
+                "api_key"
+              ]
+            },
+            "required": {
+              "type": "boolean"
+            }
+          }
+        },
+        "localProcess": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "command": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "commandEnv": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      }
+    },
+    "modelRef": {
+      "type": "string",
+      "minLength": 1
+    },
+    "modelRefEnv": {
+      "type": "string",
+      "minLength": 1
+    },
+    "capabilities": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "reasoning",
+        "toolUse",
+        "vision",
+        "contextWindow",
+        "maxTokens"
+      ],
+      "properties": {
+        "reasoning": {
+          "type": "boolean"
+        },
+        "toolUse": {
+          "type": "boolean"
+        },
+        "vision": {
+          "type": "boolean"
+        },
+        "contextWindow": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "maxTokens": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "timeoutPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "requestTimeoutSeconds",
+        "jobDefaultTimeoutSeconds"
+      ],
+      "properties": {
+        "requestTimeoutSeconds": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "jobDefaultTimeoutSeconds": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "rateLimits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "requestsPerMinute",
+        "maxConcurrentRequests"
+      ],
+      "properties": {
+        "requestsPerMinute": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "maxConcurrentRequests": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "costPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "currency",
+        "billingMode",
+        "pricingSource",
+        "tokenRates",
+        "estimation",
+        "budget",
+        "riskPolicy"
+      ],
+      "properties": {
+        "currency": {
+          "type": "string",
+          "minLength": 1
+        },
+        "billingMode": {
+          "type": "string",
+          "enum": [
+            "pay_as_you_go",
+            "subscription_quota",
+            "self_hosted",
+            "not_applicable"
+          ]
+        },
+        "pricingSource": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind"
+          ],
+          "properties": {
+            "kind": {
+              "type": "string",
+              "minLength": 1
+            },
+            "url": {
+              "type": "string",
+              "minLength": 1
+            },
+            "checkedAt": {
+              "type": "string",
+              "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+            },
+            "notes": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        },
+        "tokenRates": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "inputPerMillionTokens",
+            "outputPerMillionTokens"
+          ],
+          "properties": {
+            "inputPerMillionTokens": {
+              "type": "number",
+              "minimum": 0
+            },
+            "outputPerMillionTokens": {
+              "type": "number",
+              "minimum": 0
+            },
+            "promptCacheReadPerMillionTokens": {
+              "type": "number",
+              "minimum": 0
+            },
+            "promptCacheWritePerMillionTokens": {
+              "type": "number",
+              "minimum": 0
+            }
+          }
+        },
+        "estimation": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "inputCharsPerToken",
+            "outputCharsPerToken"
+          ],
+          "properties": {
+            "inputCharsPerToken": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "outputCharsPerToken": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            }
+          }
+        },
+        "budget": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "enforcement",
+            "maxEstimatedCostPerCall",
+            "dailySoftLimit",
+            "dailyHardLimit",
+            "maxEstimatedInputTokensPerCall",
+            "maxEstimatedOutputTokensPerCall"
+          ],
+          "properties": {
+            "enforcement": {
+              "type": "string",
+              "enum": [
+                "off",
+                "audit",
+                "hard"
+              ]
+            },
+            "maxEstimatedCostPerCall": {
+              "type": "number",
+              "minimum": 0
+            },
+            "dailySoftLimit": {
+              "type": "number",
+              "minimum": 0
+            },
+            "dailyHardLimit": {
+              "type": "number",
+              "minimum": 0
+            },
+            "maxEstimatedInputTokensPerCall": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "maxEstimatedOutputTokensPerCall": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
+        "riskPolicy": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "allowZeroRates",
+            "allowEstimatedUsage"
+          ],
+          "properties": {
+            "allowZeroRates": {
+              "type": "boolean"
+            },
+            "allowEstimatedUsage": {
+              "type": "boolean"
+            }
+          }
+        }
+      }
+    }
+  }
+}

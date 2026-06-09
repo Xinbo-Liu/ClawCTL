@@ -1,0 +1,75 @@
+{
+  "schema_version": 1,
+  "title": "CentOS 7 host shell guard",
+  "target_paths": [
+    "scripts/setup/prepare_docker_host.sh",
+    "scripts/doctor/check_docker_host_readiness.sh",
+    "scripts/doctor/check_system_time.sh",
+    "scripts/images/check_openclaw_supply_chain.sh",
+    "scripts/setup/update_system_time.sh",
+    "scripts/setup/lib/setup_flow_handoff.sh",
+    "scripts/setup/lib/setup_cli_common.sh",
+    "scripts/lib/control_plane_config_paths.sh",
+    "scripts/lib/docker_host_support_truth.sh",
+    "scripts/lib/image_env.sh",
+    "scripts/lib/openclaw_runtime_contract.sh",
+    "scripts/lib/registry_manifest_probe.sh",
+    "scripts/lib/repo_contracts.sh",
+    "scripts/lib/system_time_guard.sh"
+  ],
+  "bash": {
+    "baseline": "4.2",
+    "disallowed_patterns": [
+      {
+        "id": "bash_local_nameref",
+        "description": "Bash 4.2 不支持 local -n nameref。",
+        "regex": "\\blocal\\s+-n\\b"
+      },
+      {
+        "id": "bash_declare_nameref",
+        "description": "Bash 4.2 不支持 declare -n nameref。",
+        "regex": "\\bdeclare\\s+-n\\b"
+      },
+      {
+        "id": "bash_wait_n",
+        "description": "Bash 4.2 不支持 wait -n。",
+        "regex": "\\bwait\\s+-n\\b"
+      },
+      {
+        "id": "bash_parameter_transform",
+        "description": "Bash 4.2 不支持 ${var@Q} 等参数变换语法。",
+        "regex": "\\$\\{[^}]+@[A-Za-z]+\\}"
+      }
+    ]
+  },
+  "jq": {
+    "baseline": "1.5",
+    "disallowed_patterns": [
+      {
+        "id": "jq_walk_builtin",
+        "description": "jq 1.5 不提供 walk/1 内建函数。",
+        "regex": "\\bwalk\\s*\\("
+      },
+      {
+        "id": "jq_INDEX_builtin",
+        "description": "jq 1.5 不提供 INDEX/2 内建函数。",
+        "regex": "\\bINDEX\\s*\\("
+      },
+      {
+        "id": "jq_JOIN_builtin",
+        "description": "jq 1.5 不提供 JOIN/4 内建函数。",
+        "regex": "\\bJOIN\\s*\\("
+      },
+      {
+        "id": "jq_IN_builtin",
+        "description": "jq 1.5 不提供 IN/1 内建函数。",
+        "regex": "\\bIN\\s*\\("
+      },
+      {
+        "id": "jq_bsearch_builtin",
+        "description": "jq 1.5 不提供 bsearch/1。",
+        "regex": "\\bbsearch\\s*\\("
+      }
+    ]
+  }
+}

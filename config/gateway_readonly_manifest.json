@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "description": "gateway 只读镜像目录真源；仅允许把正式运行面确实需要的文档与配置放入 /local_ro。",
+  "target_root": "local_ro_gateway",
+  "entries": [
+    {
+      "type": "file",
+      "source": "README.md",
+      "target": "README.md"
+    },
+    {
+      "type": "dir",
+      "source": "docs/architecture",
+      "target": "docs/architecture"
+    },
+    {
+      "type": "dir",
+      "source": "docs/getting-started",
+      "target": "docs/getting-started"
+    },
+    {
+      "type": "dir",
+      "source": "docs/operations",
+      "target": "docs/operations"
+    }
+  ]
+}

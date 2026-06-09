@@ -1,0 +1,582 @@
+{
+  "title": "one_click_deploy 阶段说明真源",
+  "stages": {
+    "fix_permissions": {
+      "explain_label": "fix_permissions.sh",
+      "summary_hint": [
+        "关联文档：",
+        "- docs/getting-started/quickstart.md",
+        "重点检查：",
+        "- 仓库目录是否由当前用户拥有，Gateway 运行态目录是否为 owner-only",
+        "- runtime_paths 模板渲染所需目录、证书目录与 bind mount 目标是否已准备就绪",
+        "- 本地证书目录、文件权限与 bind IP 是否一致"
+      ],
+      "next_commands": [
+        "bash ./scripts/setup/one_click_test_basic.sh${offlineFlag}",
+        "bash ./scripts/setup/fix_permissions.sh",
+        "bash ./scripts/doctor/doctor_paths.sh | sed -n '1,40p'",
+        "id"
+      ],
+      "execution": {
+        "kind": "script",
+        "script_rel_path": "scripts/setup/fix_permissions.sh"
+      }
+    },
+    "bootstrap": {
+      "explain_label": "bootstrap.sh",
+      "summary_hint": [
+        "关联文档：",
+        "- docs/getting-started/quickstart.md",
+        "重点检查：",
+        "- runtime_paths 模板渲染是否通过，dispatch runtime targets.json 是否已更新",
+        "- local_ro 镜像目录与只读边界是否已重新生成",
+        "- 需要额外核对 workspace 运行态副本漂移时，单独执行 sync_workspace_templates.sh --check"
+      ],
+      "next_commands": [
+        "bash ./scripts/setup/bootstrap.sh",
+        "bash ./scripts/runtime/run_openclaw_python_tool.sh runtime paths check-generated",
+        "bash ./scripts/runtime/sync_workspace_templates.sh --check"
+      ],
+      "execution": {
+        "kind": "script",
+        "script_rel_path": "scripts/setup/bootstrap.sh"
+      }
+    },
+    "gen_cert": {
+      "explain_label": "gen_cert.sh",
+      "summary_hint": [
+        "关联文档：",
+        "- docs/getting-started/quickstart.md",
+        "重点检查：",
+        "- `OPENCLAW_TLS_MODE=self_signed` 时，deploy/nginx/certs 是否已按 OPENCLAW_TLS_CN 重新生成 365 天 DNS SAN 证书与私钥",
+        "- `OPENCLAW_TLS_MODE=provided_files` 时，PEM 证书源路径与私钥源路径是否不位于 deploy/nginx/certs 输出目录，证书是否未过期、包含精确 dNSName SAN，且与未加密 PEM 私钥配对后复制到同一证书目录",
+        "- 私钥与证书权限是否为当前操作者可读，不应被 group/world 打开",
+        "- 后续 private ingress 渲染是否继续使用同一份证书目录"
+      ],
+      "next_commands": [
+        "bash ./scripts/setup/gen_cert.sh",
+        "bash ./scripts/runtime/run_openclaw_python_tool.sh setup ingress render-nginx --env-file deploy/.env",
+        "ls -l deploy/nginx/certs"
+      ],
+      "execution": {
+        "kind": "script",
+        "script_rel_path": "scripts/setup/gen_cert.sh"
+      }
+    },
+    "render_gateway_ingress_conf": {
+      "explain_label": "run_openclaw_python_tool.sh setup ingress render-nginx",
+      "summary_hint": [
+        "关联文档：",
+        "- docs/getting-started/quickstart.md",
+        "- docs/operations/security-boundary.md",
+        "重点检查：",
+        "- OPENCLAW_TLS_CN、OPENCLAW_INGRESS_LISTEN_IP、HSTS 与单一官方 gateway ingress 配置是否来自同一控制面",
+        "- 当前 host state root 下的 gateway/nginx.gateway.conf 是否按当前 TLS 主机名、HSTS 与来源 CIDR allowlist 正确渲染",
+        "- OPENCLAW_INGRESS_ALLOWED_SOURCE_CIDRS 是否已同时进入 Nginx 本地 allowlist 与后续基础设施边界证据"
+      ],
+      "next_commands": [
+        "bash ./scripts/runtime/run_openclaw_python_tool.sh setup ingress render-nginx --env-file deploy/.env",
+        "bash ./scripts/runtime/run_openclaw_python_tool.sh setup ingress check-nginx --env-file deploy/.env",
+        "HOST_STATE_DIR=\"${HOST_STATE_DIR:-${OPENCLAW_STATE_DIR:-<current-host-state-root>}}\"; sed -n '1,120p' \"$HOST_STATE_DIR/gateway/nginx.gateway.conf\""
+      ],
+      "execution": {
+        "kind": "script",
+        "script_rel_path": "scripts/runtime/run_openclaw_python_tool.sh",
+        "arg_mode": "gateway-ingress-render"
+      }
+    },
+    "check_ingress_boundary_evidence": {
+      "explain_label": "check_ingress_boundary_evidence.sh（含 Nginx allowlist 渲染闭环）",
+      "summary_hint": [
+        "关联文档：",
+        "- docs/getting-started/quickstart.md",
+        "- docs/operations/security-boundary.md",
+        "重点检查：",
+        "- host_firewall 或 external_acl 证据是否与 OPENCLAW_INGRESS_ALLOWED_SOURCE_CIDRS 精确一致",
+        "- nginx.gateway.conf 是否按当前来源 CIDR 渲染 allowlist 并保持默认拒绝",
+        "- compose/runtime 是否只有 private ingress 发布 80/443",
+        "- host_firewall 模式下优先由 root 侧写出 evidence；非 root 部署阶段只复用已与当前 env / nginx policy 对齐的证据，不覆盖 root 侧语义"
+      ],
+      "next_commands": [
+        "sudo bash ./scripts/setup/apply_ingress_boundary_rules.sh --env-file deploy/.env",
+        "sudo bash ./scripts/doctor/check_ingress_boundary_evidence.sh --env-file deploy/.env --require-nginx-policy",
+        "bash ./scripts/runtime/run_openclaw_python_tool.sh setup ingress check-nginx --env-file deploy/.env"
+      ],
+      "execution": {
+        "kind": "script",
+        "script_rel_path": "scripts/doctor/check_ingress_boundary_evidence.sh",
+        "arg_mode": "env-file-required-nginx-policy"
+      }
+    },
+    "check_ingress_boundary_evidence_resume_guard": {
+      "explain_label": "resume 前 ingress 边界证据守卫",
+      "summary_hint": [
+        "关联文档：",
+        "- docs/getting-started/quickstart.md",
+        "- docs/operations/security-boundary.md",
+        "- docs/operations/troubleshooting.md",
+        "重点检查：",
+        "- resume 起点跳过 check_ingress_boundary_evidence 时，当前基础 evidence 与 deploy/.env 是否仍然一致",
+        "- nginx.gateway.conf 是否已经按当前 OPENCLAW_INGRESS_ALLOWED_SOURCE_CIDRS 渲染 allowlist",
+        "- host_firewall 模式下是否已经由 root 侧写出可被部署用户读取的基础 evidence"
+      ],
+      "next_commands": [
+        "sudo bash ./scripts/setup/apply_ingress_boundary_rules.sh --env-file deploy/.env",
+        "sudo bash ./scripts/doctor/check_ingress_boundary_evidence.sh --env-file deploy/.env --require-nginx-policy",
+        "bash ./scripts/doctor/check_ingress_boundary_evidence.sh --env-file deploy/.env --require-nginx-policy --no-write",
+        "bash ./scripts/setup/one_click_deploy.sh --resume-from docker_compose_config"
+      ]
+    },
+    "check_openclaw_release": {
+      "explain_label": "check_openclaw_release.sh",
+      "summary_hint": [
+        "关联文档：",
+        "- docs/getting-started/image-preparation.md",
+        "- docs/operations/troubleshooting.md",
+        "重点检查：",
+        "- 官方 Gateway镜像 pin 是否对齐 config/image_pins/openclaw.env",
+        "- 上游 release / correction tag 与当前固定 digest 是否已重新核对",
+        "- selected runtime source 对应的镜像仓库是否已经同步 latest stable 对应 digest"
+      ],
+      "next_commands": [
+        "bash ./scripts/images/check_openclaw_release.sh"
+      ],
+      "execution": {
+        "kind": "custom_handler",
+        "handler": "deploy_run_release_check"
+      }
+    },
+    "pull_images": {
+      "explain_label": "pull_images.sh（拉取部署镜像合同角色）",
+      "summary_hint": [
+        "关联文档：",
+        "- docs/getting-started/image-preparation.md",
+        "- docs/operations/troubleshooting.md",
+        "重点检查：",
+        "- deploy/.env 中的 selected runtime image source 与 active profile 暴露的 provider/API endpoint 输入是否正确",
+        "- 在线模式是否能访问 selected runtime source 与上游 canonical source",
+        "- source_strategy 声明的部署镜像合同 env key 是否都已拉取成功",
+        "- show_deployment_image_status 是否已经把部署镜像合同与 compose 运行镜像集合同时显示为本地可用，并且 verified local refs 通过 image id 校验"
+      ],
+      "next_commands": [
+        "bash ./scripts/images/pull_images.sh",
+        "bash ./scripts/images/show_deployment_image_status.sh"
+      ],
+      "execution": {
+        "kind": "script",
+        "script_rel_path": "scripts/images/pull_images.sh"
+      }
+    },
+    "load_deployment_images": {
+      "explain_label": "load_deployment_images.sh（导入部署镜像合同角色）",
+      "summary_hint": [
+        "关联文档：",
+        "- docs/getting-started/image-preparation.md",
+        "- docs/operations/troubleshooting.md",
+        "重点检查：",
+        "- 离线 deployment_images_*.tar 是否来自同一 release 产物",
+        "- 归档中的部署镜像合同 env key 是否与当前 pin 一致",
+        "- docker load 后 show_deployment_image_status 是否已显示部署镜像合同本地可用、verified local refs 通过 image id 校验，且 compose 运行镜像集合闭合"
+      ],
+      "next_commands": [
+        "bash ./scripts/images/load_deployment_images.sh \"${imageArchivePath}\"",
+        "bash ./scripts/images/show_deployment_image_status.sh"
+      ],
+      "execution": {
+        "kind": "script",
+        "script_rel_path": "scripts/images/load_deployment_images.sh",
+        "arg_mode": "image-archive"
+      }
+    },
+    "verify_gateway_browser": {
+      "explain_label": "verify_gateway_browser.sh",
+      "summary_hint": [
+        "关联文档：",
+        "- docs/getting-started/image-preparation.md",
+        "- docs/operations/troubleshooting.md",
+        "重点检查：",
+        "- official gateway 浏览器运行时边界是否符合当前治理要求",
+        "- 官方 Gateway 版本与当前 pin 是否一致",
+        "- verify 输出、show_deployment_image_status 的 image id 证明状态与部署镜像合同状态是否互相印证"
+      ],
+      "next_commands": [
+        "bash ./scripts/images/verify_gateway_browser.sh",
+        "bash ./scripts/runtime/show_runtime_container_logs.sh --target gateway 2>/dev/null || true"
+      ],
+      "execution": {
+        "kind": "script",
+        "script_rel_path": "scripts/images/verify_gateway_browser.sh"
+      }
+    },
+    "docker_compose_config": {
+      "explain_label": "show_runtime_compose_config.sh（对应 one-click 内部的 docker_compose_config 阶段）",
+      "summary_hint": [
+        "关联文档：",
+        "- docs/getting-started/quickstart.md",
+        "- docs/getting-started/image-preparation.md",
+        "- docs/operations/troubleshooting.md",
+        "重点检查：",
+        "- deploy/.env 是否由 one_click_config 根据 deploy/site.env / 启用扩展内部 agent/extensions/<extension-id>/deploy/extension.env / deploy/targets.d/*.env 正确生成，并包含 OPENCLAW_GATEWAY_TOKEN / OPENCLAW_TLS_CN / OPENCLAW_INGRESS_LISTEN_IP 与启用扩展要求的关键字段",
+        "- compose 运行镜像集合是否来自 source_strategy 声明的正式镜像真源，且 host 控制面单独固定使用 OPENCLAW_CONTROL_PLANE_IMAGE",
+        "- 启用的 runtime 服务各 bridge 与挂载目录是否按预期展开"
+      ],
+      "next_commands": [
+        "bash ./scripts/runtime/show_runtime_compose_config.sh",
+        "bash ./scripts/runtime/run_openclaw_python_tool.sh setup env query-env-batch OPENCLAW_TLS_CN OPENCLAW_INGRESS_LISTEN_IP --format shell"
+      ],
+      "execution": {
+        "kind": "arg_mode_only",
+        "arg_mode": "compose-config"
+      }
+    },
+    "docker_compose_up": {
+      "explain_label": "启动 runtime 服务（内部执行 compose up -d，同时拉起官方 gateway、私有 HTTPS ingress、internal-api、control-plane scheduler（承载 delivery_adapter 执行能力）与 profile + extension 显式启用的附加 runtime 视角）",
+      "summary_hint": [
+        "关联文档：",
+        "- docs/getting-started/quickstart.md",
+        "- docs/operations/troubleshooting.md",
+        "重点检查：",
+        "- compose up 前的 config 渲染结果是否已经稳定",
+        "- 启用的 runtime 容器是否全部进入已创建状态",
+        "- 若启动失败，先区分是镜像、端口、证书还是 bind mount 问题",
+        "- 若日志包含 INVALID_ZONE: docker，先以 root 复跑 prepare_docker_host.sh --open-firewall，再重放 apply_ingress_boundary_rules.sh"
+      ],
+      "next_commands": [
+        "sudo bash ./scripts/setup/prepare_docker_host.sh --open-firewall",
+        "sudo bash ./scripts/setup/apply_ingress_boundary_rules.sh --env-file deploy/.env",
+        "bash ./scripts/runtime/run_runtime_service_action.sh up --all --force-recreate",
+        "bash ./scripts/setup/one_click_deploy.sh --resume-from docker_compose_up",
+        "bash ./scripts/runtime/show_runtime_service_status.sh",
+        "bash ./scripts/runtime/show_runtime_container_logs.sh --target gateway"
+      ],
+      "execution": {
+        "kind": "arg_mode_only",
+        "arg_mode": "runtime-up"
+      }
+    },
+    "docker_compose_ps": {
+      "explain_label": "show_runtime_service_status.sh（对应 one-click 内部的 docker_compose_ps 阶段）",
+      "summary_hint": [
+        "关联文档：",
+        "- docs/getting-started/quickstart.md",
+        "- docs/operations/troubleshooting.md",
+        "重点检查：",
+        "- 官方 gateway、私有 HTTPS ingress、internal-api 与 control-plane scheduler（承载 delivery_adapter 执行能力）等启用的 runtime 容器是否都处于健康状态",
+        "- private ingress 渲染结果与容器端口暴露是否一致",
+        "- scheduler 是否已随默认 compose 运行链启动，且运行状态与日志均可直接查看"
+      ],
+      "next_commands": [
+        "bash ./scripts/runtime/show_runtime_service_status.sh",
+        "bash ./scripts/setup/one_click_deploy.sh --resume-from docker_compose_ps",
+        "bash ./scripts/runtime/show_runtime_container_logs.sh --target gateway",
+        "bash ./scripts/runtime/show_runtime_container_logs.sh --target scheduler",
+        "bash ./scripts/doctor/check_control_plane_runtime.sh"
+      ],
+      "execution": {
+        "kind": "arg_mode_only",
+        "arg_mode": "runtime-ps"
+      }
+    },
+    "check_deployment_image_contract": {
+      "explain_label": "check_deployment_image_contract.sh",
+      "summary_hint": [
+        "关联文档：",
+        "- docs/getting-started/image-preparation.md",
+        "- docs/getting-started/quickstart.md",
+        "重点检查：",
+        "- 部署镜像合同是否覆盖 source_strategy 声明的部署角色",
+        "- compose 运行镜像集合是否持续来自 source_strategy 的 compose_runtime 声明，且没有把 host 控制面镜像重新混入 compose",
+        "- pull / load / export / readiness / host 控制面准备入口是否共同闭合到同一份 deployment image 治理面，并在离线 local refs 上校验合同 image id"
+      ],
+      "next_commands": [
+        "bash ./scripts/images/check_deployment_image_contract.sh",
+        "bash ./scripts/images/show_deployment_image_status.sh"
+      ],
+      "execution": {
+        "kind": "script",
+        "script_rel_path": "scripts/images/check_deployment_image_contract.sh",
+        "arg_mode": "env-file-compose-file-require-local"
+      }
+    },
+    "check_runtime_compose_contract": {
+      "explain_label": "check_runtime_compose_contract.sh",
+      "summary_hint": [
+        "关联文档：",
+        "- docs/getting-started/quickstart.md",
+        "- docs/operations/troubleshooting.md",
+        "重点检查：",
+        "- compose 渲染后是否只包含当前声明的 runtime 服务集合",
+        "- private ingress 是否在保留 cap_drop: ALL 的同时显式补齐 NET_BIND_SERVICE",
+        "- 非 ingress 服务的 user 与 /local_ro 挂载合同是否符合正式运行路径"
+      ],
+      "next_commands": [
+        "bash ./scripts/doctor/check_runtime_compose_contract.sh --env-file deploy/.env",
+        "bash ./scripts/runtime/show_runtime_compose_config.sh"
+      ],
+      "execution": {
+        "kind": "script",
+        "script_rel_path": "scripts/doctor/check_runtime_compose_contract.sh",
+        "arg_mode": "env-file-compose-file"
+      }
+    },
+    "control_plane_defaults": {
+      "explain_label": "one_click_deploy 控制面默认值加载",
+      "summary_hint": [
+        "关联文档：",
+        "- docs/getting-started/quickstart.md",
+        "- docs/operations/troubleshooting.md",
+        "重点检查：",
+        "- one_click_deploy 依赖的控制面脚本、摘要 helper 与配置真源是否完整存在",
+        "- prepare_control_plane_medium.sh 是否已经为当前主机准备好唯一 OPENCLAW_CONTROL_PLANE_IMAGE",
+        "- run_openclaw_python_tool.sh 是否可被当前执行用户正常调用"
+      ],
+      "next_commands": [
+        "bash ./scripts/setup/prepare_control_plane_medium.sh${offlineFlag}",
+        "bash ./scripts/setup/one_click_deploy.sh --help",
+        "bash ./scripts/runtime/run_openclaw_python_tool.sh setup flow one-click-deploy preflight"
+      ]
+    },
+    "basic_gate_proof_preflight": {
+      "explain_label": "latest basic gate proof 预检",
+      "summary_hint": [
+        "关联文档：",
+        "- docs/getting-started/quickstart.md",
+        "- docs/getting-started/environment-setup.md",
+        "- docs/operations/troubleshooting.md",
+        "重点检查：",
+        "- latest basic gate proof 是否存在且与当前 deploy/.env、online/offline 模式、离线镜像归档选择一致",
+        "- 自动刷新 basic gate 时是否仍沿用同一份 env 与 image archive",
+        "- --require-basic-gate-proof 场景下是否需要先执行 one_click_test_basic.sh 生成 proof"
+      ],
+      "next_commands": [
+        "bash ./scripts/setup/one_click_test_basic.sh${offlineFlag}",
+        "bash ./scripts/setup/one_click_deploy.sh${offlineFlag}",
+        "bash ./scripts/setup/one_click_deploy.sh --help"
+      ]
+    },
+    "local_permission_preflight": {
+      "explain_label": "部署前本地权限预检",
+      "summary_hint": [
+        "关联文档：",
+        "- docs/getting-started/environment-setup.md",
+        "- docs/operations/troubleshooting.md",
+        "重点检查：",
+        "- deploy/.env、deploy/site.env、启用扩展内部 agent/extensions/<extension-id>/deploy/extension.env、deploy/targets.d、state/ 与当前 host state root 是否由当前部署用户可管理",
+        "- 当前脚本不会自动 sudo；以 root 执行 bootstrap/fix_permissions 时必须能解析 OPENCLAW_RUNTIME_UID/GID，解析失败会中止，其他仓库写权限、控制面写路径与 bind mount 目标必须先闭合",
+        "- basic gate 是否已经在同一份 deploy/.env 上通过"
+      ],
+      "next_commands": [
+        "bash ./scripts/setup/one_click_test_basic.sh${offlineFlag}",
+        "bash ./scripts/setup/fix_permissions.sh",
+        "id"
+      ]
+    },
+    "control_plane_preflight": {
+      "explain_label": "one_click_deploy 静态 preflight",
+      "summary_hint": [
+        "关联文档：",
+        "- docs/getting-started/quickstart.md",
+        "- docs/operations/troubleshooting.md",
+        "重点检查：",
+        "- one_click_deploy 静态依赖文件是否完整",
+        "- deploy_flow、deploy_success 与相关 shell helper 是否使用同一套治理真源",
+        "- 控制面镜像与 run_openclaw_python_tool.sh 是否已准备完成"
+      ],
+      "next_commands": [
+        "bash ./scripts/runtime/run_openclaw_python_tool.sh setup flow one-click-deploy preflight",
+        "bash ./scripts/setup/prepare_control_plane_medium.sh${offlineFlag}",
+        "bash ./scripts/setup/one_click_deploy.sh --help"
+      ]
+    },
+    "deployment_image_readiness_preflight": {
+      "explain_label": "部署前镜像就绪性预检",
+      "summary_hint": [
+        "关联文档：",
+        "- docs/getting-started/image-preparation.md",
+        "重点检查：",
+        "- 当前模式下所需镜像是否已满足部署前就绪性检查",
+        "- 在线模式的 selected runtime source / 上游 release 对齐是否正常，离线模式的 deployment_images_*.tar 是否与当前 pin 一致",
+        "- 不要在镜像就绪性未闭合时继续推进 compose 阶段"
+      ],
+      "next_commands": [
+        "bash ./scripts/doctor/check_deployment_image_readiness.sh${offlineFlag}",
+        "bash ./scripts/images/show_deployment_image_status.sh",
+        "bash ./scripts/setup/one_click_deploy.sh${offlineFlag}"
+      ]
+    },
+    "extension_env_preflight": {
+      "explain_label": "部署前 managed extension runtime venv 预检",
+      "summary_hint": [
+        "关联文档：",
+        "- docs/getting-started/quickstart.md",
+        "- docs/architecture/explicit-extension-packages.md",
+        "- docs/operations/troubleshooting.md",
+        "重点检查：",
+        "- 当前 active profile 是否启用了 managed extension",
+        "- scheduler 视角 runtime wheelhouse 是否由扩展仓内 offline_wheelhouse 同步",
+        "- 扩展 runtime venv 是否已由 extension-env ensure 按 requirements.lock/hash 准备并 verify 通过"
+      ],
+      "next_commands": [
+        "source <(bash ./scripts/runtime/run_openclaw_python_tool.sh setup env query-env OPENCLAW_CONTROL_PLANE_SERVICE_CONFIG_PATH --env-file deploy/.env --format shell)",
+        "bash ./scripts/runtime/run_openclaw_python_tool.sh control-plane runtime --config-path \"$OPENCLAW_CONTROL_PLANE_SERVICE_CONFIG_PATH\" extension-env ensure --enabled --offline --json",
+        "bash ./scripts/setup/one_click_deploy.sh${offlineFlag}"
+      ]
+    },
+    "effective_compose_render": {
+      "explain_label": "生成 active profile 有效 compose",
+      "summary_hint": [
+        "关联文档：",
+        "- docs/getting-started/quickstart.md",
+        "- docs/operations/runtime-service-reference.md",
+        "- docs/operations/troubleshooting.md",
+        "重点检查：",
+        "- 当前 active profile 与 enabled extension 是否已经完成 extension-env ensure",
+        "- effective compose 是否写入当前 host state root 下的 control_plane/setup/docker-compose.effective.yml",
+        "- 后续 compose config、runtime up、runtime ps 是否都使用同一份 effective compose；deploy/docker-compose.yml 只保留基础模板属性"
+      ],
+      "next_commands": [
+        "bash ./scripts/setup/one_click_config.sh",
+        "bash ./scripts/runtime/show_runtime_compose_config.sh --env-file deploy/.env",
+        "bash ./scripts/setup/one_click_deploy.sh${offlineFlag}"
+      ]
+    },
+    "runtime_bind_user_contract_preflight": {
+      "explain_label": "部署前 runtime bind user 合同预检",
+      "summary_hint": [
+        "关联文档：",
+        "- docs/getting-started/deployment-inputs.md",
+        "- docs/getting-started/quickstart.md",
+        "- docs/operations/troubleshooting.md",
+        "重点检查：",
+        "- deploy/.env 中的 OPENCLAW_RUNTIME_UID / OPENCLAW_RUNTIME_GID 是否与当前宿主机目录 owner 对齐",
+        "- 启用的 runtime 服务 bind mount 目标 owner-only 边界是否闭合",
+        "- 不要在 bind user 合同失败时直接 resume 到 compose 阶段"
+      ],
+      "next_commands": [
+        "bash ./scripts/doctor/check_runtime_bind_user_contract.sh --env-file deploy/.env",
+        "bash ./scripts/setup/fix_permissions.sh",
+        "bash ./scripts/setup/one_click_test_basic.sh${offlineFlag}"
+      ]
+    },
+    "repo_exec_permission_repair": {
+      "explain_label": "仓库脚本执行位修复",
+      "summary_hint": [
+        "关联文档：",
+        "- docs/getting-started/quickstart.md",
+        "- docs/operations/troubleshooting.md",
+        "重点检查：",
+        "- zip、scp、tar 或 Windows 同步后的 shell 入口是否丢失 executable bit",
+        "- fix_permissions.sh 是否能在 control-plane helper 执行前恢复部署链所需脚本权限",
+        "- 后续控制面调用是否仍通过 bash 包裹，避免单一执行位漂移阻断失败摘要写出"
+      ],
+      "next_commands": [
+        "bash ./scripts/setup/fix_permissions.sh",
+        "bash ./scripts/setup/one_click_deploy.sh --help",
+        "bash ./scripts/setup/one_click_test_basic.sh${offlineFlag}"
+      ]
+    },
+    "post_deploy_acceptance": {
+      "explain_label": "执行 required jobs、full test 与 runtime evidence 导出",
+      "summary_hint": [
+        "关联文档：",
+        "- docs/getting-started/quickstart.md",
+        "- docs/operations/runtime-service-reference.md",
+        "- docs/operations/troubleshooting.md",
+        "重点检查：",
+        "- 当前 target 配置是否允许发送动作执行",
+        "- required run ledger jobs 是否已经在当前机器生成真实 accepted 记录",
+        "- one_click_test_full.sh 是否全部通过，deployment_acceptance_contract 是否 accepted",
+        "- runtime acceptance evidence 是否已导出到 release/evidence"
+      ],
+      "next_commands": [
+        "bash ./scripts/setup/one_click_deploy.sh --resume-from post_deploy_acceptance"
+      ]
+    },
+    "control_plane_run_all_once": {
+      "explain_label": "run_control_plane_run_all_once.sh（required run ledger jobs）",
+      "summary_hint": [
+        "关联文档：",
+        "- docs/operations/runtime-service-reference.md",
+        "- docs/operations/troubleshooting.md",
+        "重点检查：",
+        "- 当前 profile / extension 是否声明 required_run_ledger_jobs",
+        "- 当前 target 配置是否允许发送动作执行",
+        "- run ledger latest run / result / artifacts manifest 是否来自当前机器"
+      ],
+      "next_commands": [
+        "bash ./scripts/setup/one_click_deploy.sh --resume-from post_deploy_acceptance",
+        "bash ./scripts/control_plane/run_control_plane_run_all_once.sh"
+      ]
+    },
+    "post_deploy_full_acceptance": {
+      "explain_label": "执行 full test 与 runtime evidence 导出，跳过 run_all_once",
+      "summary_hint": [
+        "关联文档：",
+        "- docs/getting-started/quickstart.md",
+        "- docs/operations/runtime-service-reference.md",
+        "- docs/operations/troubleshooting.md",
+        "重点检查：",
+        "- deployment_acceptance_contract 是否 accepted",
+        "- required run ledger jobs 是否已 accepted；若缺失或失败，改用 --resume-from post_deploy_acceptance",
+        "- dispatch runtime health 是否无 queue / target / release gate 阻断"
+      ],
+      "next_commands": [
+        "bash ./scripts/setup/one_click_deploy.sh --resume-from post_deploy_full_acceptance"
+      ]
+    },
+    "export_runtime_acceptance_evidence": {
+      "explain_label": "export_runtime_acceptance_evidence.sh",
+      "summary_hint": [
+        "关联文档：",
+        "- docs/operations/runtime-service-reference.md",
+        "- docs/operations/troubleshooting.md",
+        "重点检查：",
+        "- deployment_acceptance_contract 是否 accepted",
+        "- required run ledger jobs 是否缺失或失败；若是，使用 --resume-from post_deploy_acceptance 执行 required jobs",
+        "- control-plane scheduler runtime、run ledger 与 official CLI 摘要是否可读",
+        "- <current-host-state-root>/control_plane/release/evidence 是否由当前部署用户可写"
+      ],
+      "next_commands": [
+        "bash ./scripts/setup/one_click_deploy.sh --resume-from post_deploy_acceptance",
+        "bash ./scripts/setup/one_click_deploy.sh --resume-from post_deploy_full_acceptance"
+      ]
+    },
+    "deploy_success_summary": {
+      "explain_label": "部署成功摘要写出",
+      "summary_hint": [
+        "关联文档：",
+        "- docs/getting-started/quickstart.md",
+        "- docs/operations/runtime-service-reference.md",
+        "- docs/operations/troubleshooting.md",
+        "重点检查：",
+        "- <current-host-state-root>/control_plane/setup 与日志目录是否由当前部署用户可写",
+        "- one_click_deploy.latest.summary.json / .md 固定 latest 路径是否可创建或覆盖",
+        "- 部署服务与 acceptance 已完成时，不要通过放宽整个 state 目录权限来修复摘要写出"
+      ],
+      "next_commands": [
+        "bash ./scripts/setup/fix_permissions.sh",
+        "bash ./scripts/runtime/run_openclaw_python_tool.sh setup flow one-click-deploy deploy-latest-summary-json-path",
+        "bash ./scripts/runtime/run_openclaw_python_tool.sh setup flow one-click-deploy deploy-latest-summary-markdown-path",
+        "bash ./scripts/setup/one_click_deploy.sh --resume-from post_deploy_full_acceptance"
+      ]
+    },
+    "deploy_success_terminal_summary": {
+      "explain_label": "部署成功终端摘要输出",
+      "summary_hint": [
+        "关联文档：",
+        "- docs/getting-started/quickstart.md",
+        "- docs/operations/runtime-service-reference.md",
+        "- docs/operations/troubleshooting.md",
+        "重点检查：",
+        "- 固定 latest 摘要是否已经写出",
+        "- 终端摘要读取路径是否与 one_click_deploy.latest.summary.json / .md 一致",
+        "- 若仅终端输出失败，先读取 latest 摘要确认部署与 acceptance 状态"
+      ],
+      "next_commands": [
+        "summary_path=\"$(bash ./scripts/runtime/run_openclaw_python_tool.sh setup flow one-click-deploy deploy-latest-summary-markdown-path)\"; cat \"$summary_path\"",
+        "summary_json=\"$(bash ./scripts/runtime/run_openclaw_python_tool.sh setup flow one-click-deploy deploy-latest-summary-json-path)\"; cat \"$summary_json\"",
+        "bash ./scripts/setup/one_click_test_full.sh --json"
+      ]
+    }
+  }
+}

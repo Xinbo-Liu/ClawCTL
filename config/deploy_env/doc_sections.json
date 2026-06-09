@@ -1,0 +1,50 @@
+{
+  "minimal_example_intro": "以下片段适用于 **self_signed + host_firewall** 的首轮引导：",
+  "conditional_example_intro": "若切到 **provided_files + external_acl**，再补充：",
+  "step2_closure": [
+    "`init_private_ingress.sh` 通常已先回填 `OPENCLAW_INGRESS_LISTEN_IP` / `OPENCLAW_TLS_CN`；第 2 步默认先复核，再决定是否覆盖。",
+    "必填人工输入固定先补 {step2_inputs}；它是 private ingress 来源限制的固定输入项。",
+    "切到 `OPENCLAW_TLS_MODE=provided_files` 时，再补证书 / 私钥路径；切到 `OPENCLAW_INGRESS_BOUNDARY_MODE=external_acl` 时，再补结构化 ACL 证据文件路径。",
+    "`one_click_config.sh` 后先执行 setup env validate；host_firewall 模式要先用 `sudo bash ./scripts/setup/apply_ingress_boundary_rules.sh --env-file deploy/.env` 物化来源限制，再用 root 侧 ingress boundary doctor 写出基础 evidence；不要等到 full test 才暴露来源限制语义错误。"
+  ],
+  "cross_instance_access_scenario": [
+    "适用条件：访问端与目标机分处不同 OS 实例、不同网络实例、VPN、NAT 或上游代理链路。",
+    "`OPENCLAW_INGRESS_LISTEN_IP` 固定填写目标机对访问端可达的私网 IP；不要填写访问端地址、上游网关地址，也不要误写成 loopback。",
+    "`OPENCLAW_TLS_CN` 在访问端 DNS / hosts 中必须解析到目标机 ingress 地址；不要解析到访问端地址。",
+    "`OPENCLAW_INGRESS_ALLOWED_SOURCE_CIDRS` 优先收窄为目标机实际看到的访问端源 IP `/32`；若网络层把访问端流量翻译成网关地址，则填写该翻译后地址 `/32`；只有链路以网段呈现时，才填写对应链路网段；同时加入目标机本机 full test 来源，即 `OPENCLAW_INGRESS_LISTEN_IP/32` 或 IPv6 `/128`。",
+    "常见误填：访问端网卡地址或网段、本地 Wi-Fi 网段、Docker bridge 网段，以及遗漏目标机本机 full test 来源。"
+  ],
+  "public_upstream_acl_access": [
+    "OpenClaw 本机 ingress 只接受私网或 loopback 来源 CIDR，不把公网客户端 CIDR 写入 `OPENCLAW_INGRESS_ALLOWED_SOURCE_CIDRS`。",
+    "公网访问必须先经过上游 ACL、NAT、VPN、堡垒机或反向代理；OpenClaw 只配置目标机实际看到的私网来源。",
+    "公网客户 IP 白名单写入上游 ACL 或安全组，并在 evidence JSON 中体现该上游策略；OpenClaw allowlist 只记录目标机可见的私网来源。",
+    "访问端验收时，先确认目标机日志或上游转发记录中的实际来源地址，再执行 `check_client_access_acceptance.sh`。"
+  ],
+  "input_constraints": [
+    "`OPENCLAW_TLS_CN` 是唯一访问主机名、证书主机名与 Gateway Control UI origin。",
+    "`OPENCLAW_INGRESS_LISTEN_IP` 只用于私有 HTTPS ingress 绑定；Gateway 容器内 bind 固定遵循容器侧网络合同。",
+    "`OPENCLAW_INGRESS_LISTEN_IP` {private_ingress_bind_ip_doc}",
+    "只有浏览器与目标服务位于同一操作系统实例时，`OPENCLAW_INGRESS_LISTEN_IP` 才允许使用 loopback；跨机器、跨 OS / 跨网络实例、VPN 或上游代理场景都不属于该例外。",
+    "`OPENCLAW_INGRESS_ALLOWED_SOURCE_CIDRS` 用于定义 ingress 允许来源段；host_firewall 模式下 root 侧基础 evidence 必须把它与宿主机防火墙规则逐项对齐，部署用户侧会把当前 Nginx allowlist 校验结果合并回 evidence；external_acl 模式必须把它与结构化证据逐项对齐，并按最小必要来源面填写。",
+    "`OPENCLAW_INGRESS_ALLOWED_SOURCE_CIDRS` 必须包含目标机本机 full test 来源；默认 one_click_deploy 会在目标机本机通过 ingress 验证 `/healthz` 与 `/readyz`。",
+    "当前部署输入不接受未登记的 `OPENCLAW_*` 键。",
+    "当前部署输入只接受单一官方 Gateway token auth 所需字段。",
+    "`OPENCLAW_RUNTIME_UID` / `OPENCLAW_RUNTIME_GID` 是 runtime 可写 bind mount 的用户配置；默认写为执行 `one_click_config.sh` 的当前部署用户；`one_click_config.sh`、basic gate 与部署主链都会拒绝 root 误入。",
+    "需要把 runtime 绑定到其他 UID/GID 时，宿主机 bind mount owner/UID/GID 合同必须闭合；bootstrap/fix_permissions 以 root 执行时必须能解析 OPENCLAW_RUNTIME_UID/GID，解析失败会中止，不会自动 sudo 或留下 root-owned runtime state。",
+    "compose 运行镜像变量由 runtime source strategy 声明并固定由 image pins 提供，不在 `deploy/site.env` 手工填写；canonical / acceleration / selected runtime source 的分层统一看 `../operations/runtime-service-reference.md` 的“运行镜像来源与 source strategy”。",
+    "`OPENCLAW_TLS_MODE` 只允许 `self_signed` 或 `provided_files`；切换到 `provided_files` 时，必须同时提供 `OPENCLAW_TLS_CERT_SOURCE_PATH` / `OPENCLAW_TLS_KEY_SOURCE_PATH`。",
+    "`provided_files` 模式要求外部 PEM 证书包含精确 `dNSName:OPENCLAW_TLS_CN` SAN、未过期，并与未加密 PEM 私钥匹配；目标机与访问端必须已信任签发链。",
+    "`OPENCLAW_INGRESS_BOUNDARY_MODE` 只允许 `host_firewall` 或 `external_acl`；切换到 `external_acl` 时，必须同时提供 `OPENCLAW_INGRESS_BOUNDARY_EVIDENCE_PATH`。",
+    "`OPENCLAW_INGRESS_ALLOWED_SOURCE_CIDRS` 只允许逗号分隔的私网或 loopback IPv4/IPv6 CIDR，并作为 ingress 来源限制的固定输入项；没有业务必要时不得放开泛化私网大网段，公网客户端 CIDR 只能写在上游 ACL 或安全组策略中。",
+    "root 侧 `apply_ingress_boundary_rules.sh` 会写出与当前 env 对齐的基础 evidence；部署阶段渲染 Nginx 后，部署用户会本地校验 allowlist 并把 `nginx_policy` 合并到 `<current-host-state-root>/control_plane/setup/ingress_boundary_evidence.json`。只有基础 evidence 缺失、env 漂移或本地 Nginx 校验失败时，才补跑 root 侧 `check_ingress_boundary_evidence.sh --require-nginx-policy`。",
+    "`external_acl` 模式下，证据文件必须是结构化 JSON，并且其中 `source_cidrs`、`allowed_ports`、`default_deny`、`ip_families`、`enforcement_plane` 与目标信息必须能证明和当前部署输入一致。",
+    "{provider_source_note}",
+    "当前部署输入不接受额外认证模式切换字段。"
+  ],
+  "auth_path": [
+    "外部请求先进入私有 HTTPS ingress；",
+    "`OPENCLAW_TLS_CN` 是唯一访问主机名；ingress 只做 TLS 终结与反向代理；",
+    "官方 Gateway 直接执行 token auth，令牌字段固定为 `OPENCLAW_GATEWAY_TOKEN`；",
+    "Python 业务面只在内网接受来自运行链路的调用。"
+  ]
+}

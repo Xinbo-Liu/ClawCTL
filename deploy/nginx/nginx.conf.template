@@ -1,0 +1,113 @@
+worker_processes auto;
+
+events {
+    worker_connections 1024;
+}
+
+http {
+    sendfile on;
+    keepalive_timeout 65;
+    keepalive_requests 1000;
+    map_hash_bucket_size 256;
+
+    log_format timed '$remote_addr - $remote_user [$time_local] '
+                     '"$request_method $uri $server_protocol" $status $body_bytes_sent '
+                     'rt=$request_time uct=$upstream_connect_time '
+                     'uht=$upstream_header_time urt=$upstream_response_time '
+                     'upstream="$upstream_addr" '
+                     'ua="$http_user_agent" '
+                     'xff="$http_x_forwarded_for"';
+
+    access_log /var/log/nginx/access.log timed;
+    error_log /var/log/nginx/error.log warn;
+
+    map $http_upgrade $connection_upgrade {
+        default upgrade;
+        ''      close;
+    }
+
+__OPENCLAW_INGRESS_SOURCE_MAP__
+
+__OPENCLAW_CONTROL_PLANE_READ_AUTH_MAP__
+
+    server {
+        listen 80;
+        server_name __OPENCLAW_TLS_CN__;
+
+__OPENCLAW_INGRESS_REWRITE_GUARD__
+
+__OPENCLAW_INGRESS_ACCESS_GUARD__
+
+        return 301 https://$host$request_uri;
+    }
+
+    server {
+        listen 443 ssl;
+        server_name __OPENCLAW_TLS_CN__;
+
+        ssl_certificate /etc/nginx/certs/openclaw.crt;
+        ssl_certificate_key /etc/nginx/certs/openclaw.key;
+        ssl_protocols TLSv1.2 TLSv1.3;
+        ssl_session_timeout 10m;
+        ssl_session_cache shared:SSL:10m;
+
+        add_header Strict-Transport-Security "max-age=__OPENCLAW_INGRESS_HSTS_MAX_AGE__" always;
+
+        client_max_body_size 10m;
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
+
+__OPENCLAW_INGRESS_REWRITE_GUARD__
+
+__OPENCLAW_INGRESS_ACCESS_GUARD__
+
+
+        location = /healthz {
+            proxy_pass http://openclaw-official-gateway:18789/healthz;
+            proxy_http_version 1.1;
+            proxy_set_header Host $host;
+        }
+
+        location = /readyz {
+            proxy_pass http://openclaw-official-gateway:18789/readyz;
+            proxy_http_version 1.1;
+            proxy_set_header Host $host;
+        }
+
+        location = /v1/config/summary {
+__OPENCLAW_CONTROL_PLANE_READ_AUTH_GUARD__
+            proxy_pass http://openclaw-internal-api:18081/v1/config/summary;
+            proxy_http_version 1.1;
+            proxy_set_header Host $host;
+            proxy_set_header X-Forwarded-Proto https;
+            proxy_set_header X-Forwarded-For $remote_addr;
+            proxy_set_header X-Forwarded-Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header Authorization "__OPENCLAW_INTERNAL_API_AUTHORIZATION__";
+        }
+
+        location ^~ /v1/control-plane/ {
+__OPENCLAW_CONTROL_PLANE_READ_AUTH_GUARD__
+            proxy_pass http://openclaw-internal-api:18081;
+            proxy_http_version 1.1;
+            proxy_set_header Host $host;
+            proxy_set_header X-Forwarded-Proto https;
+            proxy_set_header X-Forwarded-For $remote_addr;
+            proxy_set_header X-Forwarded-Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header Authorization "__OPENCLAW_INTERNAL_API_AUTHORIZATION__";
+        }
+
+        location / {
+            proxy_pass http://openclaw-official-gateway:18789;
+            proxy_http_version 1.1;
+            proxy_set_header Host $host;
+            proxy_set_header X-Forwarded-Proto https;
+            proxy_set_header X-Forwarded-For $remote_addr;
+            proxy_set_header X-Forwarded-Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection $connection_upgrade;
+        }
+    }
+}

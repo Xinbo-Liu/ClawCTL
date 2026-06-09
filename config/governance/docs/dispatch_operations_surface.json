@@ -1,0 +1,7 @@
+{
+  "schema_version": 1,
+  "generated_artifacts": {
+    "dispatch_operations_doc": "docs/operations/dispatch-targets.md"
+  },
+  "entries": {}
+}

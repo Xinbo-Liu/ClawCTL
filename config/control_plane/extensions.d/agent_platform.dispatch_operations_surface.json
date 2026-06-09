@@ -1,0 +1,258 @@
+{
+  "schema_version": 1,
+  "generated_artifacts": {
+    "dispatch_operations_doc": "docs/operations/dispatch-targets.md"
+  },
+  "entries": {
+    "dispatch_target_onboarding": {
+      "id": "dispatch_target_onboarding",
+      "title": "分发目标首次接入默认顺序",
+      "purpose": "统一定义 dispatch target 首次接入、首次 dry-run、治理验活与目标级 acceptance 的默认顺序。",
+      "entry_command": "bash ./scripts/runtime/run_openclaw_python_tool.sh dispatch ops commands --entry dispatch_target_onboarding",
+      "steps": [
+        "bash ./scripts/setup/one_click_config.sh",
+        "bash ./scripts/runtime/run_openclaw_python_tool.sh setup env validate-dispatch-registry",
+        "bash ./scripts/runtime/run_openclaw_python_tool.sh setup env render-runtime-service-envs --env-file deploy/.env",
+        "bash ./scripts/doctor/check_control_plane_runtime.sh",
+        "bash ./scripts/doctor/check_dispatch_runtime.sh",
+        "bash ./scripts/runtime/run_openclaw_python_tool.sh dispatch ops run-target-operation --operation preflight --target <target_id> --env-file deploy/.env --control-plane-profile <profile_id> --ensure-running strict",
+        "bash ./scripts/runtime/run_openclaw_python_tool.sh dispatch ops run-target-operation --operation send --target <target_id> --env-file deploy/.env --control-plane-profile <profile_id> --ensure-running strict -- --dry-run true",
+        "bash ./scripts/runtime/run_openclaw_python_tool.sh dispatch ops verify-rotation-sequence --gate-env-file deploy/.env --control-plane-profile <profile_id> --json --fail-on-warn --write-audit",
+        "bash ./scripts/runtime/run_openclaw_python_tool.sh dispatch ops verify-rotation-sequence --batch <batch_id> --gate-env-file deploy/.env --control-plane-profile <profile_id> --json --fail-on-warn --write-audit",
+        "bash ./scripts/runtime/run_openclaw_python_tool.sh dispatch observability show-target-acceptance --target <target_id> --gate-env-file deploy/.env --fail-on-fail --json --write-audit",
+        "bash ./scripts/runtime/run_openclaw_python_tool.sh dispatch observability show-batch-acceptance --batch <batch_id> --gate-env-file deploy/.env --json --fail-on-warn --write-audit"
+      ],
+      "references": [
+        "docs/operations/dispatch-targets.md",
+        "docs/operations/troubleshooting.md"
+      ],
+      "notes": [
+        "真实发送只在 preflight、治理验活、目标级 acceptance 与批次级 acceptance 都通过后再放开。",
+        "当前 dispatch 执行统一由 scheduler 承载的 delivery_adapter 完成。",
+        "`dispatch ops run-target-operation` 是 scheduler service exec 的正式人工入口；部署验收先执行 preflight / dry-run，再读取 target acceptance 与 batch acceptance。"
+      ],
+      "prerequisites": [
+        "目标 target 存在于注册表；deploy/targets.d/<target_id>.env 由 one_click_config 补齐或由人工填写。",
+        "已执行 bash ./scripts/setup/one_click_config.sh，并保证 deploy/.env 已清除全部 __REQUIRED__ 占位。",
+        "scheduler 已运行；首次接入前先执行 `bash ./scripts/doctor/check_dispatch_runtime.sh`。"
+      ],
+      "example_commands": [
+        {
+          "title": "对目标先做联调 dry-run",
+          "command": "bash ./scripts/runtime/run_openclaw_python_tool.sh dispatch ops run-target-operation --operation preflight --target <target_id> --env-file deploy/.env --control-plane-profile <profile_id> --ensure-running strict && bash ./scripts/runtime/run_openclaw_python_tool.sh dispatch ops run-target-operation --operation send --target <target_id> --env-file deploy/.env --control-plane-profile <profile_id> --ensure-running strict -- --dry-run true && bash ./scripts/runtime/run_openclaw_python_tool.sh dispatch observability show-target-acceptance --target <target_id> --gate-env-file deploy/.env --fail-on-fail --json"
+        },
+        {
+          "title": "单独查看目标的 target-scoped acceptance JSON",
+          "command": "bash ./scripts/runtime/run_openclaw_python_tool.sh dispatch observability show-target-acceptance --target <target_id> --gate-env-file deploy/.env --fail-on-fail --json"
+        },
+        {
+          "title": "查看批次 acceptance",
+          "command": "bash ./scripts/runtime/run_openclaw_python_tool.sh dispatch observability show-batch-acceptance --batch <batch_id> --gate-env-file deploy/.env --json --fail-on-warn --write-audit"
+        }
+      ],
+      "result_checks": [
+        "preflight、dry-run 与 dispatch observability show-target-acceptance --fail-on-fail 应全部返回 0。",
+        "target-scoped acceptance JSON 中 overall_status 不应为 fail；生产相关 target 还应继续通过对应发布批次 acceptance。"
+      ],
+      "common_branches": [
+        "若报 endpoint_missing / invalid_target_endpoint，回 deploy/targets.d/<target_id>.env 补齐并重新 one_click_config + bootstrap。",
+        "若 current_release_allowed=false，说明当前是 release gate 拦截，而不是 provider 故障。"
+      ]
+    },
+    "dispatch_target_default_dry_run": {
+      "id": "dispatch_target_default_dry_run",
+      "title": "分发目标默认 dry-run 顺序",
+      "purpose": "统一定义首次接入或轮换后的 send / retry / resend dry-run 组合与正式命令入口。",
+      "entry_command": "bash ./scripts/runtime/run_openclaw_python_tool.sh dispatch ops commands --entry dispatch_target_default_dry_run",
+      "steps": [
+        "bash ./scripts/runtime/run_openclaw_python_tool.sh dispatch ops run-target-operation --operation send --target <target_id> --env-file deploy/.env --control-plane-profile <profile_id> --ensure-running strict -- --dry-run true",
+        "bash ./scripts/runtime/run_openclaw_python_tool.sh dispatch ops run-target-operation --operation retry --target <target_id> --env-file deploy/.env --control-plane-profile <profile_id> --ensure-running strict -- --dry-run true",
+        "bash ./scripts/runtime/run_openclaw_python_tool.sh dispatch ops run-target-operation --operation resend --target <target_id> --env-file deploy/.env --control-plane-profile <profile_id> --ensure-running strict -- --dry-run true",
+        "bash ./scripts/runtime/run_openclaw_python_tool.sh dispatch observability show-target-acceptance --target <target_id> --gate-env-file deploy/.env --fail-on-fail --json --write-audit"
+      ],
+      "references": [
+        "docs/operations/dispatch-targets.md#dispatch-target-default-dry-run",
+        "docs/operations/dispatch-targets.md#dispatch-target-rotation-min-acceptance"
+      ],
+      "notes": [
+        "该 dry-run 组合用于验证控制面入口、release gate 与目标级 acceptance 口径一致性；真实发送验收使用完整 acceptance 链。",
+        "本页的 dry-run / resend / preflight 人工命令统一走 scheduler service exec；批量验收读取 observability acceptance。"
+      ],
+      "prerequisites": [
+        "已完成目标接入或轮换后的最小配置生效动作：one_click_config、bootstrap、scheduler up --force-recreate。"
+      ],
+      "example_commands": [
+        {
+          "title": "对目标做 send/retry/resend 预演",
+          "command": "bash ./scripts/runtime/run_openclaw_python_tool.sh dispatch ops run-target-operation --operation send --target <target_id> --env-file deploy/.env --control-plane-profile <profile_id> --ensure-running strict -- --dry-run true && bash ./scripts/runtime/run_openclaw_python_tool.sh dispatch ops run-target-operation --operation retry --target <target_id> --env-file deploy/.env --control-plane-profile <profile_id> --ensure-running strict -- --dry-run true && bash ./scripts/runtime/run_openclaw_python_tool.sh dispatch ops run-target-operation --operation resend --target <target_id> --env-file deploy/.env --control-plane-profile <profile_id> --ensure-running strict -- --dry-run true && bash ./scripts/runtime/run_openclaw_python_tool.sh dispatch observability show-target-acceptance --target <target_id> --gate-env-file deploy/.env --fail-on-fail --json --write-audit"
+        },
+        {
+          "title": "单独执行 resend dry-run",
+          "command": "bash ./scripts/runtime/run_openclaw_python_tool.sh dispatch ops run-target-operation --operation resend --target <target_id> --env-file deploy/.env --control-plane-profile <profile_id> --ensure-running strict -- --dry-run true"
+        },
+        {
+          "title": "补看最新 explain-latest",
+          "command": "bash ./scripts/runtime/run_openclaw_python_tool.sh dispatch ops run-target-operation --operation explain_latest --target <target_id> --env-file deploy/.env --control-plane-profile <profile_id> --ensure-running strict"
+        }
+      ],
+      "result_checks": [
+        "dry-run 组合只做预演；返回 0 代表控制面入口、release gate 与目标绑定可解析。",
+        "正式放开真实发送前必须完成完整 acceptance；dry-run 结果只表示控制面预演通过。"
+      ],
+      "common_branches": [
+        "retry/resend 的 dry-run 不会消费 queue；判断 backlog 是否下降时必须看 queue_done 与 ledger。"
+      ]
+    },
+    "dispatch_target_rotation": {
+      "id": "dispatch_target_rotation",
+      "title": "分发目标轮换默认顺序",
+      "purpose": "统一定义 provider endpoint / secret 轮换后的默认切换顺序、scheduler 生效动作与批量治理链路。",
+      "entry_command": "bash ./scripts/runtime/run_openclaw_python_tool.sh dispatch ops commands --entry dispatch_target_rotation",
+      "steps": [
+        "# 先更新 deploy/targets.d/<target_id>.env 中当前 target 对应的 endpointEnv / secretEnv",
+        "bash ./scripts/setup/one_click_config.sh",
+        "bash ./scripts/setup/bootstrap.sh",
+        "bash ./scripts/runtime/run_runtime_service_action.sh up --target scheduler --force-recreate",
+        "bash ./scripts/runtime/run_openclaw_python_tool.sh dispatch ops run-target-operation --operation preflight --target <target_id> --env-file deploy/.env --control-plane-profile <profile_id> --ensure-running strict",
+        "bash ./scripts/runtime/run_openclaw_python_tool.sh dispatch observability show-target-acceptance --target <target_id> --gate-env-file deploy/.env --fail-on-fail --json --write-audit",
+        "bash ./scripts/runtime/run_openclaw_python_tool.sh dispatch ops verify-rotation-sequence --batch <batch_id> --gate-env-file deploy/.env --control-plane-profile <profile_id> --json --fail-on-warn --write-audit",
+        "bash ./scripts/runtime/run_openclaw_python_tool.sh dispatch observability show-batch-acceptance --batch <batch_id> --gate-env-file deploy/.env --json --fail-on-warn --write-audit"
+      ],
+      "references": [
+        "docs/operations/dispatch-targets.md",
+        "docs/operations/troubleshooting.md"
+      ],
+      "notes": [
+        "生产相关 target 必须成组替换 provider endpoint 与 secret，不要只轮换一半。",
+        "轮换后是否放开真实发送，取决于 preflight、目标级 acceptance 与批量治理是否同时通过。"
+      ],
+      "prerequisites": [
+        "已拿到新 provider endpoint / secret，并明确当前轮换的 target_id、targetGroup 与 verification batch。",
+        "切换前已备份 deploy/targets.d/<target_id>.env 当前值，确保能快速回滚。"
+      ],
+      "example_commands": [
+        {
+          "title": "编辑目标输入文件",
+          "command": "vim deploy/targets.d/<target_id>.env"
+        },
+        {
+          "title": "重新生成 deploy/.env 并刷新运行态",
+          "command": "bash ./scripts/setup/one_click_config.sh && bash ./scripts/setup/bootstrap.sh"
+        },
+        {
+          "title": "重建 scheduler 后执行目标最小轮换验收",
+          "command": "bash ./scripts/runtime/run_runtime_service_action.sh up --target scheduler --force-recreate && bash ./scripts/runtime/run_openclaw_python_tool.sh dispatch ops run-target-operation --operation preflight --target <target_id> --env-file deploy/.env --control-plane-profile <profile_id> --ensure-running strict && bash ./scripts/runtime/run_openclaw_python_tool.sh dispatch ops run-target-operation --operation send --target <target_id> --env-file deploy/.env --control-plane-profile <profile_id> --ensure-running strict -- --dry-run true && bash ./scripts/runtime/run_openclaw_python_tool.sh dispatch observability show-batch-acceptance --batch <batch_id> --gate-env-file deploy/.env --json --fail-on-warn --write-audit"
+        }
+      ],
+      "result_checks": [
+        "bootstrap 完成后，dispatch target 运行态副本应已刷新；随后 scheduler force recreate 不应报错。",
+        "target-scoped acceptance 与对应轮换批次 acceptance 不应为 fail；生产放量前还应补看发布必需批次。"
+      ],
+      "common_branches": [
+        "若轮换后系统表现为未刷新的配置，优先检查是否遗漏 bootstrap 或 scheduler up --force-recreate。",
+        "若治理巡检报共享 provider endpoint，说明多个 target 引用同一 endpoint，不得直接放量。"
+      ]
+    },
+    "dispatch_target_rotation_min_acceptance": {
+      "id": "dispatch_target_rotation_min_acceptance",
+      "title": "轮换后的最小验收",
+      "purpose": "统一定义 dispatch target 轮换完成后至少必须保留的一组最小验收入口。",
+      "entry_command": "bash ./scripts/runtime/run_openclaw_python_tool.sh dispatch ops commands --entry dispatch_target_rotation_min_acceptance",
+      "steps": [
+        "bash ./scripts/runtime/run_openclaw_python_tool.sh dispatch ops run-target-operation --operation preflight --target <target_id> --env-file deploy/.env --control-plane-profile <profile_id> --ensure-running strict",
+        "bash ./scripts/runtime/run_openclaw_python_tool.sh dispatch observability show-target-acceptance --target <target_id> --gate-env-file deploy/.env --fail-on-fail --json --write-audit",
+        "bash ./scripts/runtime/run_openclaw_python_tool.sh dispatch ops verify-rotation-sequence --batch <batch_id> --gate-env-file deploy/.env --control-plane-profile <profile_id> --json --fail-on-warn --write-audit"
+      ],
+      "references": [
+        "docs/operations/dispatch-targets.md#dispatch-target-rotation-min-acceptance",
+        "docs/operations/dispatch-targets.md#dispatch-recovery-order"
+      ],
+      "notes": [
+        "正式播报 target 的目标级 acceptance 使用 dispatch ops run-target-operation + dispatch observability show-target-acceptance 的完整命令组。",
+        "`dispatch ops run-target-operation` 承载 scheduler service exec 的人工 preflight / dry-run；验收结果由 observability acceptance 给出。"
+      ],
+      "prerequisites": [
+        "目标切换已经实际生效；配置尚未 bootstrap 前不要执行最小验收。"
+      ],
+      "example_commands": [
+        {
+          "title": "对目标执行轮换后的最小验收",
+          "command": "bash ./scripts/runtime/run_openclaw_python_tool.sh dispatch ops run-target-operation --operation preflight --target <target_id> --env-file deploy/.env --control-plane-profile <profile_id> --ensure-running strict && bash ./scripts/runtime/run_openclaw_python_tool.sh dispatch observability show-target-acceptance --target <target_id> --gate-env-file deploy/.env --fail-on-fail --json --write-audit && bash ./scripts/runtime/run_openclaw_python_tool.sh dispatch ops verify-rotation-sequence --batch <batch_id> --gate-env-file deploy/.env --control-plane-profile <profile_id> --json --fail-on-warn --write-audit"
+        }
+      ],
+      "result_checks": [
+        "preflight 返回 0，target acceptance 不为 fail，对应批次治理检查不为 fail。"
+      ],
+      "common_branches": [
+        "若只想验证单目标，不要把批量治理结果误当作单 target 结果；两者职责不同。"
+      ]
+    },
+    "dispatch_target_disable": {
+      "id": "dispatch_target_disable",
+      "title": "停发 target 的标准动作",
+      "purpose": "统一定义将 dispatch target 置为 disabled 时的标准命令顺序。",
+      "entry_command": "bash ./scripts/runtime/run_openclaw_python_tool.sh dispatch ops commands --entry dispatch_target_disable",
+      "steps": [
+        "bash ./scripts/setup/update_dispatch_target_lifecycle.sh --target <target_id> --state disabled --write-audit",
+        "bash ./scripts/setup/update_dispatch_target_lifecycle.sh --target <target_id> --state disabled --apply --write-audit"
+      ],
+      "references": [
+        "docs/operations/dispatch-targets.md#dispatch-target-lifecycle",
+        "docs/operations/dispatch-targets.md#dispatch-recovery-order"
+      ],
+      "notes": [
+        "disabled 用于停止真实发送但保留注册表条目、批次与治理关系。"
+      ],
+      "prerequisites": [
+        "明确这是停发而不是彻底下线；disabled 保留注册表条目与审计关系。"
+      ],
+      "example_commands": [
+        {
+          "title": "先 dry-run 预览目标停发影响",
+          "command": "bash ./scripts/setup/update_dispatch_target_lifecycle.sh --target <target_id> --state disabled --write-audit"
+        },
+        {
+          "title": "确认无误后正式 apply",
+          "command": "bash ./scripts/setup/update_dispatch_target_lifecycle.sh --target <target_id> --state disabled --apply --write-audit"
+        }
+      ],
+      "result_checks": [
+        "apply 后摘要中应显示 current_state -> next_state 的变化，enabledDefault 应为 false。"
+      ],
+      "common_branches": [
+        "disabled 不会自动删除 target；需要从批次与轮换中彻底移除时，使用 `decommissioned`。"
+      ]
+    },
+    "dispatch_target_decommission": {
+      "id": "dispatch_target_decommission",
+      "title": "彻底下线 target 的标准动作",
+      "purpose": "统一定义将 dispatch target 置为 decommissioned 时的标准命令顺序。",
+      "entry_command": "bash ./scripts/runtime/run_openclaw_python_tool.sh dispatch ops commands --entry dispatch_target_decommission",
+      "steps": [
+        "bash ./scripts/setup/update_dispatch_target_lifecycle.sh --target <target_id> --state decommissioned --apply --write-audit"
+      ],
+      "references": [
+        "docs/operations/dispatch-targets.md#dispatch-target-lifecycle",
+        "docs/operations/dispatch-targets.md#dispatch-recovery-order"
+      ],
+      "notes": [
+        "进入 decommissioned 后，脚本会自动把 enabledDefault=false 并清空 verificationBatchIds，避免已下线 target 继续参与轮换。"
+      ],
+      "prerequisites": [
+        "明确该 target 已退出任何轮换、验收与真实发送，并已准备好 owner/批次层面的清理评审。"
+      ],
+      "example_commands": [
+        {
+          "title": "直接将目标置为 decommissioned",
+          "command": "bash ./scripts/setup/update_dispatch_target_lifecycle.sh --target <target_id> --state decommissioned --apply --write-audit"
+        }
+      ],
+      "result_checks": [
+        "apply 后 target 的 enabledDefault 应为 false，verificationBatchIds 应为空，相关批次若仅剩该目标也会被移除。"
+      ],
+      "common_branches": [
+        "decommissioned 默认不允许直接回退；需要恢复时，必须先补回 verificationBatchIds、owner 与策略并重新评审。"
+      ]
+    }
+  }
+}

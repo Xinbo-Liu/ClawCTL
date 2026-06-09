@@ -1,0 +1,293 @@
+{
+  "fileBaselines": {
+    "python/openclaw/release/__init__.py": {
+      "moduleHasChineseDocstring": true,
+      "publicChineseDocstrings": 1,
+      "publicEnglishOnlyDocstrings": 0,
+      "publicItemBaselines": {
+        "module:<module>": {
+          "hasChineseDocstring": true,
+          "hasDocstring": true,
+          "kind": "module",
+          "qualname": "<module>"
+        }
+      },
+      "publicMissingDocstrings": 0
+    },
+    "python/openclaw/release/artifact_smoke.py": {
+      "moduleHasChineseDocstring": false,
+      "publicChineseDocstrings": 0,
+      "publicEnglishOnlyDocstrings": 1,
+      "publicItemBaselines": {
+        "function:build_parser": {
+          "hasChineseDocstring": false,
+          "hasDocstring": false,
+          "kind": "function",
+          "qualname": "build_parser"
+        },
+        "function:cmd_base_kernel": {
+          "hasChineseDocstring": false,
+          "hasDocstring": false,
+          "kind": "function",
+          "qualname": "cmd_base_kernel"
+        },
+        "function:cmd_platform_profile": {
+          "hasChineseDocstring": false,
+          "hasDocstring": false,
+          "kind": "function",
+          "qualname": "cmd_platform_profile"
+        },
+        "function:main": {
+          "hasChineseDocstring": false,
+          "hasDocstring": false,
+          "kind": "function",
+          "qualname": "main"
+        },
+        "module:<module>": {
+          "hasChineseDocstring": false,
+          "hasDocstring": true,
+          "kind": "module",
+          "qualname": "<module>"
+        }
+      },
+      "publicMissingDocstrings": 4
+    },
+    "python/openclaw/release/bundle_governance.py": {
+      "moduleHasChineseDocstring": true,
+      "publicChineseDocstrings": 16,
+      "publicEnglishOnlyDocstrings": 0,
+      "publicItemBaselines": {
+        "class:BundleGovernanceError": {
+          "hasChineseDocstring": true,
+          "hasDocstring": true,
+          "kind": "class",
+          "qualname": "BundleGovernanceError"
+        },
+        "function:build_parser": {
+          "hasChineseDocstring": true,
+          "hasDocstring": true,
+          "kind": "function",
+          "qualname": "build_parser"
+        },
+        "function:bundle_spec": {
+          "hasChineseDocstring": true,
+          "hasDocstring": true,
+          "kind": "function",
+          "qualname": "bundle_spec"
+        },
+        "function:cmd_build": {
+          "hasChineseDocstring": true,
+          "hasDocstring": true,
+          "kind": "function",
+          "qualname": "cmd_build"
+        },
+        "function:cmd_list_bundles": {
+          "hasChineseDocstring": true,
+          "hasDocstring": true,
+          "kind": "function",
+          "qualname": "cmd_list_bundles"
+        },
+        "function:cmd_manifest": {
+          "hasChineseDocstring": true,
+          "hasDocstring": true,
+          "kind": "function",
+          "qualname": "cmd_manifest"
+        },
+        "function:cmd_validate": {
+          "hasChineseDocstring": true,
+          "hasDocstring": true,
+          "kind": "function",
+          "qualname": "cmd_validate"
+        },
+        "function:compute_bom": {
+          "hasChineseDocstring": true,
+          "hasDocstring": true,
+          "kind": "function",
+          "qualname": "compute_bom"
+        },
+        "function:default_output_name": {
+          "hasChineseDocstring": true,
+          "hasDocstring": true,
+          "kind": "function",
+          "qualname": "default_output_name"
+        },
+        "function:load_manifest": {
+          "hasChineseDocstring": true,
+          "hasDocstring": true,
+          "kind": "function",
+          "qualname": "load_manifest"
+        },
+        "function:main": {
+          "hasChineseDocstring": true,
+          "hasDocstring": true,
+          "kind": "function",
+          "qualname": "main"
+        },
+        "function:must_not_ship_hits": {
+          "hasChineseDocstring": true,
+          "hasDocstring": true,
+          "kind": "function",
+          "qualname": "must_not_ship_hits"
+        },
+        "function:resolve_bundle_files": {
+          "hasChineseDocstring": true,
+          "hasDocstring": true,
+          "kind": "function",
+          "qualname": "resolve_bundle_files"
+        },
+        "function:validate_bundle": {
+          "hasChineseDocstring": true,
+          "hasDocstring": true,
+          "kind": "function",
+          "qualname": "validate_bundle"
+        },
+        "function:write_json": {
+          "hasChineseDocstring": true,
+          "hasDocstring": true,
+          "kind": "function",
+          "qualname": "write_json"
+        },
+        "module:<module>": {
+          "hasChineseDocstring": true,
+          "hasDocstring": true,
+          "kind": "module",
+          "qualname": "<module>"
+        }
+      },
+      "publicMissingDocstrings": 0
+    },
+    "python/openclaw/release/bundle_manifest_support.py": {
+      "moduleHasChineseDocstring": true,
+      "publicChineseDocstrings": 10,
+      "publicEnglishOnlyDocstrings": 0,
+      "publicItemBaselines": {
+        "function:bundle_spec": {
+          "hasChineseDocstring": true,
+          "hasDocstring": true,
+          "kind": "function",
+          "qualname": "bundle_spec"
+        },
+        "function:contains_glob": {
+          "hasChineseDocstring": true,
+          "hasDocstring": true,
+          "kind": "function",
+          "qualname": "contains_glob"
+        },
+        "function:default_shared_excludes": {
+          "hasChineseDocstring": true,
+          "hasDocstring": true,
+          "kind": "function",
+          "qualname": "default_shared_excludes"
+        },
+        "function:iter_pattern_matches": {
+          "hasChineseDocstring": true,
+          "hasDocstring": true,
+          "kind": "function",
+          "qualname": "iter_pattern_matches"
+        },
+        "function:load_manifest": {
+          "hasChineseDocstring": true,
+          "hasDocstring": true,
+          "kind": "function",
+          "qualname": "load_manifest"
+        },
+        "function:match_any": {
+          "hasChineseDocstring": true,
+          "hasDocstring": true,
+          "kind": "function",
+          "qualname": "match_any"
+        },
+        "function:must_not_ship_hits": {
+          "hasChineseDocstring": true,
+          "hasDocstring": true,
+          "kind": "function",
+          "qualname": "must_not_ship_hits"
+        },
+        "function:normalize_pattern": {
+          "hasChineseDocstring": false,
+          "hasDocstring": false,
+          "kind": "function",
+          "qualname": "normalize_pattern"
+        },
+        "function:read_json": {
+          "hasChineseDocstring": true,
+          "hasDocstring": true,
+          "kind": "function",
+          "qualname": "read_json"
+        },
+        "function:resolve_bundle_files": {
+          "hasChineseDocstring": true,
+          "hasDocstring": true,
+          "kind": "function",
+          "qualname": "resolve_bundle_files"
+        },
+        "module:<module>": {
+          "hasChineseDocstring": true,
+          "hasDocstring": true,
+          "kind": "module",
+          "qualname": "<module>"
+        }
+      },
+      "publicMissingDocstrings": 1
+    },
+    "python/openclaw/release/bundle_runtime_checks.py": {
+      "moduleHasChineseDocstring": false,
+      "publicChineseDocstrings": 4,
+      "publicEnglishOnlyDocstrings": 1,
+      "publicItemBaselines": {
+        "function:artifact_smoke_failures": {
+          "hasChineseDocstring": true,
+          "hasDocstring": true,
+          "kind": "function",
+          "qualname": "artifact_smoke_failures"
+        },
+        "function:budget_failures": {
+          "hasChineseDocstring": true,
+          "hasDocstring": true,
+          "kind": "function",
+          "qualname": "budget_failures"
+        },
+        "function:build_size_manifest": {
+          "hasChineseDocstring": true,
+          "hasDocstring": true,
+          "kind": "function",
+          "qualname": "build_size_manifest"
+        },
+        "function:run_artifact_smoke": {
+          "hasChineseDocstring": true,
+          "hasDocstring": true,
+          "kind": "function",
+          "qualname": "run_artifact_smoke"
+        },
+        "module:<module>": {
+          "hasChineseDocstring": false,
+          "hasDocstring": true,
+          "kind": "module",
+          "qualname": "<module>"
+        }
+      },
+      "publicMissingDocstrings": 0
+    }
+  },
+  "kind": "openclaw_platform_docstring_baseline_shard",
+  "policy": {
+    "mode": "baseline-ratchet",
+    "newFilesRequireChinesePublicDocstrings": true,
+    "trackedItemKinds": [
+      "module",
+      "class",
+      "function"
+    ]
+  },
+  "schemaVersion": 1,
+  "scope": {
+    "excluded": [
+      "python/openclaw/tests",
+      "python/openclaw/testing"
+    ],
+    "roots": [
+      "python/openclaw"
+    ]
+  },
+  "shardKey": "release"
+}

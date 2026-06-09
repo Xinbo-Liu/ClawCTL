@@ -1,0 +1,168 @@
+{
+  "purpose": "统一维护 runtime 服务 bind mount 合同。Gateway 正式 state 面固定整根挂载到 `/home/node/.openclaw`；其下 `openclaw.json`、`exec-approvals.json`、`devices`、`logs` 与 `workspace-*` 仅作为逻辑对象继续由 runtime_paths 管理。优先引用 runtime_paths 真源；仅当挂载来源属于仓库代码目录或 deploy 本地目录时，才使用 repo_path / compose_relpath。",
+  "compose": {
+    "file": "deploy/docker-compose.yml",
+    "marker_prefix": "RUNTIME_MOUNTS"
+  },
+  "generated_artifacts": {
+    "runtime_mount_registry_doc": "docs/architecture/control-plane-baseline.md"
+  },
+  "services": [
+    {
+      "service": "openclaw-official-gateway",
+      "mounts": [
+        {
+          "source_type": "runtime_path_entry",
+          "entry": "gateway_host_state_dir",
+          "container_path": "/home/node/.openclaw",
+          "mode": "rw",
+          "selinux": "Z",
+          "description": "Gateway 单根状态目录"
+        },
+        {
+          "source_type": "runtime_path_entry",
+          "entry": "gateway_local_ro_dir",
+          "container_path": "/local_ro",
+          "mode": "ro",
+          "selinux": "Z",
+          "description": "Gateway 只读本地资料目录"
+        }
+      ]
+    },
+    {
+      "service": "openclaw-internal-api",
+      "mounts": [
+        {
+          "source_type": "repo_path",
+          "relative_path": "python",
+          "container_path": "/opt/openclaw-tools/python",
+          "mode": "ro",
+          "selinux": "Z",
+          "description": "仓库 Python 源码"
+        },
+        {
+          "source_type": "repo_path",
+          "relative_path": "config",
+          "container_path": "/opt/openclaw-tools/config",
+          "mode": "ro",
+          "selinux": "Z",
+          "description": "仓库配置真源"
+        },
+        {
+          "source_type": "repo_path",
+          "relative_path": "docs",
+          "container_path": "/opt/openclaw-tools/docs",
+          "mode": "ro",
+          "selinux": "Z",
+          "description": "仓库文档真源"
+        },
+        {
+          "source_type": "repo_path",
+          "relative_path": "agent",
+          "container_path": "/opt/openclaw-tools/agent",
+          "mode": "ro",
+          "selinux": "Z",
+          "description": "仓库 agent 真源"
+        },
+        {
+          "source_type": "runtime_path_entry",
+          "entry": "control_plane_host_state_dir",
+          "container_path": "/home/openclaw/.openclaw",
+          "mode": "ro",
+          "selinux": "Z",
+          "description": "控制平面运行态目录（internal-api 只读）"
+        }
+      ]
+    },
+    {
+      "service": "openclaw-control-plane-scheduler",
+      "mounts": [
+        {
+          "source_type": "runtime_path_entry",
+          "entry": "control_plane_host_state_dir",
+          "mode": "rw",
+          "selinux": "Z",
+          "description": "控制平面运行态目录（scheduler 可写）",
+          "container_path": "/home/openclaw/.openclaw"
+        },
+        {
+          "source_type": "runtime_path_entry",
+          "entry": "gateway_host_state_dir",
+          "mode": "rw",
+          "selinux": "Z",
+          "description": "Gateway 定时任务展示镜像目录（scheduler 刷新 cron UI 状态）",
+          "container_path": "/home/openclaw/.openclaw-gateway"
+        },
+        {
+          "source_type": "repo_path",
+          "relative_path": "python",
+          "container_path": "/opt/openclaw-tools/python",
+          "mode": "ro",
+          "selinux": "Z",
+          "description": "仓库 Python 源码"
+        },
+        {
+          "source_type": "repo_path",
+          "relative_path": "scripts",
+          "container_path": "/opt/openclaw-tools/scripts",
+          "mode": "ro",
+          "selinux": "Z",
+          "description": "运行与恢复脚本"
+        },
+        {
+          "source_type": "repo_path",
+          "relative_path": "config",
+          "container_path": "/opt/openclaw-tools/config",
+          "mode": "ro",
+          "selinux": "Z",
+          "description": "仓库配置真源"
+        },
+        {
+          "source_type": "repo_path",
+          "relative_path": "docs",
+          "container_path": "/opt/openclaw-tools/docs",
+          "mode": "ro",
+          "selinux": "Z",
+          "description": "仓库文档真源"
+        },
+        {
+          "source_type": "repo_path",
+          "relative_path": "agent",
+          "container_path": "/opt/openclaw-tools/agent",
+          "mode": "ro",
+          "selinux": "Z",
+          "description": "仓库 agent 真源"
+        }
+      ]
+    },
+    {
+      "service": "openclaw-private-ingress",
+      "mounts": [
+        {
+          "source_type": "runtime_path_entry",
+          "entry": "nginx_gateway_conf",
+          "container_path": "/etc/nginx/nginx.conf",
+          "mode": "ro",
+          "selinux": "Z",
+          "description": "渲染后的 ingress Nginx 配置"
+        },
+        {
+          "source_type": "compose_relpath",
+          "relative_path": "nginx/certs",
+          "container_path": "/etc/nginx/certs",
+          "mode": "ro",
+          "selinux": "Z",
+          "description": "TLS 证书目录"
+        },
+        {
+          "source_type": "runtime_path_entry",
+          "entry": "gateway_nginx_logs_dir",
+          "container_path": "/var/log/nginx",
+          "mode": "rw",
+          "selinux": "Z",
+          "description": "Nginx 日志目录"
+        }
+      ]
+    }
+  ]
+}

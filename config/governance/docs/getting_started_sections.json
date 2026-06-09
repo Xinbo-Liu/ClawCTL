@@ -1,0 +1,155 @@
+{
+  "quickstart": {
+    "problem_paragraphs": [
+      "本页提供 **正式部署路径** 的最简部署主线：从宿主机准备、private ingress 选择、`deploy/site.env` 与启用扩展内部 `agent/extensions/<extension-id>/deploy/extension.env` 的 schema 工具化填写、one-click 主链，到 deployment acceptance、client access acceptance 与最终交付包导出。",
+      "正文覆盖部署主链、阶段顺序与恢复执行语义；需要运行验收与排障时，再分别跳到 `../operations/runtime-service-reference.md` 与 `../operations/troubleshooting.md`。"
+    ],
+    "scope_links": [
+      "正式支持边界与不支持范围：`../architecture/supported-deployment-boundary.md`",
+      "宿主机准备与 readiness：`environment-setup.md`",
+      "阶段顺序与 `--resume-from` 语义：本页下方的“部署阶段与 `--resume-from`”",
+      "acceptance 产物与 required checks：`../operations/runtime-service-reference.md#deployment-acceptance-artifacts`"
+    ],
+    "step2_static_notes": [
+      "target 级变量维护入口固定为 `deploy/targets.d/<target_id>.env`；批量写入使用 `apply_target_env_values.sh --target <target_id>`，不要从 Windows PowerShell here-string 直接向远程 bash 写多行 env，也不要手改 `deploy/.env`。",
+      "启用业务扩展时，先执行 `bash ./scripts/setup/check_extension_env_values.sh --profile <profile_id>` 查看按 group 分组的 required / manual_required / secret 字段，再用 `apply_extension_env_values.sh --profile <profile_id> --init-from-example --set KEY=VALUE` 或 `--set-secret-from-env KEY` 写入扩展 env。",
+      "需要逐项解释输入字段时，转到 `deployment-inputs.md`。",
+      "one_click 入口职责、默认主链、阶段顺序与 `--resume-from` 语义统一查看本页。"
+    ],
+    "config_validation_notes": [
+      "出现 `__REQUIRED__`、TLS / ingress 参数不一致、setup env validate 失败，或 `check_ingress_boundary_evidence.sh` 失败时，先不要进入 basic gate。",
+      "来源限制语义错误应在此步骤直接暴露，作为进入 full test 前的前置校验。",
+      "配置生成与输入问题的失败分流统一查看 `../operations/troubleshooting.md#配置生成与输入问题`。"
+    ],
+    "basic_gate_notes": [
+      "离线首轮示例：`bash ./scripts/setup/one_click_test_basic.sh --offline --image-archive <local-path>`。",
+      "`--image-archive` 只允许与 `--offline` 同用；在线模式传入离线归档会直接失败，basic gate proof 与镜像来源状态必须一致。",
+      "basic gate 固定前置检查 ingress 边界证据与来源限制语义；失败时先修正 `deploy/site.env`、启用扩展内部 `agent/extensions/<extension-id>/deploy/extension.env`、宿主机防火墙或 external ACL 证据，再继续。",
+      "release alignment 默认使用 `relaxed_install` 策略：当前 pin tag@digest 可解析且合同闭合时，上游 latest 更高只记 WARN；发布门禁、升级验证或 candidate 提升验证才使用 `--strict-release-check`。",
+      "basic gate 会拒绝 `deploy/.env`、`deploy/site.env`、启用扩展内部 `agent/extensions/<extension-id>/deploy/extension.env`、`deploy/targets.d/*.env` 与仓库可执行脚本中的 CRLF / 回车字符；从 Windows 写入部署输入后先保持 LF，再进入正式部署。",
+      "详细边界、默认主链与 basic gate 语义统一查看本页。"
+    ],
+    "deploy_full_test_notes": [
+      "`one_click_deploy.sh` 默认会校验或刷新 basic gate proof，启动 runtime 服务后自动执行 `one_click_test_full.sh` 并导出 runtime acceptance evidence。",
+      "若 `pull_images.sh` 在 `PULL_GATEWAY_CANDIDATE_MODE=auto-switch` 下改写了 `deploy/.env`，部署入口会重新加载镜像 env、重新渲染 effective compose、刷新 basic gate proof，并在 `docker_compose_up` 前用最终 compose image refs 做本地镜像合同检查。",
+      "若当前 profile / extension 声明 required run ledger jobs，`one_click_deploy.sh` 会先受控执行一次 `run_control_plane_run_all_once.sh` 生成真实 run ledger，再进入 full test；该入口只在 scheduler cycle lock busy 时有限重试，其他失败立即保留。发送动作按当前 target 配置执行；当前 target 配置不允许发送且 run ledger 缺失时，应改用 `--skip-acceptance` 仅启动服务，并把 deployment acceptance / runtime acceptance evidence 未闭合作为交接状态。run ledger execution 与 artifact evidence 必须同时闭合，执行失败、job 缺失、artifact root 缺失或声明输出没有可接受 evidence 都会阻断 full test / deployment acceptance。",
+      "需要结构化 full test 摘要时，执行 `bash ./scripts/setup/one_click_test_full.sh --json`。",
+      "需要快速恢复、验证服务启动或先定位部署根因时，可对部署入口追加 `--skip-acceptance`；该模式不会运行 full test，也不会把 deployment acceptance 置为通过。",
+      "`--skip-acceptance` 后先执行 `show_runtime_service_status.sh`、`check_internal_api_runtime.sh`、`check_control_plane_runtime.sh` 与 root 侧 ingress 边界证据检查；当前 target 配置允许发送时，选择 `--resume-from post_deploy_acceptance` 闭合 required jobs、full test 与 runtime evidence；required run ledger jobs 已 accepted、仅 full test 或 runtime evidence 未闭合时，选择 `--resume-from post_deploy_full_acceptance`。",
+      "`--skip-release-check`、`--skip-browser-verify`、`--require-basic-gate-proof` 与 `--skip-acceptance` 都属于恢复/排障开关；使用时部署日志会写出 WARN，不能把服务启动当作完整验收通过。",
+      "若服务阶段已经健康但 required run ledger jobs 缺失或失败，使用 `bash ./scripts/setup/one_click_deploy.sh --resume-from post_deploy_acceptance` 执行 required jobs、full test 与 runtime evidence；发送动作按当前 target 配置执行。",
+      "若 required run ledger jobs 已 accepted，仅 full test 或 runtime evidence 导出未闭合，使用 `bash ./scripts/setup/one_click_deploy.sh --resume-from post_deploy_full_acceptance` 执行 full test 与 runtime evidence，且跳过镜像拉取、compose 阶段与 run_all_once。",
+      "正式部署阶段会在启动服务前复核 `nginx.gateway.conf` 的来源 allowlist 与 ingress 边界证据；自动 full test 会再次执行同一闭环检查。",
+      "若部署中修复过 Docker / firewalld，必须重新执行 root 侧 `apply_ingress_boundary_rules.sh --env-file deploy/.env`，再 resume compose 或验收阶段。",
+      "失败后第一跳统一回 `../operations/troubleshooting.md`；阶段顺序与恢复执行语义统一回本页“部署阶段与 `--resume-from`”。"
+    ],
+    "manual_acceptance_notes": [
+      "目标机先执行运行态人工补充核对：`../operations/runtime-service-reference.md#manual-post-deploy-checks`。",
+      "访问端再执行 `/healthz`、`/readyz` 与浏览器访问。",
+      "访问端闭环可先在目标机生成辅助命令：`bash ./scripts/setup/check_client_access_acceptance.sh --env-file deploy/.env --client-cidr '<目标机实际看到的访问端私网CIDR[,CIDR]>' --tls-cn <OPENCLAW_TLS_CN>`；该入口区分目标机本机 `deployment_acceptance` 与外部浏览器/DNS/hosts/证书信任的 `client_access_acceptance`。",
+      "浏览器必须打开 `https://<OPENCLAW_TLS_CN>/`，Control UI 的 WebSocket URL 使用 `wss://<OPENCLAW_TLS_CN>`；若改用 IP 或其他别名访问，Gateway 会因 Origin 不在 `allowedOrigins` 中拒绝连接。",
+      "Control UI 连接时必须填入 `OPENCLAW_GATEWAY_TOKEN` 的真实值；目标机可用 `bash ./scripts/runtime/run_openclaw_python_tool.sh setup env query-env OPENCLAW_GATEWAY_TOKEN --env-file deploy/.env` 查询。",
+      "浏览器本地凭据丢失或更换浏览器时，不重新部署、不重新生成 token；重新读取当前 `OPENCLAW_GATEWAY_TOKEN` 并批准新设备配对即可恢复访问。",
+      "`deploy/.env`、`deploy/site.env`、`deploy/targets.d/*.env` 与启用扩展内部 `agent/extensions/*/deploy/extension.env` 保持 owner-only `600`；日常检查用 validate、schema check 与脱敏 compose，确需查看 token / secret / webhook 明文时只在目标机受控终端定向读取目标 key。",
+      "第 5 步未使用 `--skip-acceptance` 时，deployment acceptance 与 runtime acceptance evidence 已由 `one_click_deploy.sh` 自动闭合；本步只做人工补充核对与首次浏览器配对。",
+      "若第 5 步使用 `--skip-acceptance`，或需要复核默认顺序、通过标准与证据产物，统一查看："
+    ],
+    "failure_matrix": [
+      {
+        "symptom": "宿主机仓库、Docker、Compose、firewall 或 firewalld docker zone 未准备完成",
+        "route": "`environment-setup.md`"
+      },
+      {
+        "symptom": "`deploy/.env` 里还有 `__REQUIRED__`，或 setup env validate 失败",
+        "route": "`../operations/troubleshooting.md#配置生成与输入问题`"
+      },
+      {
+        "symptom": "one_click_test_basic / one_click_deploy / one_click_test_full 失败",
+        "route": "`../operations/troubleshooting.md`"
+      },
+      {
+        "symptom": "服务起来了但 UI / healthz / readyz 不正常",
+        "route": "`../operations/runtime-service-reference.md` 与 `../operations/troubleshooting.md#runtime-与-ingress-问题`"
+      },
+      {
+        "symptom": "目标机本机验收通过，但外部浏览器或访问端 curl 未闭合",
+        "route": "`../operations/troubleshooting.md#client-access-acceptance`"
+      },
+      {
+        "symptom": "Control UI 提示 origin not allowed",
+        "route": "`../operations/troubleshooting.md#control-ui-origin-not-allowed`"
+      },
+      {
+        "symptom": "Control UI 提示 gateway token missing 或 unauthorized",
+        "route": "`../operations/troubleshooting.md#control-ui-gateway-token-missing`"
+      },
+      {
+        "symptom": "浏览器提示网站不是私密链接或证书不受信任",
+        "route": "`../operations/troubleshooting.md#control-ui-certificate-warning`"
+      },
+      {
+        "symptom": "访问端打开了 localhost、localhost:443、目标机 IP 或其他别名",
+        "route": "`../operations/troubleshooting.md#control-ui-localhost-url`"
+      },
+      {
+        "symptom": "浏览器本地凭据丢失或更换浏览器后需要重新取 Gateway token",
+        "route": "`../operations/troubleshooting.md#control-ui-token-recovery`"
+      },
+      {
+        "symptom": "首次浏览器访问提示 pairing required",
+        "route": "`../operations/troubleshooting.md#control-ui-first-pairing`"
+      },
+      {
+        "symptom": "导出 evidence 或 clean delivery 失败",
+        "route": "`../operations/troubleshooting.md#验收归档与交付导出问题`"
+      }
+    ],
+    "next_steps": [
+      "进入日常值守、服务状态、日志与证据归档：`../operations/runtime-service-reference.md`",
+      "进入统一排障：`../operations/troubleshooting.md`",
+      "进入 dispatch target 首次接入：`../operations/dispatch-targets.md`"
+    ],
+    "deploy_stage": {
+      "title": "部署阶段与 `--resume-from`",
+      "resume_intro": "`one_click_deploy.sh --resume-from <stage>` 只接受下面这些 canonical stage id。",
+      "online_title": "在线默认阶段：",
+      "offline_title": "离线默认阶段：",
+      "post_resume_title": "后置 resume 阶段：",
+      "post_resume_stage_ids": [
+        "post_deploy_acceptance",
+        "post_deploy_full_acceptance"
+      ],
+      "resume_rules": [
+        "`--resume-from` 必须从真实失败阶段或更早阶段继续；如果失败发生在 `docker_compose_config` 或更早阶段，不能固定从 `docker_compose_up` 开始恢复执行。",
+        "若 `docker_compose_up` 因 `INVALID_ZONE: docker` 失败，先以 root 执行 `prepare_docker_host.sh --open-firewall` 与 `apply_ingress_boundary_rules.sh --env-file deploy/.env`，再从 `docker_compose_up` 继续。",
+        "若失败发生在服务启动后的 required run ledger jobs 阶段，使用 `--resume-from post_deploy_acceptance` 执行 required jobs、full test 与 runtime evidence；发送动作按当前 target 配置执行。",
+        "若 required run ledger jobs 已 accepted，仅 full test 或 runtime evidence 导出阶段失败，使用 `--resume-from post_deploy_full_acceptance` 执行 full test 与 runtime evidence，且跳过 run_all_once。",
+        "后置验收 resume 必须实际执行验收闭环，不能与 `--prepare-only` 或 `--skip-acceptance` 同用。",
+        "需要先确认入口与阶段说明时，用 `bash ./scripts/setup/one_click_deploy.sh --explain`。"
+      ],
+      "command_section_intro": "下列命令直接来自 `{deploy_stage_flow_relpath}` 的 `next_commands`，恢复执行或人工核对时以这些固定命令为准。",
+      "focus_stage_ids": [
+        "fix_permissions",
+        "bootstrap",
+        "check_ingress_boundary_evidence",
+        "check_runtime_compose_contract",
+        "docker_compose_up",
+        "docker_compose_ps",
+        "control_plane_run_all_once",
+        "post_deploy_acceptance",
+        "post_deploy_full_acceptance",
+        "export_runtime_acceptance_evidence"
+      ]
+    }
+  },
+  "environment_setup": {
+    "host_control_plane_intro": [
+      "完成宿主机基础环境后，在进入 `one_click_config.sh` 与任意 host 控制面 Python 工具子命令前，必须先显式准备 host 控制面执行介质。"
+    ],
+    "private_ingress_listen_ip_template": "`{ingress_listen_ip_field}` 必须是目标机自己的私网或 loopback IP；默认先使用 `hostname -I` 输出中的首个私网 IPv4，即 `{listen_ip}`，也可手工使用 ULA/loopback IPv6。只有浏览器与目标服务位于同一操作系统实例时，才允许手工使用 loopback；跨 OS / 跨网络实例访问不属于该例外。它不能是 hostname、`0.0.0.0`、`::` 或公网地址。",
+    "private_ingress_tls_cn_template": "`{tls_cn_field}` 示例可写为 `{tls_cn}`。它必须同时承担：",
+    "private_ingress_resolution_intro": "访问端必须能把：",
+    "private_ingress_resolution_note": "解析成功。没有内网 DNS 就写 hosts。",
+    "private_ingress_boundary_note": "宿主机若启用防火墙，只开放 80/443。firewalld 环境还必须保留 permanent `docker` zone 且 target 为 `ACCEPT`，避免 Docker bridge / NAT 在 compose up 时遇到 `INVALID_ZONE: docker`。Nginx 会按 `OPENCLAW_INGRESS_ALLOWED_SOURCE_CIDRS` 渲染本地 allowlist；来源限制必须在宿主机防火墙、ACL 或 DOCKER-USER 中显式落地，并保持默认拒绝；若环境启用 IPv6，则必须同时提供 IPv6 边界证据，或在宿主机 / 上游网络层显式禁用 IPv6 对外暴露。"
+  }
+}

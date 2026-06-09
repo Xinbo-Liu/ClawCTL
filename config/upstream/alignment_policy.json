@@ -1,0 +1,49 @@
+{
+  "schema_version": 3,
+  "title": "openclaw upstream alignment policy",
+  "checker": "scripts/images/check_openclaw_release.sh",
+  "max_base_lag": 0,
+  "max_correction_lag": 0,
+  "block_on_pending_regeneration": true,
+  "official_runtime_contract": {
+    "path_envs": [
+      "OPENCLAW_HOME",
+      "OPENCLAW_STATE_DIR",
+      "OPENCLAW_CONFIG_PATH"
+    ],
+    "default_state_dir": "~/.openclaw",
+    "default_config_path": "~/.openclaw/openclaw.json",
+    "docker_home": "/home/node",
+    "docker_state_mount": "/home/node/.openclaw",
+    "docker_config_path": "/home/node/.openclaw/openclaw.json"
+  },
+  "runtime_contract_state": {
+    "state": "gateway_official_runtime_projection_active",
+    "official_runtime_contract_active": true,
+    "statement": "当前仓库的 Gateway 容器运行合同以 OpenClaw 官方公开语义为准；升级必须在该合同内演进，项目自定义 Gateway 活动路径语义不属于支持范围。"
+  },
+  "preserve_project_layers": [
+    "private_https_ingress",
+    "python_control_plane",
+    "single_scheduler_truth",
+    "target_adapter_registry",
+    "runtime_paths_host_projection",
+    "control_plane_service_registry"
+  ],
+  "runtime_contract_rules": [
+    "文档基准、入口清单与职责边界统一服从 Gateway 官方运行合同。",
+    "宿主机侧 runtime_paths 与控制平面抽象属于仓库保留层；Gateway 容器内统一暴露 OPENCLAW_HOME / OPENCLAW_STATE_DIR / OPENCLAW_CONFIG_PATH 与 openclaw.json。",
+    "影子验证与 doctor/runtime contract 统一以 /home/node/.openclaw/openclaw.json 为最终观测对象。",
+    "Gateway 活动路径语义固定沿用当前官方运行合同与 overlay 边界。"
+  ],
+  "notes": [
+    "若上游 stable release 同时调整模型目录，先更新 config/runtime/openclaw.runtime_contract.json，再决定是否提升默认 pin。",
+    "升级流程必须以 OpenClaw 官方公开文档中的 Docker / configuration / multiple-gateways 合同为准。"
+  ],
+  "upstream_public_references": [
+    "https://docs.openclaw.ai/help/environment",
+    "https://docs.openclaw.ai/gateway/configuration",
+    "https://docs.openclaw.ai/install/docker",
+    "https://docs.openclaw.ai/gateway/multiple-gateways"
+  ]
+}

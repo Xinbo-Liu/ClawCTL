@@ -1,0 +1,162 @@
+{
+  "schemaVersion": 1,
+  "minimumRegistryVersion": 7,
+  "topLevelRequired": [
+    "version",
+    "defaults",
+    "releasePolicies",
+    "verificationBatches",
+    "lifecycleStates",
+    "targets"
+  ],
+  "defaultsRequired": [
+    "dedupeWindowHours",
+    "maxAttempts",
+    "backoffSeconds",
+    "targetMinIntervalMs",
+    "targetMaxPerSecond",
+    "targetMaxPerMinute",
+    "targetRateLimitStateTtlSeconds"
+  ],
+  "allowedTargetGroups": [
+    "biz",
+    "ops",
+    "test"
+  ],
+  "allowedDeliveryTiers": [
+    "business",
+    "technical",
+    "validation"
+  ],
+  "allowedMessageProfiles": [
+    "biz_brief",
+    "ops_detail",
+    "test_detail"
+  ],
+  "allowedDispatchLanes": [
+    "formal_broadcast",
+    "operations_monitoring",
+    "integration_validation"
+  ],
+  "allowedPayloadScopes": [
+    "business_digest",
+    "ops_summary",
+    "validation_digest"
+  ],
+  "allowedMessageFormats": [
+    "text",
+    "post",
+    "card"
+  ],
+  "allowedReleaseLevels": [
+    "official",
+    "review",
+    "degraded"
+  ],
+  "requiredReleasePolicyFields": [
+    "id",
+    "title",
+    "description",
+    "allowedReleaseLevels"
+  ],
+  "requiredVerificationBatchFields": [
+    "id",
+    "title",
+    "description",
+    "requiredForRelease",
+    "targetIds",
+    "requiredTargetGroups"
+  ],
+  "requiredTargetFields": [
+    "id",
+    "transport",
+    "provider",
+    "targetGroup",
+    "deliveryTier",
+    "messageProfile",
+    "enabledDefault",
+    "enabledEnv",
+    "endpointEnv",
+    "secretEnv",
+    "titleEnv",
+    "atAllEnv",
+    "formatEnv",
+    "silenceEnabledDefault",
+    "silenceEnabledEnv",
+    "silenceMinDeltaDefault",
+    "silenceMinDeltaEnv",
+    "allowedReleaseLevelsDefault",
+    "allowedReleaseLevelsEnv",
+    "formatDefault",
+    "secretRequiredDefault",
+    "endpointIsolationDefault",
+    "titleDefault",
+    "boundary",
+    "atAllDefault",
+    "verificationOrderDefault",
+    "owner",
+    "releasePolicyId",
+    "verificationBatchIds",
+    "lifecycleState",
+    "rotationClass"
+  ],
+  "requiredBoundaryFields": [
+    "dispatchLane",
+    "payloadScope",
+    "publishLatestDefault",
+    "description"
+  ],
+  "targetGroupBoundaryRules": {
+    "biz": {
+      "dispatchLane": "formal_broadcast",
+      "allowedDeliveryTiers": [
+        "business"
+      ],
+      "allowedMessageProfiles": [
+        "biz_brief"
+      ],
+      "allowedPayloadScopes": [
+        "business_digest"
+      ],
+      "publishLatestDefault": true
+    },
+    "ops": {
+      "dispatchLane": "operations_monitoring",
+      "allowedDeliveryTiers": [
+        "technical"
+      ],
+      "allowedMessageProfiles": [
+        "ops_detail"
+      ],
+      "allowedPayloadScopes": [
+        "ops_summary"
+      ],
+      "publishLatestDefault": false
+    },
+    "test": {
+      "dispatchLane": "integration_validation",
+      "allowedDeliveryTiers": [
+        "validation"
+      ],
+      "allowedMessageProfiles": [
+        "test_detail"
+      ],
+      "allowedPayloadScopes": [
+        "validation_digest"
+      ],
+      "publishLatestDefault": false
+    }
+  },
+  "requiredOwnerFields": [
+    "team",
+    "primary",
+    "backup"
+  ],
+  "requiredLifecycleFields": [
+    "id",
+    "title",
+    "description",
+    "enableAllowed",
+    "decommissioned"
+  ]
+}

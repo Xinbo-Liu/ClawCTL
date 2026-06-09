@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "profiles": {
+    "deploy_success": {
+      "markdown": {
+        "title": "one_click_deploy 摘要",
+        "sections": {
+          "input_summary": "部署输入摘要",
+          "private_ingress": "private ingress",
+          "image_contract": "部署镜像合同",
+          "post_acceptance": "部署后验收",
+          "runtime_evidence": "运行验收证据",
+          "next_steps": "下一步"
+        }
+      },
+      "text": {
+        "prefix": "[deploy_success]",
+        "next_steps_heading": "[deploy_success] 下一步动作："
+      }
+    },
+    "run_failure": {
+      "markdown": {
+        "title": "one_click_deploy 失败摘要",
+        "sections": {
+          "diagnosis": "排障结论",
+          "next_steps": "下一步命令"
+        }
+      },
+      "text": {
+        "diagnosis_heading": "[run_failure] 排障结论：",
+        "next_steps_heading": "[run_failure] 下一步动作："
+      }
+    },
+    "full_test": {
+      "markdown": {
+        "title": "one_click_test_full 摘要",
+        "sections": {
+          "next_steps": "下一步动作"
+        }
+      },
+      "text": {
+        "terminal_title": "=== one_click_test_full 汇总 ===",
+        "next_steps_heading": "下一步动作:"
+      }
+    },
+    "config": {
+      "text": {
+        "terminal_title": "=== one_click_config 汇总 ===",
+        "next_steps_heading": "下一步动作:"
+      }
+    },
+    "basic_test": {
+      "text": {
+        "terminal_title": "=== one_click_test_basic 汇总 ===",
+        "next_steps_heading": "下一步动作:"
+      }
+    }
+  }
+}

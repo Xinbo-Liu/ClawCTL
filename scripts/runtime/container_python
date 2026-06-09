@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ ! -f /.dockerenv ]]; then
+  echo "[container_python][FAIL] 该入口只允许在运行容器内使用；宿主机请改用 bash ./scripts/runtime/run_python_container.sh" >&2
+  exit 2
+fi
+
+exec python3 -B "$@"

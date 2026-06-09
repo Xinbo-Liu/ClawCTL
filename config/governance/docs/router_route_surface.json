@@ -1,0 +1,14 @@
+{
+  "heading": "router_local_ro（初始路由 / 离线本地只读）",
+  "description": "负责在不联网、不执行、不写入的前提下，基于本地只读信息完成最小信息收集与任务分流；需要业务 route 时由启用的 extension 追加。",
+  "explicitRoutes": [],
+  "automaticRoutes": [
+    {
+      "target": "router_local_ro",
+      "when": "明显属于只读项目结构查看、文件阅读、文本搜索、脱敏验证，或需要先通过本地文档判断方向",
+      "action": "留在 `router_local_ro`，继续用 `/local_ro/*` 做离线梳理。"
+    }
+  ],
+  "healthAwareRules": [],
+  "generated_artifacts": {}
+}

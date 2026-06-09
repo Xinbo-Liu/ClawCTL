@@ -1,0 +1,93 @@
+{
+  "kind": "openclaw_platform_docstring_baseline_index",
+  "policy": {
+    "mode": "baseline-ratchet",
+    "newFilesRequireChinesePublicDocstrings": true,
+    "trackedItemKinds": [
+      "module",
+      "class",
+      "function"
+    ]
+  },
+  "schemaVersion": 1,
+  "scope": {
+    "excluded": [
+      "python/openclaw/tests",
+      "python/openclaw/testing"
+    ],
+    "roots": [
+      "python/openclaw"
+    ]
+  },
+  "shards": [
+    {
+      "fileCount": 117,
+      "key": "control_plane",
+      "path": "control_plane.json"
+    },
+    {
+      "fileCount": 35,
+      "key": "docs",
+      "path": "docs.json"
+    },
+    {
+      "fileCount": 37,
+      "key": "doctor",
+      "path": "doctor.json"
+    },
+    {
+      "fileCount": 8,
+      "key": "guards",
+      "path": "guards.json"
+    },
+    {
+      "fileCount": 4,
+      "key": "images",
+      "path": "images.json"
+    },
+    {
+      "fileCount": 10,
+      "key": "internal_api",
+      "path": "internal_api.json"
+    },
+    {
+      "fileCount": 80,
+      "key": "lib",
+      "path": "lib.json"
+    },
+    {
+      "fileCount": 5,
+      "key": "release",
+      "path": "release.json"
+    },
+    {
+      "fileCount": 3,
+      "key": "root",
+      "path": "root.json"
+    },
+    {
+      "fileCount": 26,
+      "key": "runtime",
+      "path": "runtime.json"
+    },
+    {
+      "fileCount": 9,
+      "key": "scheduler",
+      "path": "scheduler.json"
+    },
+    {
+      "fileCount": 39,
+      "key": "setup",
+      "path": "setup.json"
+    },
+    {
+      "fileCount": 2,
+      "key": "specs",
+      "path": "specs.json"
+    }
+  ],
+  "summaryMinimums": {
+    "moduleChineseDocstrings": 186,
+    "publicChineseDocstrings": 658
+  }
+}

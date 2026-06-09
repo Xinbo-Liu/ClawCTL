@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "generated_artifacts": {
+    "acceptance_doc": "docs/operations/runtime-service-reference.md"
+  },
+  "intro": [
+    "本页只负责统一说明 `runtime acceptance` 的默认人工入口、deployment acceptance / runtime acceptance 摘要口径，以及证据产物索引。",
+    "deployment acceptance required checks、默认顺序、通过标准与证据产物以 `config/runtime/testing_manifest.json` 与 `docs/operations/runtime-service-reference.md` 为准；CLI 帮助面与摘要输出统一引用本页。",
+    "acceptance / runtime evidence 对象族路径统一来自 `config/control_plane/object_families.json` 与 `agent/README.md`；本页统一引用对象族中的固定文件清单。"
+  ],
+  "usage_commands": [
+    "bash ./scripts/runtime/run_openclaw_python_tool.sh runtime acceptance doc",
+    "bash ./scripts/runtime/run_openclaw_python_tool.sh runtime acceptance json",
+    "bash ./scripts/runtime/run_openclaw_python_tool.sh runtime acceptance acceptance-summary [--format json] [--root <repo-root>]",
+    "bash ./scripts/runtime/run_openclaw_python_tool.sh runtime acceptance required-checks [--format lines|csv|json]",
+    "bash ./scripts/runtime/run_openclaw_python_tool.sh runtime acceptance write-deployment-acceptance-state --out <path> --generated-at <iso> --env-file <path> --eligible <true|false> --accepted <true|false> --required-checks id=status,...",
+    "bash ./scripts/runtime/run_openclaw_python_tool.sh runtime acceptance write-official-cli-summary --official-dir <path> --out <path> --target <control-plane|runtime>",
+    "bash ./scripts/runtime/run_openclaw_python_tool.sh runtime acceptance write-runtime-acceptance-summary --acceptance-state <path> --control-plane-summary <path> --control-plane-runtime-summary <path> --control-plane-run-ledger <path> --out <path>"
+  ],
+  "text_output": {
+    "summary_prefix": "[acceptance_surface] 部署后验收摘要：",
+    "failure_reference_intro": "  - 进一步核对：",
+    "failure_reference_format": "    - {label}：{target}"
+  },
+  "failure_references": [
+    {
+      "label": "deployment acceptance 默认顺序",
+      "target": "docs/operations/runtime-service-reference.md#deployment-acceptance-default-flow"
+    },
+    {
+      "label": "deployment acceptance 通过标准",
+      "target": "docs/operations/runtime-service-reference.md#deployment-acceptance-pass-criteria"
+    },
+    {
+      "label": "deployment acceptance 证据产物",
+      "target": "docs/operations/runtime-service-reference.md#deployment-acceptance-artifacts"
+    }
+  ],
+  "boundary": [
+    "required checks 的唯一检查清单来自 `config/runtime/testing_manifest.json`。",
+    "仓库内正式运维入口是 `docs/operations/runtime-service-reference.md`；本页负责提供 CLI 帮助面与摘要输出所需的固定引用。",
+    "对象族路径、producer 与 usage 统一来自 `config/control_plane/object_families.json`；本页只消费引用后的摘要。"
+  ]
+}

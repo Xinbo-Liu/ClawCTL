@@ -1,0 +1,127 @@
+{
+  "fileBaselines": {
+    "python/openclaw/__init__.py": {
+      "moduleHasChineseDocstring": true,
+      "publicChineseDocstrings": 1,
+      "publicEnglishOnlyDocstrings": 0,
+      "publicItemBaselines": {
+        "module:<module>": {
+          "hasChineseDocstring": true,
+          "hasDocstring": true,
+          "kind": "module",
+          "qualname": "<module>"
+        }
+      },
+      "publicMissingDocstrings": 0
+    },
+    "python/openclaw/cli.py": {
+      "moduleHasChineseDocstring": true,
+      "publicChineseDocstrings": 1,
+      "publicEnglishOnlyDocstrings": 0,
+      "publicItemBaselines": {
+        "function:fail": {
+          "hasChineseDocstring": false,
+          "hasDocstring": false,
+          "kind": "function",
+          "qualname": "fail"
+        },
+        "function:main": {
+          "hasChineseDocstring": false,
+          "hasDocstring": false,
+          "kind": "function",
+          "qualname": "main"
+        },
+        "function:run_target": {
+          "hasChineseDocstring": false,
+          "hasDocstring": false,
+          "kind": "function",
+          "qualname": "run_target"
+        },
+        "module:<module>": {
+          "hasChineseDocstring": true,
+          "hasDocstring": true,
+          "kind": "module",
+          "qualname": "<module>"
+        }
+      },
+      "publicMissingDocstrings": 3
+    },
+    "python/openclaw/cli_registry.py": {
+      "moduleHasChineseDocstring": true,
+      "publicChineseDocstrings": 1,
+      "publicEnglishOnlyDocstrings": 0,
+      "publicItemBaselines": {
+        "function:active_config_path": {
+          "hasChineseDocstring": false,
+          "hasDocstring": false,
+          "kind": "function",
+          "qualname": "active_config_path"
+        },
+        "function:command_node": {
+          "hasChineseDocstring": false,
+          "hasDocstring": false,
+          "kind": "function",
+          "qualname": "command_node"
+        },
+        "function:control_plane_command_tree": {
+          "hasChineseDocstring": false,
+          "hasDocstring": false,
+          "kind": "function",
+          "qualname": "control_plane_command_tree"
+        },
+        "function:control_plane_extension_commands": {
+          "hasChineseDocstring": false,
+          "hasDocstring": false,
+          "kind": "function",
+          "qualname": "control_plane_extension_commands"
+        },
+        "function:root_command_tree": {
+          "hasChineseDocstring": false,
+          "hasDocstring": false,
+          "kind": "function",
+          "qualname": "root_command_tree"
+        },
+        "function:supported_control_plane_group_namespaces": {
+          "hasChineseDocstring": false,
+          "hasDocstring": false,
+          "kind": "function",
+          "qualname": "supported_control_plane_group_namespaces"
+        },
+        "function:supported_root_commands": {
+          "hasChineseDocstring": false,
+          "hasDocstring": false,
+          "kind": "function",
+          "qualname": "supported_root_commands"
+        },
+        "module:<module>": {
+          "hasChineseDocstring": true,
+          "hasDocstring": true,
+          "kind": "module",
+          "qualname": "<module>"
+        }
+      },
+      "publicMissingDocstrings": 7
+    }
+  },
+  "kind": "openclaw_platform_docstring_baseline_shard",
+  "policy": {
+    "mode": "baseline-ratchet",
+    "newFilesRequireChinesePublicDocstrings": true,
+    "trackedItemKinds": [
+      "module",
+      "class",
+      "function"
+    ]
+  },
+  "schemaVersion": 1,
+  "scope": {
+    "excluded": [
+      "python/openclaw/tests",
+      "python/openclaw/testing"
+    ],
+    "roots": [
+      "python/openclaw"
+    ]
+  },
+  "shardKey": "root"
+}

@@ -1,0 +1,39 @@
+{
+  "id": "agent_platform",
+  "title": "Neutral Agent Platform Management Overlay",
+  "version": "1.0.0",
+  "compat": {
+    "controlPlane": ">=1.0.0"
+  },
+  "dependencies": [],
+  "migrations": [],
+  "registry": {
+    "runtimeAdapterRegistryPaths": [
+      "@repo/agent/control_plane/runtime/runtime_adapters.json"
+    ],
+    "dispatchProviderRegistryPaths": [
+      "@repo/agent/control_plane/registries/dispatch_provider_adapters.json"
+    ]
+  },
+  "schemas": {
+    "runtimeAdaptersSchema": "@repo/config/control_plane/schemas/runtime_adapter_registry.schema.json"
+  },
+  "surfaceFragments": {
+    "runtimePathsPath": "agent_platform.runtime_paths.json",
+    "objectFamiliesPath": "agent_platform.object_families.json"
+  },
+  "governanceSurfaces": {
+    "dispatchOperationsSurfacePath": "agent_platform.dispatch_operations_surface.json",
+    "fullTestGroupRegistryPath": "agent_platform.full_test_group_registry.json",
+    "docsRegistryPath": "agent_platform.docs_registry.json"
+  },
+  "jobRunners": [
+    {
+      "id": "agent_runtime",
+      "title": "Agent Runtime Runner",
+      "module": "openclaw.control_plane.agent.runtime_runner",
+      "callable": "run_job",
+      "handlesAgentBindings": true
+    }
+  ]
+}

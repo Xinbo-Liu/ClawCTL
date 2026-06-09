@@ -1,0 +1,97 @@
+{
+  "version": 12,
+  "purpose": "限制本项目相对 OpenClaw 官方 Gateway 的 overlay 边界；保留 ingress、Python control plane 与路径治理优势，同时避免继续漂移 Gateway 官方运行时合同。",
+  "allowed_base_image_repositories": [
+    "ghcr.io/openclaw/openclaw",
+    "ghcr.nju.edu.cn/openclaw/openclaw"
+  ],
+  "compose_contract": {
+    "file": "deploy/docker-compose.yml",
+    "services": {
+      "openclaw-official-gateway": {
+        "image_env": "OPENCLAW_OFFICIAL_GATEWAY_IMAGE",
+        "command": ["openclaw", "gateway", "run", "--port", "18789", "--bind", "lan"],
+        "env_file": [
+          "../${HOST_STATE_ROOT:?HOST_STATE_ROOT_required}/gateway/runtime.gateway.env"
+        ],
+        "environment": {
+          "HOME": "/home/node",
+          "OPENCLAW_HOME": "/home/node",
+          "OPENCLAW_STATE_DIR": "/home/node/.openclaw",
+          "OPENCLAW_CONFIG_PATH": "/home/node/.openclaw/openclaw.json"
+        },
+        "volume_targets": [
+          "/home/node/.openclaw",
+          "/local_ro"
+        ]
+      },
+      "openclaw-internal-api": {
+        "image_env": "OPENCLAW_RUNTIME_PYTHON_IMAGE",
+        "command": ["python3", "-m", "openclaw.cli", "control-plane", "api", "internal-runtime"],
+        "environment": {
+          "PYTHONPATH": "/opt/openclaw-tools/python",
+          "OPENCLAW_TOOLS_ROOT": "/opt/openclaw-tools",
+          "OPENCLAW_REPO_ROOT": "/opt/openclaw-tools"
+        },
+        "volume_targets": [
+          "/opt/openclaw-tools/python",
+          "/opt/openclaw-tools/config",
+          "/home/openclaw/.openclaw"
+        ]
+      },
+      "openclaw-control-plane-scheduler": {
+        "image_env": "OPENCLAW_RUNTIME_PYTHON_IMAGE",
+        "command": ["python3", "-m", "openclaw.cli", "control-plane", "scheduler-runtime"],
+        "environment": {
+          "PYTHONPATH": "/opt/openclaw-tools/python",
+          "OPENCLAW_TOOLS_ROOT": "/opt/openclaw-tools",
+          "OPENCLAW_REPO_ROOT": "/opt/openclaw-tools"
+        },
+        "volume_targets": [
+          "/home/openclaw/.openclaw",
+          "/opt/openclaw-tools/python",
+          "/opt/openclaw-tools/scripts",
+          "/opt/openclaw-tools/config"
+        ]
+      },
+      "openclaw-private-ingress": {
+        "image_env": "NGINX_IMAGE",
+        "volume_targets": [
+          "/etc/nginx/nginx.conf",
+          "/etc/nginx/certs",
+          "/var/log/nginx"
+        ]
+      }
+    },
+    "must_not": {
+      "service_keys": ["build"],
+      "image_refs": [
+        "ghcr.io/openclaw/openclaw:main",
+        "ghcr.io/openclaw/openclaw:latest"
+      ],
+      "command_fragments": [
+        "OPENCLAW_PATH_RESOLVER_JS",
+        "runtime_paths/lib/path_resolver.js",
+        "node dist/index.js",
+        "node -e"
+      ],
+      "service_name_fragments": ["dispatch"]
+    }
+  },
+  "allowed_project_overlays": [
+    "private_https_ingress",
+    "python_control_plane_services",
+    "single_scheduler_truth",
+    "target_adapter_registry",
+    "runtime_paths_host_side_projection",
+    "browser_runtime_hardening",
+    "gateway_token_auth_and_allowed_origins_hardening",
+    "private_ingress_readonly_control_plane_api_projection"
+  ],
+  "gateway_contract_notes": [
+    "项目自定义 Gateway 配置发现环境变量或活动文件名不得继续定义为官方配置发现合同。",
+    "项目自定义 Gateway 容器内 home/state 语义不得继续定义为官方 Docker home/state 合同。",
+    "项目自定义路径投影不得写成 official CLI、doctor、security audit 的最终观测对象。",
+    "Gateway 配置入口真源、活动配置文件命名与容器内 home 语义固定沿用当前官方合同。"
+  ]
+}

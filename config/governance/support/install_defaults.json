@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "title": "host install defaults",
+  "defaults": {
+    "host_state_root": "state/openclaw"
+  },
+  "notes": [
+    "宿主机运行态 state 根目录默认值只在此处保留一份；runtime_paths、帮助文本、控制面与安装脚本统一从该真源派生。"
+  ]
+}

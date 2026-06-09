@@ -1,0 +1,747 @@
+{
+  "title": "getting started surface",
+  "generated_artifacts": {
+    "quickstart_doc": "docs/getting-started/quickstart.md",
+    "environment_setup_doc": "docs/getting-started/environment-setup.md"
+  },
+  "common": {
+    "private_ingress_examples": {
+      "listen_ip": "<hostname -I 首个私网 IPv4>",
+      "tls_cn": "openclaw.internal.example"
+    },
+    "private_ingress_requirements": [
+      "浏览器所在机器必须能把 `OPENCLAW_TLS_CN` 解析到 `OPENCLAW_INGRESS_LISTEN_IP`；",
+      "没有内网 DNS 就写 hosts；",
+      "只开放 80/443；Nginx 会按 `OPENCLAW_INGRESS_ALLOWED_SOURCE_CIDRS` 渲染本地 allowlist，宿主机防火墙、基础设施 ACL 或 DOCKER-USER 必须显式落地并保持默认拒绝；",
+      "若环境启用 IPv6，来源限制证据必须同时覆盖 IPv6；若不提供 IPv6 证据，则必须在宿主机或上游网络层显式禁用该暴露面；",
+      "`OPENCLAW_INGRESS_LISTEN_IP` 不能是 hostname、`0.0.0.0`、`::` 或公网地址；",
+      "只有浏览器与目标服务位于同一操作系统实例时，才允许把 `OPENCLAW_INGRESS_LISTEN_IP` 填成 loopback；跨 OS / 跨网络实例访问不属于该例外。"
+    ],
+    "private_ingress_responsibilities": [
+      "浏览器访问主机名；",
+      "证书精确 dNSName SAN；",
+      "Gateway Control UI origin。"
+    ],
+    "precheck_commands": [
+      "bash ./scripts/doctor/check_docker_host_readiness.sh"
+    ],
+    "offline_precheck_commands": [
+      "bash ./scripts/doctor/check_docker_host_readiness.sh --offline"
+    ],
+    "tool_commands": [
+      "command -v bash curl wget openssl jq git tar unzip zip vim less which nslookup dig ss ip lsof docker",
+      "docker compose version"
+    ],
+    "private_ingress_init_commands": [
+      "bash ./scripts/setup/init_private_ingress.sh",
+      "bash ./scripts/setup/init_private_ingress.sh --platform windows -- 192.168.50.10 openclaw.internal.example"
+    ],
+    "private_ingress_init_notes": [
+      "默认命令会从 `hostname -I` 中选取首个 RFC1918 私网 IPv4，并把 `OPENCLAW_TLS_CN` 默认写成 `openclaw.internal.example`。",
+      "执行后会统一回填 `deploy/site.env` 中的 `OPENCLAW_INGRESS_LISTEN_IP` / `OPENCLAW_TLS_CN`，并在终端打印当前平台的访问端 DNS / hosts 命令；默认平台是 Windows，可用 --platform 切换。",
+      "若实际部署网卡不是首个私网 IPv4，必须改用 `-- <listen_ip> <tls_cn>` 显式覆盖。",
+      "只有浏览器与目标服务位于同一操作系统实例时，才允许把 `<listen_ip>` 填写为 `127.0.0.1`；跨 OS / 跨网络实例访问必须填写目标机私网地址。"
+    ]
+  },
+  "quickstart": {
+    "title": "Quickstart",
+    "intro": "本文描述正式部署路径：**official Gateway token auth + private HTTPS ingress + Python 平台控制平面**。\n\nCentOS 7 x86_64 是受支持的存量老系统部署路径，并配套完整脚本链与静态门禁。该路径不作为默认推荐安全基线；新部署优先使用维护期内的 Linux 宿主机。宿主机前置链、one_click 主链与支持 / 不支持范围统一查看 `../architecture/supported-deployment-boundary.md`。",
+    "deploy_inputs_notes": [
+      "compose 运行镜像变量由 runtime source strategy 声明；host 控制面执行介质使用 `OPENCLAW_CONTROL_PLANE_IMAGE`；internal-api / scheduler 等 runtime Python 服务统一复用 `OPENCLAW_RUNTIME_PYTHON_IMAGE`；额外运行视角通过 profile + extension 显式接入。部署 env 查询与逻辑路径人工入口统一查看 `docs/getting-started/deployment-inputs.md`。",
+      "`one_click_config.sh` / `apply_ingress_boundary_rules.sh` / `fix_permissions.sh` / `one_click_test_basic.sh` / `one_click_deploy.sh` / `one_click_test_full.sh` 的职责边界、默认主路径、自动验收闭环与服务启动后的 deployment acceptance 入口，统一查看 `docs/getting-started/quickstart.md`。",
+      "root 只用于 `prepare_docker_host.sh`、`prepare_deploy_user.sh`、`apply_ingress_boundary_rules.sh` 与 `fix_permissions.sh` 这类宿主机特权步骤；`one_click_config.sh`、basic gate 与部署主链由固定部署用户执行，入口会拒绝 root 误入，使 `OPENCLAW_RUNTIME_UID` / `OPENCLAW_RUNTIME_GID` 与 bind mount owner 保持一致。",
+      "`OPENCLAW_TLS_MODE` 默认是 `self_signed`；使用 `provided_files` 时，必须同时填写 `OPENCLAW_TLS_CERT_SOURCE_PATH` / `OPENCLAW_TLS_KEY_SOURCE_PATH`，外部证书必须包含精确 `dNSName:OPENCLAW_TLS_CN` SAN、未过期，并与未加密 PEM 私钥匹配。",
+      "`OPENCLAW_INGRESS_BOUNDARY_MODE` 默认是 `host_firewall`；无论哪种模式，都必须先填写 `OPENCLAW_INGRESS_ALLOWED_SOURCE_CIDRS`。使用 `external_acl` 时，还必须填写 `OPENCLAW_INGRESS_BOUNDARY_EVIDENCE_PATH`，并让该文件至少提供 `source_cidrs`、`allowed_ports`、`default_deny`、`ip_families`、`enforcement_plane` 与目标信息。",
+      "`config/services/runtime_mounts.json` 是 runtime bind mount 真源；`one_click_config.sh`、`one_click_deploy.sh` 与 `one_click_upgrade.sh` 会把当前 active profile 渲染为 `<current-host-state-root>/control_plane/setup/docker-compose.effective.yml`，后续 compose config、服务启动、状态查询与 full test 都读取这份 effective compose。`deploy/docker-compose.yml` 只保留基础模板属性，不作为多扩展切换时的运行态落点。"
+    ],
+    "default_step_notes": {
+      "one_click_config": [
+        "进入 host 控制面前，必须先显式执行 `bash ./scripts/setup/prepare_control_plane_medium.sh`。在线场景会先复用本地镜像，再尝试导入显式指定或自动发现的 `deployment_images_*.tar`；归档在继续执行前会先按当前 pin 校验内容是否完整，只有归档未命中时才执行网络拉取。离线场景使用 `bash ./scripts/setup/prepare_control_plane_medium.sh --offline --image-archive <local-path>` 显式准备控制面介质。",
+        "启用 managed extension profile 时，部署与升级主链默认通过 `bash ./scripts/runtime/run_openclaw_python_tool.sh control-plane runtime --config-path <service-config> extension-env ensure --enabled --offline --json` 自动同步离线 wheelhouse、准备扩展 venv 并 verify；lock 与源码不一致时先执行 `bash ./scripts/runtime/run_openclaw_python_tool.sh control-plane extensions lock` 并复核变更。`extension-env ensure` 是唯一扩展环境外部入口，失败时按结构化输出修复 lock、requirements 或离线 wheelhouse 后再次执行同一命令；`--config-path` 用于显式指定 control-plane service config。",
+        "不要用 root 生成 `deploy/.env`；该步骤会把当前执行用户写入 `OPENCLAW_RUNTIME_UID` / `OPENCLAW_RUNTIME_GID`。若当前 SSH 会话是 root，先切到固定部署用户，并确保仓库、`deploy/` 与当前 host state root 由该用户可管理。",
+        "首次生成 `deploy/site.env` 时，`OPENCLAW_INGRESS_LISTEN_IP` 会优先落为 `hostname -I` 探测到的首个私网 IPv4；如果实际部署网卡不是该地址，必须手工填写目标网卡 IP。"
+      ],
+      "one_click_test_basic": [
+        "basic gate 的完整检查范围、边界与失败分流统一查看 `docs/getting-started/quickstart.md` 与 `docs/operations/troubleshooting.md`；该入口保留默认主路径。",
+        "默认首装使用 `relaxed_install` release policy：当前 pin digest 可验证但 upstream latest 更高时只记 WARN；发布门禁或升级验证使用 `bash ./scripts/setup/one_click_test_basic.sh --strict-release-check`。",
+        "在线首轮示例：`bash ./scripts/setup/one_click_test_basic.sh`；离线首轮示例：`bash ./scripts/setup/one_click_test_basic.sh --offline --image-archive <local-path>`。"
+      ],
+      "one_click_test_full": [
+        "需要结构化结果时，执行 `bash ./scripts/setup/one_click_test_full.sh --json`；external 组失败按 full test 失败处理。",
+        "full test 失败后的默认第一跳修复入口统一查看 `docs/operations/troubleshooting.md`。"
+      ]
+    },
+    "manual_checks": [
+      "[目标机] `gateway / ingress / internal-api / scheduler` 全部健康；",
+      "[目标机] `bash ./scripts/doctor/check_control_plane_runtime.sh` 通过；",
+      "[目标机] `sudo bash ./scripts/doctor/check_ingress_boundary_evidence.sh --env-file deploy/.env --require-nginx-policy` 通过；",
+      "[目标机] `bash ./scripts/doctor/check_dispatch_runtime.sh` 通过；",
+      "[访问端] `bash ./scripts/setup/check_client_access_acceptance.sh --env-file deploy/.env --client-cidr '<目标机实际看到的访问端私网CIDR[,CIDR]>' --tls-cn <OPENCLAW_TLS_CN>` 已标记 client access acceptance 为 ready；",
+      "[访问端] `/healthz` 与 `/readyz` 返回 `200`；",
+      "[访问端] 浏览器使用 `https://<OPENCLAW_TLS_CN>/` 打开 Control UI，WebSocket URL 使用 `wss://<OPENCLAW_TLS_CN>`，不使用目标机 IP 或其他别名；",
+      "[访问端] Control UI 已填入 `OPENCLAW_GATEWAY_TOKEN` 的真实值并通过 token auth；",
+      "[目标机 + 访问端] 若新浏览器首次进入 Control UI，已完成一次设备配对批准并重新打开页面。"
+    ],
+    "pairing_commands": [
+      "bash ./scripts/runtime/run_openclaw_official_cli.sh --target gateway -- devices list",
+      "bash ./scripts/runtime/run_openclaw_official_cli.sh --target gateway -- devices approve <requestId>"
+    ],
+    "export_commands": [
+      "bash ./scripts/setup/export_clean_delivery_bundle.sh --bundle runtime-core --clean"
+    ],
+    "export_notes": [
+      "第 7 步在当前保存交付仓库的机器执行；仓库同时保存在交付工作机与目标机时，固定在交付工作机执行；仓库仅位于目标机时，在目标机执行。",
+      "该命令只导出最终干净交付包。"
+    ],
+    "default_step_labels": {
+      "one_click_config": "生成并验证 deploy/.env",
+      "one_click_test_basic": "执行基础测试门禁",
+      "one_click_deploy": "执行正式部署与自动验收闭环",
+      "one_click_test_full": "deployment acceptance 与 full test"
+    },
+    "verify_commands_by_mode": {
+      "self_signed": [
+        "export OPENCLAW_TLS_CN=openclaw.internal.example",
+        "export OPENCLAW_INGRESS_LISTEN_IP=<第 0 步选定的目标机私网 IP>",
+        "export OPENCLAW_CURL_RESOLVE_IP=\"${OPENCLAW_INGRESS_LISTEN_IP}\"",
+        "case \"$OPENCLAW_CURL_RESOLVE_IP\" in *:*) OPENCLAW_CURL_RESOLVE_IP=\"[$OPENCLAW_CURL_RESOLVE_IP]\" ;; esac",
+        "curl --cacert <openclaw-self-signed.crt> --resolve ${OPENCLAW_TLS_CN}:443:${OPENCLAW_CURL_RESOLVE_IP} https://${OPENCLAW_TLS_CN}/healthz",
+        "curl --cacert <openclaw-self-signed.crt> --resolve ${OPENCLAW_TLS_CN}:443:${OPENCLAW_CURL_RESOLVE_IP} https://${OPENCLAW_TLS_CN}/readyz"
+      ],
+      "provided_files": [
+        "export OPENCLAW_TLS_CN=openclaw.internal.example",
+        "export OPENCLAW_INGRESS_LISTEN_IP=<第 0 步选定的目标机私网 IP>",
+        "export OPENCLAW_CURL_RESOLVE_IP=\"${OPENCLAW_INGRESS_LISTEN_IP}\"",
+        "case \"$OPENCLAW_CURL_RESOLVE_IP\" in *:*) OPENCLAW_CURL_RESOLVE_IP=\"[$OPENCLAW_CURL_RESOLVE_IP]\" ;; esac",
+        "curl --resolve ${OPENCLAW_TLS_CN}:443:${OPENCLAW_CURL_RESOLVE_IP} https://${OPENCLAW_TLS_CN}/healthz",
+        "curl --resolve ${OPENCLAW_TLS_CN}:443:${OPENCLAW_CURL_RESOLVE_IP} https://${OPENCLAW_TLS_CN}/readyz"
+      ]
+    },
+    "browser_access_sections": [
+      {
+        "title": "访问端 SSH 隧道（Windows）",
+        "paragraphs": [
+          "访问端不能直连目标机 private ingress 地址时，可通过 SSH 本地转发访问 Control UI。SSH 进程必须保持运行；该方式只转发本机 443 到目标机 ingress，不改变 TLS 主机名、证书或 Gateway Origin 合同。"
+        ],
+        "command_blocks": [
+          {
+            "intro": "访问端保持隧道进程运行：",
+            "language": "powershell",
+            "commands": [
+              "ssh -p <ssh-port> -L 127.0.0.1:443:<OPENCLAW_INGRESS_LISTEN_IP>:443 <ssh-user>@<ssh-host> -N"
+            ]
+          },
+          {
+            "intro": "Windows 访问端以管理员 PowerShell 写入 hosts，流程为备份、过滤旧记录、写入目标映射并刷新解析缓存：",
+            "language": "powershell",
+            "commands": [
+              "$OpenClawTlsCn = \"openclaw.internal.example\"",
+              "$hosts = Join-Path $env:SystemRoot \"System32\\drivers\\etc\\hosts\"",
+              "$backup = \"$hosts.openclaw-backup-$(Get-Date -Format yyyyMMddHHmmss)\"",
+              "Copy-Item -LiteralPath $hosts -Destination $backup -Force",
+              "$lines = @(Get-Content -LiteralPath $hosts -ErrorAction Stop)",
+              "$escapedTlsCn = [regex]::Escape($OpenClawTlsCn)",
+              "$lines = $lines | Where-Object { $_ -notmatch \"(^|\\s)$escapedTlsCn(\\s|$)\" }",
+              "$lines += \"127.0.0.1 $OpenClawTlsCn\"",
+              "[System.IO.File]::WriteAllLines($hosts, $lines, [System.Text.Encoding]::ASCII)",
+              "ipconfig /flushdns",
+              "Select-String -LiteralPath $hosts -SimpleMatch $OpenClawTlsCn"
+            ]
+          },
+          {
+            "intro": "`OPENCLAW_TLS_MODE=self_signed` 时，在 Windows 访问端信任目标机证书。只导入当前部署生成的 `OPENCLAW_TLS_CN` 公共证书，不导入私钥：",
+            "language": "powershell",
+            "commands": [
+              "$OpenClawTlsCn = \"openclaw.internal.example\"",
+              "$certPath = \"$env:TEMP\\$OpenClawTlsCn.crt\"",
+              "ssh -p <ssh-port> <ssh-user>@<ssh-host> \"cd /opt/openclaw/clawctl && (cat deploy/nginx/certs/openclaw.crt 2>/dev/null || sudo -n cat deploy/nginx/certs/openclaw.crt)\" | Set-Content -LiteralPath $certPath -Encoding ASCII",
+              "Import-Certificate -FilePath $certPath -CertStoreLocation Cert:\\CurrentUser\\Root"
+            ]
+          },
+          {
+            "intro": "证书信任后，访问端用系统 trust store 验证，不使用 `-k`：",
+            "language": "powershell",
+            "commands": [
+              "$OpenClawTlsCn = \"openclaw.internal.example\"",
+              "curl.exe \"https://$OpenClawTlsCn/healthz\"",
+              "curl.exe \"https://$OpenClawTlsCn/readyz\""
+            ]
+          }
+        ],
+        "notes": [
+          "浏览器固定打开 `https://<OPENCLAW_TLS_CN>/`。不使用 `http://localhost:443/`、`https://localhost/`、目标机 IP 或其他别名；证书、Origin 与 WebSocket 主机名都以 `OPENCLAW_TLS_CN` 为准。",
+          "证书目录按运行态权限收口；SSH 用户是固定部署用户时可直接读取证书，否则需要具备非交互 sudo。只读取 `.crt` 公共证书，不读取 `.key` 私钥。"
+        ]
+      },
+      {
+        "title": "浏览器凭据恢复",
+        "paragraphs": [
+          "浏览器本地凭据丢失或更换浏览器后，不重新部署、不重新生成 token。访问端重新填入目标机当前 `deploy/.env` 中的 `OPENCLAW_GATEWAY_TOKEN`，随后按 `pairing required` 批准新设备。"
+        ],
+        "command_blocks": [
+          {
+            "intro": "目标机读取 Gateway token：",
+            "language": "bash",
+            "commands": [
+              "cd /opt/openclaw/clawctl",
+              "bash ./scripts/runtime/run_openclaw_python_tool.sh setup env query-env OPENCLAW_GATEWAY_TOKEN --env-file deploy/.env"
+            ]
+          },
+          {
+            "intro": "Windows 访问端需要避免终端明文停留时，只把 token 放入剪贴板：",
+            "language": "powershell",
+            "commands": [
+              "$token = ssh -p <ssh-port> <ssh-user>@<ssh-host> \"cd /opt/openclaw/clawctl && bash ./scripts/runtime/run_openclaw_python_tool.sh setup env query-env OPENCLAW_GATEWAY_TOKEN --env-file deploy/.env\"",
+              "$token.Trim() | Set-Clipboard"
+            ]
+          }
+        ],
+        "notes": [
+          "不要把 token 粘贴到聊天、issue、日志或截图；只在当前访问端输入框或受控剪贴板中短暂使用。",
+          "新浏览器首次连通后仍会生成新的设备配对请求，需要在目标机执行 `devices list` / `devices approve <requestId>`。"
+        ]
+      },
+      {
+        "title": "敏感项检查",
+        "paragraphs": [
+          "`deploy/.env`、`deploy/site.env`、`deploy/targets.d/*.env` 与启用扩展内部 `agent/extensions/*/deploy/extension.env` 保持 owner-only `600`。配置检查默认看存在性、schema 和脱敏摘要；恢复访问或排查明确指向某个 key 时，才在目标机受控终端定向查看明文。"
+        ],
+        "command_blocks": [
+          {
+            "intro": "默认检查配置是否闭合，不打印 secret 明文：",
+            "language": "bash",
+            "commands": [
+              "cd /opt/openclaw/clawctl",
+              "ls -l deploy/.env deploy/site.env",
+              "bash ./scripts/runtime/run_openclaw_python_tool.sh setup env validate --env-file deploy/.env",
+              "bash ./scripts/setup/check_extension_env_values.sh --profile <profile_id> --format json",
+              "bash ./scripts/runtime/show_runtime_compose_config.sh --env-file deploy/.env"
+            ]
+          },
+          {
+            "intro": "确需查看 token、secret 或 webhook 明文时，只查目标 key，并在查看后清空屏幕或终端滚动历史：",
+            "language": "bash",
+            "commands": [
+              "sudo -u <deploy-user> bash -lc 'cd /opt/openclaw/clawctl && grep -hE \"^(OPENCLAW_GATEWAY_TOKEN|<SECRET_KEY>|<WEBHOOK_KEY>)=\" deploy/.env agent/extensions/*/deploy/extension.env deploy/targets.d/*.env 2>/dev/null || true'"
+            ]
+          }
+        ],
+        "notes": [
+          "`<deploy-user>` 是执行 `one_click_config.sh` 和部署主链的固定部署用户；使用默认示例部署时通常是 `openclaw`。",
+          "不要为排查把这些文件 chmod 成 group/world 可读；固定做法是切换到部署用户或通过 sudo 读取。",
+          "需要查看完整 compose 原始值时，只在本机受控终端追加 `--show-secrets`，不要把输出保存进仓库或交付包。"
+        ]
+      }
+    ],
+    "verify_notes": [
+      "第 6 步分成两个执行位置：`show_runtime_service_status.sh`、control-plane / ingress / dispatch 的 doctor 检查在目标机执行；`curl --resolve` 与浏览器验证在访问端执行。",
+      "访问端命令不应依赖仓库内脚本；访问端只需要第 0 步和第 1 步已经确定的 `OPENCLAW_TLS_CN` 与 `OPENCLAW_INGRESS_LISTEN_IP`。",
+      "若目标机本身就是实际访问浏览器的机器，可不切换设备，但应按“先服务状态、后 curl / 浏览器”的顺序执行。",
+      "`OPENCLAW_TLS_MODE=self_signed` 时，把目标机 `deploy/nginx/certs/openclaw.crt` 复制到访问端，再用 `curl --cacert <openclaw-self-signed.crt>` 校验。",
+      "`OPENCLAW_TLS_MODE=provided_files` 时，目标机与访问端必须已信任签发链，访问端直接使用系统 trust store 执行不带 `-k` 的 `curl`。",
+      "目标机 full test 通过只代表 `deployment_acceptance` 闭合；若 `OPENCLAW_INGRESS_ALLOWED_SOURCE_CIDRS` 仅包含目标机本机 `/32`，外部浏览器仍可能未放行，必须单独完成 `client_access_acceptance`。",
+      "公网、非私网或过宽 client CIDR 会被访问端闭环脚本拒绝；这类场景应先确认外部 ACL、安全组、VPN 或 NAT 后目标机实际看到的私网来源。"
+    ],
+    "config_validation_commands": [
+      "grep -n \"__REQUIRED__\" deploy/site.env agent/extensions/*/deploy/extension.env deploy/targets.d/*.env deploy/.env || true",
+      "bash ./scripts/runtime/run_openclaw_python_tool.sh setup env validate --env-file deploy/.env",
+      "source <(bash ./scripts/runtime/run_openclaw_python_tool.sh setup env query-env-batch OPENCLAW_TLS_MODE OPENCLAW_TLS_CN OPENCLAW_INGRESS_LISTEN_IP OPENCLAW_INGRESS_ALLOWED_SOURCE_CIDRS --format shell)",
+      "printf \"OPENCLAW_TLS_MODE=%s\\nOPENCLAW_TLS_CN=%s\\nOPENCLAW_INGRESS_LISTEN_IP=%s\\nOPENCLAW_INGRESS_ALLOWED_SOURCE_CIDRS=%s\\n\" \"$OPENCLAW_TLS_MODE\" \"$OPENCLAW_TLS_CN\" \"$OPENCLAW_INGRESS_LISTEN_IP\" \"$OPENCLAW_INGRESS_ALLOWED_SOURCE_CIDRS\"",
+      "sudo bash ./scripts/setup/apply_ingress_boundary_rules.sh --env-file deploy/.env",
+      "sudo bash ./scripts/doctor/check_ingress_boundary_evidence.sh --env-file deploy/.env"
+    ],
+    "config_validation_notes": [
+      "若 `grep` 命中 `__REQUIRED__`，说明 `deploy/site.env`、启用扩展内部 `agent/extensions/<extension-id>/deploy/extension.env` 或 `deploy/targets.d/*.env` 还有必填项未补齐，不能进入 basic gate。",
+      "`setup env validate --env-file deploy/.env` 必须返回成功；若失败，按报错回到 `deploy/site.env`、启用扩展内部 `agent/extensions/<extension-id>/deploy/extension.env` 或 `deploy/targets.d/*.env` 修正后重新执行 `one_click_config.sh`。",
+      "打印出的 `OPENCLAW_TLS_CN`、`OPENCLAW_INGRESS_LISTEN_IP` 与 `OPENCLAW_INGRESS_ALLOWED_SOURCE_CIDRS` 必须与人工填写值一致。",
+      "浏览器访问端是 Linux 时，在访问端执行 `getent hosts <OPENCLAW_TLS_CN>`；macOS 执行 `dscacheutil -q host -a name <OPENCLAW_TLS_CN>`；Windows 有内网 DNS 时执行 `Resolve-DnsName -Name <OPENCLAW_TLS_CN>`。",
+      "Windows 若依赖 hosts 覆盖，不要只看 `Resolve-DnsName`；必须同时核对 hosts 文件目标记录，并用 `ping <OPENCLAW_TLS_CN>` 或浏览器首连确认实际解析结果。以上结果都必须落到同一个 `OPENCLAW_INGRESS_LISTEN_IP`。没有内网 DNS 时，先修 hosts，再继续后续步骤。"
+    ],
+    "private_ingress_detection_notes": [
+      "在浏览器所在机器执行对应系统的一组命令，用来判断这台访问端是否已经具备可用的内网 DNS。",
+      "若对应系统的查询结果中包含目标机的 `OPENCLAW_INGRESS_LISTEN_IP`，则判定为“已有可用内网 DNS”。",
+      "若查询无结果，或返回地址与目标机的 `OPENCLAW_INGRESS_LISTEN_IP` 不一致，则判定为“当前访问端没有可用内网 DNS”，必须先写 hosts。"
+    ],
+    "private_ingress_dns_check_notes": [
+      "这一组命令只在“已判定访问端具备可用内网 DNS”时执行。",
+      "Linux 使用 `getent hosts`，macOS 使用 `dscacheutil -q host -a name`，Windows PowerShell 使用 `Resolve-DnsName ... | Where-Object` 过滤目标 IP。",
+      "输出中必须出现与 `OPENCLAW_INGRESS_LISTEN_IP` 相同的地址；若不一致，说明 DNS 记录不可用，不能继续后续步骤。"
+    ],
+    "private_ingress_hosts_notes": [
+      "这一组命令只在“访问端没有可用内网 DNS”时执行。",
+      "Linux 与 macOS 把映射写入 `/etc/hosts`；Windows 需把同样的映射写入 `C:\\Windows\\System32\\drivers\\etc\\hosts`。",
+      "三个平台的 hosts 命令都按“删除既有记录、重写目标映射、再执行解析核对”的顺序输出，避免文件末尾缺少换行时把新记录粘到上一行。",
+      "三个平台的 hosts 命令都会先生成 hosts 备份并打印回滚命令；若改写后解析异常，先按脚本输出的回滚命令恢复原文件。",
+      "Windows hosts 重写必须在管理员 PowerShell 中执行；macOS 重写后需要刷新本地 DNS 缓存。",
+      "写入后再次执行对应系统的解析核对时，结果必须落到 `OPENCLAW_INGRESS_LISTEN_IP`。Linux / macOS 用 `getent hosts` / `dscacheutil` 核对实际解析；`nslookup`、`dig` 与 `Resolve-DnsName` 只验证 DNS，不验证 hosts 覆盖。"
+    ],
+    "execution_roles": [
+      "目标机：执行宿主机准备、填写 `deploy/site.env` 与启用扩展内部 `agent/extensions/<extension-id>/deploy/extension.env`、生成 `deploy/.env`、basic gate、正式部署、full test、pairing 批准，以及所有 `scripts/setup/*` / `scripts/runtime/*` / `scripts/doctor/*` 默认命令。",
+      "访问端：执行内网 DNS / hosts 解析检查、`curl --resolve` 私有 HTTPS 验证，并在浏览器中打开 `https://<OPENCLAW_TLS_CN>/`。访问端应尽量与真实使用浏览器的机器一致。",
+      "交付工作机：只在需要准备离线镜像归档或整理最终干净交付包时使用；仓库同时保存在交付工作机与目标机时，固定在交付工作机执行导出命令；仓库仅保存在目标机时，在目标机执行。"
+    ],
+    "deployment_identity_commands": [
+      "sudo bash ./scripts/setup/prepare_deploy_user.sh --user openclaw --repo-dir /opt/openclaw/clawctl",
+      "sudo -iu openclaw",
+      "cd /opt/openclaw/clawctl",
+      "id",
+      "docker info"
+    ],
+    "deployment_identity_notes": [
+      "`prepare_deploy_user.sh` 是 root 阶段到固定部署用户阶段的唯一交接入口；它负责创建用户、写入 `.openclaw/deploy-user.marker` 记录该用户是否由 OpenClaw 创建、加入 docker 组、校验仓库路径并把仓库目录交接给部署用户，但不会自动切换当前 shell。",
+      "脚本不会自动切换当前 shell；完成 `prepare_docker_host.sh` 与 `prepare_deploy_user.sh` 后，必须显式 `sudo -iu openclaw`、`runuser -u openclaw -- bash -lc 'cd /opt/openclaw/clawctl && <command>'` 或重新以固定部署用户登录，继续执行 `prepare_control_plane_medium.sh` 与 `one_click_config.sh`；`deploy/.env` 生成后，再用 root 执行 `apply_ingress_boundary_rules.sh` 与 `fix_permissions.sh`，随后切回固定部署用户执行 basic gate 与 `one_click_deploy.sh`。若当前 shell 是 root 且目标机没有 sudo，可改用 `su - openclaw`。",
+      "`prepare_deploy_user.sh` 不会复制 root 或当前登录用户的 SSH 公钥；若需要直接 SSH 登录固定部署用户，必须按目标机安全策略显式配置该用户 `authorized_keys`，否则使用已有 sudo/root 会话内的 `sudo -iu openclaw`。",
+      "`one_click_config.sh` 会把当前执行用户写入 `OPENCLAW_RUNTIME_UID` / `OPENCLAW_RUNTIME_GID`；`one_click_config.sh`、`one_click_test_basic.sh` 与 `one_click_deploy.sh` 都会在正式动作前拒绝 root 误入，避免 runtime bind user 变成 `0:0` 或留下 root-owned state。",
+      "仓库目录、`deploy/`、`state/openclaw` 与当前 host state root 应由固定部署用户可管理；root 侧 ingress evidence 只会对 evidence 输出目录和文件做定向 chown，不应通过递归 chown/chmod 放宽整个运行态目录。",
+      "`fix_permissions.sh` 和 `bootstrap.sh` 以 root 执行时必须能从当前环境、`deploy/.env` 或正在运行的 OpenClaw runtime 容器解析 runtime UID/GID；解析失败会中止，避免生成 root-owned runtime state。",
+      "private ingress 保持 `cap_drop: ALL` 与最小 capability；Nginx 配置、证书和日志写入依赖 `fix_permissions.sh`、`bootstrap.sh`、`gen_cert.sh` 中的 ACL 合同，不通过补 `CAP_DAC_OVERRIDE` 解决权限问题。"
+    ],
+    "execution_switch_rules": [
+      "先在目标机完成宿主机基础环境准备，并通过宿主机 readiness 准入；两项都完成后，才进入第 0 步。",
+      "先在目标机执行第 0.1 小节，算出 `OPENCLAW_INGRESS_LISTEN_IP` 与 `OPENCLAW_TLS_CN`；随后切换到访问端执行第 0.2 ~ 0.4 小节，确认 DNS 或 hosts 解析。",
+      "完成第 0 步后，切回目标机，连续执行第 1 步到第 5 步。除文档显式标注“访问端”外，其余部署主链命令都默认在目标机执行。",
+      "第 6 步先在目标机确认 runtime 服务健康，再切换到访问端执行 `curl --resolve` 与浏览器访问；若出现首次设备配对批准，再短暂切回目标机执行批准命令，随后返回访问端刷新页面。",
+      "第 7 步在当前保存交付仓库的机器执行；仓库同时保存在交付工作机与目标机时，固定在交付工作机执行；仓库仅位于目标机时，直接在目标机执行。"
+    ],
+    "deployment_checklist": [
+      "时间对齐：先运行 `bash ./scripts/doctor/check_system_time.sh` 或宿主机 readiness；服务器快照恢复、证书时间错误或 `CERT_NOT_YET_VALID` 时，固定用 `sudo bash ./scripts/setup/update_system_time.sh` 修复后再继续。",
+      "版本对齐：默认首装允许当前 pin tag@digest 合同可验证但 upstream latest 更高时记 WARN；发布门禁、升级验证或 candidate 提升验证必须显式使用 `--strict-release-check`。",
+      "用户对齐：先用 `prepare_deploy_user.sh` 完成 root 到固定部署用户的交接；`id` 与 `docker info` 必须在固定部署用户下成功；root 只执行宿主机准备、部署用户准备、host_firewall 规则物化和权限修复，不承担 one_click 主链；若误用 root 执行 basic gate 或部署主链，入口会直接失败，不会自动切换用户。",
+      "路径对齐：仓库固定放在目标机部署路径，例如 `/opt/openclaw/clawctl`；人工输入只改 `deploy/site.env`、启用扩展内部 `agent/extensions/<extension-id>/deploy/extension.env` 与 `deploy/targets.d/*.env`，不手改 `deploy/.env` 和生成出的 compose/runtime 文件。",
+      "权限对齐：basic gate 前先用 `fix_permissions.sh` 恢复 zip/scp/git archive 落地后的脚本执行位、runtime bind mount、ingress ACL 与 owner-only 边界；root 执行时必须能确定 runtime UID/GID，不允许静默留下 root-owned state；不要用递归 `chmod 777`、大范围 `chown root` 或给 ingress 增加绕过读权限的 capability。",
+      "边界证据对齐：`host_firewall` 模式先执行 `sudo bash ./scripts/setup/apply_ingress_boundary_rules.sh --env-file deploy/.env` 物化 DOCKER-USER 规则并写出 root 侧基础证据；部署渲染 Nginx 后，部署用户会复用该基础证据并对当前 Nginx allowlist 做本地校验，只有基础证据缺失、env 漂移或本地 Nginx 校验失败时才需要 root 侧补跑 `check_ingress_boundary_evidence.sh --require-nginx-policy`。",
+      "扩展配置对齐：active profile 启用业务扩展时，先用 `check_extension_env_values.sh --profile <profile_id>` 查看 schema 缺项，再用 `apply_extension_env_values.sh --profile <profile_id>` 写入 `agent/extensions/<extension-id>/deploy/extension.env`；secret 只从环境变量导入，日志与 summary 只记录存在性。",
+      "扩展运行环境对齐：active profile 启用 managed extension 时，scheduler 视角必须先通过 managed extension lifecycle lock 校验；`one_click_deploy.sh` 与 `one_click_upgrade.sh` 会通过 `extension-env ensure` 自动同步离线 wheelhouse、准备扩展 venv 并 verify。ensure 是唯一扩展环境外部入口，失败时按其结构化输出修复 lock、requirements 或离线 wheelhouse 后再次执行同一命令闭合。",
+      "国内网络对齐：中国国内网络首轮部署固定使用 `sudo bash ./scripts/setup/prepare_docker_host.sh --all --network-profile cn`，该 profile 同时收口 CentOS 7 vault repo、Docker Yum repo 与 daemon registry-mirrors；Gateway GHCR 拉取不通时 `pull_images.sh` 默认自动选择等值 candidate 并只改当前 `deploy/.env`，selected/candidate 都不可达时走离线归档，不反复硬拉。",
+      "换行符对齐：仓库文本由 `.gitattributes` 统一约束为 LF；从 Windows 驱动 Linux 远程命令时，避免把 PowerShell here-string 的 CRLF 直接喂给 bash/ssh，多行远程脚本使用 LF 文件、base64 包装或 `tr -d '\\r' | runuser -u openclaw -- bash -s` 这类显式去 CR 管道。",
+      "测试策略对齐：full test 和 `one_click_deploy` 默认验收可能耗时较久；排查部署根因时先跑 basic gate 与定向 doctor，必要时用 `one_click_deploy.sh --skip-acceptance` 启动服务，但必须把 acceptance 未闭合作为显式状态记录。"
+    ],
+    "host_prepare_online_commands": [
+      "sudo bash ./scripts/setup/prepare_docker_host.sh --all"
+    ],
+    "online_network_profile_commands": [
+      "sudo bash ./scripts/setup/prepare_docker_host.sh --all --network-profile cn"
+    ],
+    "online_network_profile_notes": [
+      "中国国内网络首轮部署使用下面的 profile 命令替换在线路径第一行；国际网络出口继续使用默认 `--all`。"
+    ],
+    "remote_first_install": {
+      "title": "远程首装向导（默认 dry-run）",
+      "summary": "`remote_first_install.sh` 用于把 SSH preflight、仓库/归档 staging、部署用户准备、基础 site.env 生成与 one-click 主链串成可恢复的远程首装流程；默认只做 dry-run，只有显式 `--apply` 才会写远端目录、传输 bundle 或启动部署。`--plan-json` 只输出阶段顺序、执行身份、输入输出和失败边界，不写本地 state 或远端。非默认 SSH 端口使用 `--ssh-port`，其他 SSH/scp 选项继续使用 `--ssh-option`。deploy 阶段固定在 basic gate 前执行 `fix_permissions.sh`，并允许 `--client-cidr` 使用逗号分隔多个来源段。preflight 会在无 sudo、Docker/Compose 缺失、80/443 端口占用、repo 已存在或已有 openclaw-* 容器时明确阻断。",
+      "commands": [
+        "bash ./scripts/setup/remote_first_install.sh --preflight --host <ssh-target>",
+        "bash ./scripts/setup/remote_first_install.sh --plan-json --host <ssh-target> --ssh-port <port> --deploy --client-cidr '<cidr[,cidr]>'",
+        "bash ./scripts/setup/remote_first_install.sh --apply --host <ssh-target> --repo-dir /opt/openclaw/clawctl --deploy-user openclaw --git-url <url> --prepare-repo --configure-base --deploy"
+      ],
+      "notes": [
+        "向导不在命令行接收明文密码或 secret；推荐 SSH key/agent，secret 只通过远端环境变量或 owner-only 文件导入。",
+        "stage-bundle 会排除 `state/`、`deploy/.env`、`deploy/site.env`、`agent/extensions/*/deploy/extension.env` 与常见 secret 文件。",
+        "每次运行都会输出固定 log、summary、status.env 与 resume 命令；遇到无 sudo、端口占用、既有 repo 冲突、既有 OpenClaw 容器或 Docker/Compose 缺失时在失败阶段明确阻断。"
+      ]
+    },
+    "host_prepare_offline_existing_runtime_commands": [
+      "sudo bash ./scripts/setup/prepare_docker_host.sh --configure-kernel --configure-daemon --open-firewall"
+    ],
+    "host_prepare_offline_new_machine_commands": [
+      "sudo bash ./scripts/setup/prepare_docker_host.sh --repair-centos7-vault-repos",
+      "sudo bash ./scripts/setup/prepare_docker_host.sh --install-base-tools --configure-kernel",
+      "sudo bash ./scripts/setup/prepare_docker_host.sh --install-docker --install-compose --configure-daemon --open-firewall"
+    ],
+    "host_prepare_notes": [
+      "Quickstart 的第 0 步之前，应先在目标机完成宿主机基础环境准备，并通过 check_docker_host_readiness.sh。readiness 只读复核系统时间、Docker / Compose、网络和镜像来源；它不准备 host 控制面执行介质。进入 one_click_config.sh 或 host 控制面命令前，必须显式执行 prepare_control_plane_medium.sh。",
+      "CentOS 7 初始机若先出现 `Cannot find a valid baseurl for repo: base/7/x86_64`，先执行 `--repair-centos7-vault-repos`，再继续安装预工具与 Docker / Compose。",
+      "完整宿主机准备步骤、正式支持边界、readiness 验收入口与逐条命令示例统一查看 `environment-setup.md`。"
+    ],
+    "deploy_inputs_batch_commands": [
+      "export OPENCLAW_INGRESS_ALLOWED_SOURCE_CIDRS=<目标机实际看到的来源网段 CIDR，逗号分隔>",
+      "export OPENCLAW_INGRESS_LISTEN_IP=<第 0 步选定的目标机私网或 loopback IP>",
+      "export OPENCLAW_TLS_CN=openclaw.internal.example",
+      "export OPENCLAW_TLS_MODE=self_signed",
+      "export OPENCLAW_INGRESS_BOUNDARY_MODE=host_firewall",
+      "bash ./scripts/setup/apply_site_env_values.sh --file deploy/site.env --init-from-example \\",
+      "  --from-env OPENCLAW_INGRESS_ALLOWED_SOURCE_CIDRS \\",
+      "  --from-env OPENCLAW_INGRESS_LISTEN_IP \\",
+      "  --from-env OPENCLAW_TLS_CN \\",
+      "  --from-env OPENCLAW_TLS_MODE \\",
+      "  --from-env OPENCLAW_INGRESS_BOUNDARY_MODE",
+      "vim deploy/site.env",
+      "# 如启用扩展，先检查 schema 缺项，再按字段写入 extension.env。",
+      "bash ./scripts/setup/check_extension_env_values.sh --profile <profile_id>",
+      "bash ./scripts/setup/apply_extension_env_values.sh --profile <profile_id> --init-from-example --set KEY=<value>",
+      "export SECRET_KEY=<secret>",
+      "bash ./scripts/setup/apply_extension_env_values.sh --profile <profile_id> --set-secret-from-env SECRET_KEY"
+    ],
+    "deploy_inputs_provided_files_commands": [
+      "bash ./scripts/setup/apply_site_env_values.sh --file deploy/site.env \\",
+      "  --set OPENCLAW_TLS_MODE=provided_files \\",
+      "  --set OPENCLAW_TLS_CERT_SOURCE_PATH=/srv/certs/openclaw.internal.example.crt \\",
+      "  --set OPENCLAW_TLS_KEY_SOURCE_PATH=/srv/certs/openclaw.internal.example.key"
+    ],
+    "deploy_inputs_conditional_commands": [
+      "bash ./scripts/setup/apply_site_env_values.sh --file deploy/site.env \\",
+      "  --set OPENCLAW_INGRESS_BOUNDARY_MODE=external_acl \\",
+      "  --set OPENCLAW_INGRESS_BOUNDARY_EVIDENCE_PATH=/srv/openclaw/evidence/ingress_boundary.json"
+    ],
+    "deploy_inputs_batch_notes": [
+      "先导出目标值，再用 `apply_site_env_values.sh` 批量回填 `deploy/site.env`；扩展运行变量按 deploy env schema 通过 `check_extension_env_values.sh` / `apply_extension_env_values.sh` 写入对应 `extension.env`；`vim` 只用于最后复核。",
+      "target 级 secret / webhook 使用 `apply_target_env_values.sh --target <target_id>` 批量回填 `deploy/targets.d/<target_id>.env`；不要从 Windows PowerShell here-string 直接向远程 bash 写多行 env。",
+      "`apply_site_env_values.sh`、`apply_extension_env_values.sh` 与 `apply_target_env_values.sh` 只修改人工输入真源，不会生成 `deploy/.env`；批量回填完成后执行 `one_click_config.sh`。",
+      "`deploy/site.env` 已经存在时，命令只保留 `--file deploy/site.env` 与后续 `--set` / `--from-env`。"
+    ],
+    "role_notes": [],
+    "private_ingress_access_side_notes": [
+      "访问端默认按 Windows PowerShell 输出；浏览器所在系统不是 Windows 时，必须通过 `--platform linux`、`--platform macos` 或 `--platform all` 显式切换。",
+      "Linux、macOS、Windows 三个平台的 hosts 命令都使用“删除既有记录 + 重写目标映射 + 再核对”的稳定块，可整段复制粘贴。",
+      "hosts 改写块会先备份原文件并在终端打印回滚命令；访问端核对失败时，先恢复备份，再重新确认 `OPENCLAW_TLS_CN` 与 `OPENCLAW_INGRESS_LISTEN_IP`。",
+      "Windows hosts 重写必须在“以管理员身份运行”的 PowerShell 中执行；macOS 重写后立即执行 `dscacheutil -flushcache` 与 `killall -HUP mDNSResponder`。",
+      "第 1 步只验证 `OPENCLAW_TLS_CN` 到 `OPENCLAW_INGRESS_LISTEN_IP` 的名称对齐。Linux hosts 重写后，用 `getent hosts` 核对实际解析；macOS 用 `dscacheutil -q host -a name`；Windows 依赖 hosts 时用 hosts 文件目标记录与 `ping` 核对。`nslookup`、`dig` 与 `Resolve-DnsName` 只验证 DNS 记录，不验证 hosts 覆盖。",
+      "`443/TCP` 连通性属于部署完成后的验证项；只有 private ingress 已启动、证书已落地且宿主机边界已放行后，才检查 `https://<OPENCLAW_TLS_CN>` 或 `Test-NetConnection -Port 443`。",
+      "跨 OS / 跨网络实例访问时，访问端 DNS/hosts 固定把 `OPENCLAW_TLS_CN` 指向目标机 ingress 地址；不要指向访问端地址或上游网关地址。第 2 步的 `OPENCLAW_INGRESS_ALLOWED_SOURCE_CIDRS` 也必须按目标机实际看到的访问端源 IP、NAT 翻译后地址或链路网段填写。"
+    ],
+    "private_ingress_detection_linux_commands": [
+      "export OPENCLAW_TLS_CN=openclaw.internal.example",
+      "getent hosts \"${OPENCLAW_TLS_CN}\" || true",
+      "nslookup \"${OPENCLAW_TLS_CN}\" || true",
+      "dig +short \"${OPENCLAW_TLS_CN}\" || true"
+    ],
+    "private_ingress_detection_macos_commands": [
+      "export OPENCLAW_TLS_CN=openclaw.internal.example",
+      "dscacheutil -q host -a name \"${OPENCLAW_TLS_CN}\" || true",
+      "nslookup \"${OPENCLAW_TLS_CN}\" || true",
+      "dig +short \"${OPENCLAW_TLS_CN}\" || true"
+    ],
+    "private_ingress_detection_windows_commands": [
+      "$OpenClawTlsCn = 'openclaw.internal.example'",
+      "Resolve-DnsName -Name $OpenClawTlsCn -ErrorAction SilentlyContinue",
+      "nslookup $OpenClawTlsCn"
+    ],
+    "private_ingress_dns_check_linux_commands": [
+      "export OPENCLAW_TLS_CN=openclaw.internal.example",
+      "export OPENCLAW_INGRESS_LISTEN_IP=<第 0 步选定的目标机私网 IP>",
+      "getent hosts \"${OPENCLAW_TLS_CN}\""
+    ],
+    "private_ingress_dns_check_macos_commands": [
+      "export OPENCLAW_TLS_CN=openclaw.internal.example",
+      "export OPENCLAW_INGRESS_LISTEN_IP=<第 0 步选定的目标机私网 IP>",
+      "dscacheutil -q host -a name \"${OPENCLAW_TLS_CN}\""
+    ],
+    "private_ingress_dns_check_windows_commands": [
+      "$OpenClawTlsCn = 'openclaw.internal.example'",
+      "$OpenClawIngressListenIp = '<第 0 步选定的目标机私网 IP>'",
+      "Resolve-DnsName -Name $OpenClawTlsCn -ErrorAction Stop | Where-Object { ($_.Type -eq 'A' -or $_.Type -eq 'AAAA') -and $_.IPAddress -eq $OpenClawIngressListenIp }"
+    ],
+    "private_ingress_hosts_linux_commands": [
+      "export OPENCLAW_INGRESS_LISTEN_IP=<第 0 步选定的目标机私网 IP>",
+      "export OPENCLAW_TLS_CN=openclaw.internal.example",
+      "sudo OPENCLAW_INGRESS_LISTEN_IP=\"$OPENCLAW_INGRESS_LISTEN_IP\" OPENCLAW_TLS_CN=\"$OPENCLAW_TLS_CN\" bash <<'EOF'",
+      "set -euo pipefail",
+      "HostsPath='/etc/hosts'",
+      "BackupPath=\"${HostsPath}.openclaw.$(date +%Y%m%d%H%M%S).bak\"",
+      "TmpFile=\"$(mktemp)\"",
+      "if [[ -f \"$HostsPath\" ]]; then",
+      "  cp -a \"$HostsPath\" \"$BackupPath\"",
+      "  awk -v cn=\"$OPENCLAW_TLS_CN\" '",
+      "    {",
+      "      line = $0",
+      "      sub(/#.*/, \"\", line)",
+      "      keep = 1",
+      "      n = split(line, fields, /[[:space:]]+/)",
+      "      for (i = 1; i <= n; i++) {",
+      "        if (fields[i] == cn) {",
+      "          keep = 0",
+      "          break",
+      "        }",
+      "      }",
+      "      if (keep) print $0",
+      "    }",
+      "  ' \"$HostsPath\" > \"$TmpFile\"",
+      "fi",
+      "printf '%s\\t%s\\n' \"$OPENCLAW_INGRESS_LISTEN_IP\" \"$OPENCLAW_TLS_CN\" >> \"$TmpFile\"",
+      "cat \"$TmpFile\" > \"$HostsPath\"",
+      "rm -f \"$TmpFile\"",
+      "printf '[init_private_ingress] hosts 备份：%s\\n' \"$BackupPath\"",
+      "printf '[init_private_ingress] 如需回滚：sudo cp %q %q\\n' \"$BackupPath\" \"$HostsPath\"",
+      "EOF",
+      "getent hosts \"${OPENCLAW_TLS_CN}\""
+    ],
+    "private_ingress_hosts_macos_commands": [
+      "export OPENCLAW_INGRESS_LISTEN_IP=<第 0 步选定的目标机私网 IP>",
+      "export OPENCLAW_TLS_CN=openclaw.internal.example",
+      "sudo OPENCLAW_INGRESS_LISTEN_IP=\"$OPENCLAW_INGRESS_LISTEN_IP\" OPENCLAW_TLS_CN=\"$OPENCLAW_TLS_CN\" bash <<'EOF'",
+      "set -euo pipefail",
+      "HostsPath='/etc/hosts'",
+      "BackupPath=\"${HostsPath}.openclaw.$(date +%Y%m%d%H%M%S).bak\"",
+      "TmpFile=\"$(mktemp)\"",
+      "if [[ -f \"$HostsPath\" ]]; then",
+      "  cp -a \"$HostsPath\" \"$BackupPath\"",
+      "  awk -v cn=\"$OPENCLAW_TLS_CN\" '",
+      "    {",
+      "      line = $0",
+      "      sub(/#.*/, \"\", line)",
+      "      keep = 1",
+      "      n = split(line, fields, /[[:space:]]+/)",
+      "      for (i = 1; i <= n; i++) {",
+      "        if (fields[i] == cn) {",
+      "          keep = 0",
+      "          break",
+      "        }",
+      "      }",
+      "      if (keep) print $0",
+      "    }",
+      "  ' \"$HostsPath\" > \"$TmpFile\"",
+      "fi",
+      "printf '%s\\t%s\\n' \"$OPENCLAW_INGRESS_LISTEN_IP\" \"$OPENCLAW_TLS_CN\" >> \"$TmpFile\"",
+      "cat \"$TmpFile\" > \"$HostsPath\"",
+      "rm -f \"$TmpFile\"",
+      "printf '[init_private_ingress] hosts 备份：%s\\n' \"$BackupPath\"",
+      "printf '[init_private_ingress] 如需回滚：sudo cp %q %q\\n' \"$BackupPath\" \"$HostsPath\"",
+      "EOF",
+      "sudo dscacheutil -flushcache",
+      "sudo killall -HUP mDNSResponder",
+      "dscacheutil -q host -a name \"${OPENCLAW_TLS_CN}\""
+    ],
+    "private_ingress_hosts_windows_commands": [
+      "$OpenClawIngressListenIp = '<第 0 步选定的目标机私网 IP>'",
+      "$OpenClawTlsCn = 'openclaw.internal.example'",
+      "$HostsPath = Join-Path $env:SystemRoot 'System32\\drivers\\etc\\hosts'",
+      "$BackupPath = \"$HostsPath.openclaw.$(Get-Date -Format 'yyyyMMddHHmmss').bak\"",
+      "$ExistingLines = @()",
+      "if (Test-Path $HostsPath) {",
+      "  Copy-Item -Path $HostsPath -Destination $BackupPath -Force",
+      "  $ExistingLines = Get-Content -Path $HostsPath -Encoding ascii | Where-Object { $_ -notmatch \"(^|\\\\s)$([regex]::Escape($OpenClawTlsCn))(\\\\s|$)\" }",
+      "}",
+      "$ExistingLines += \"$OpenClawIngressListenIp`t$OpenClawTlsCn\"",
+      "$NewContent = (($ExistingLines -join \"`r`n\").TrimEnd() + \"`r`n\")",
+      "[System.IO.File]::WriteAllText($HostsPath, $NewContent, [System.Text.Encoding]::ASCII)",
+      "Write-Host \"[init_private_ingress] hosts 备份：$BackupPath\"",
+      "Write-Host \"[init_private_ingress] 如需回滚：Copy-Item -Path '$BackupPath' -Destination '$HostsPath' -Force\"",
+      "ipconfig /flushdns | Out-Null",
+      "Get-Content -Path $HostsPath | Select-String -Pattern \"(^|\\\\s)$([regex]::Escape($OpenClawTlsCn))(\\\\s|$)\"",
+      "ping $OpenClawTlsCn"
+    ]
+  },
+  "environment_setup": {
+    "title": "基础环境准备",
+    "intro": "本页只负责把目标机准备到“可以开始部署 private ingress + official gateway”的状态。CentOS 7 x86_64 是受支持的存量老系统部署路径，并配套完整脚本链与静态门禁。该路径不作为默认推荐安全基线；新部署优先使用维护期内的 Linux 宿主机。",
+    "completion_standard": [
+      "系统时间已通过 check_system_time.sh / check_docker_host_readiness.sh 校验，Docker Engine 与 Docker Compose 已安装并可执行；",
+      "宿主机已准备好把 80/443 交给 private ingress；",
+      "已确定 `OPENCLAW_INGRESS_LISTEN_IP` 与 `OPENCLAW_TLS_CN`；",
+      "访问端可以把 `OPENCLAW_TLS_CN` 解析到 `OPENCLAW_INGRESS_LISTEN_IP`；",
+      "已确定来源限制证据模式与允许来源段，并写清 `OPENCLAW_INGRESS_ALLOWED_SOURCE_CIDRS`；",
+      "已理解 VPN、堡垒机、外部 DNS 与上游安全组策略不在本仓库直接代管；"
+    ],
+    "runtime_boundary": [
+      "base 默认 target 为：`gateway / ingress / internal-api / scheduler`；启用 profile + extension 后，才会额外出现扩展贡献的 runtime target。",
+      "官方 Gateway 不直接暴露宿主机端口；",
+      "private ingress 绑定宿主机 80/443；",
+      "`OPENCLAW_TLS_CN` 是唯一访问主机名；",
+      "ingress 负责 TLS、HSTS、来源 allowlist 与反向代理；`/` 进入 official Gateway，`/v1/control-plane/*` 与 `/v1/config/summary` 作为只读控制面 API 代理到 internal-api；来源限制还必须在宿主机防火墙、基础设施 ACL 或 DOCKER-USER 中显式落地，并与 `OPENCLAW_INGRESS_ALLOWED_SOURCE_CIDRS` 保持一致；同时必须能证明默认拒绝。",
+      "Gateway UI 与只读控制面 API 都必须先通过 `OPENCLAW_GATEWAY_TOKEN` 校验；private ingress 仅在 token 通过后注入 internal-api token 访问内部服务；",
+      "`OPENCLAW_INGRESS_BOUNDARY_MODE=external_acl` 时，必须保留结构化 JSON 外部 ACL 证据文件，并显式给出 `source_cidrs` / `allowed_ports` / `default_deny` / `ip_families` / 目标信息。",
+      "internal-api / scheduler 只位于 internal bridge，不对宿主机发布端口；internal-api 的外部可见面仅限 private ingress 完成 Gateway token 校验并注入内部 token 后代理的只读控制面 API；扩展贡献的内部 runtime target 也必须遵守同一规则。"
+    ],
+    "tls_modes": [
+      {
+        "mode": "self_signed",
+        "summary": "默认引导模式；由 `gen_cert.sh` 直接生成 `deploy/nginx/certs/openclaw.crt` / `openclaw.key`。",
+        "notes": [
+          "该模式用于首次部署与封闭测试；",
+          "浏览器或 curl 默认不会信任该证书，访问端必须显式使用目标机生成的自签证书作为 trust anchor。"
+        ]
+      },
+      {
+        "mode": "provided_files",
+        "summary": "正式证书模式；由 `gen_cert.sh` 严格校验未过期 PEM 证书、精确 dNSName SAN、未加密 PEM 私钥与非输出目录源路径后复制到 `deploy/nginx/certs/`。",
+        "notes": [
+          "必须在 `deploy/site.env` 中填写 `OPENCLAW_TLS_CERT_SOURCE_PATH` / `OPENCLAW_TLS_KEY_SOURCE_PATH`；",
+          "提供的证书必须包含精确 `dNSName:OPENCLAW_TLS_CN` SAN、未过期，且与未加密 PEM 私钥匹配；",
+          "目标机与访问端必须已信任签发链。"
+        ]
+      }
+    ],
+    "host_prepare_entrypoint": {
+      "summary": "先用仓库内脚本完成 CentOS 7 存量老系统路径的宿主机准备：repo 修复、基础工具、系统时间校验 / 更新、Docker、Compose 与 daemon 基线；脚本不会自动 sudo，执行时必须显式使用 root 或 sudo。",
+      "commands": [
+        "sudo bash ./scripts/setup/prepare_docker_host.sh --all",
+        "sudo bash ./scripts/setup/prepare_docker_host.sh --all --network-profile cn",
+        "sudo bash ./scripts/setup/prepare_docker_host.sh --update-system-time",
+        "sudo bash ./scripts/setup/prepare_docker_host.sh --configure-kernel --configure-daemon --open-firewall",
+        "sudo bash ./scripts/setup/prepare_docker_host.sh --install-base-tools --configure-kernel",
+        "sudo bash ./scripts/setup/prepare_docker_host.sh --install-docker --install-compose --configure-daemon --open-firewall",
+        "sudo bash ./scripts/setup/prepare_docker_host.sh --install-docker --install-compose --network-profile cn --configure-daemon --open-firewall"
+      ],
+      "notes": [
+        "在线机器优先执行完整宿主机准备命令：`sudo bash ./scripts/setup/prepare_docker_host.sh --all`。",
+        "中国国内网络首轮部署固定执行 `sudo bash ./scripts/setup/prepare_docker_host.sh --all --network-profile cn`；该 profile 会把 CentOS 7 vault repo 与 Docker Yum repo 同时固定到 aliyun_cn，并继续写入 docker_host 真源中的 registry-mirrors。",
+        "若只修复服务器快照恢复后的时钟漂移或证书时间错误，执行 `sudo bash ./scripts/setup/prepare_docker_host.sh --update-system-time` 或 `sudo bash ./scripts/setup/update_system_time.sh`，再回到 readiness。",
+        "宿主机准备完成后执行 `sudo bash ./scripts/setup/prepare_deploy_user.sh --user openclaw --repo-dir <repo>` 完成用户交接并写入部署用户证据 marker，再用 `sudo -iu openclaw`、`runuser -u openclaw -- bash -lc 'cd <repo> && <command>'` 或固定部署用户 SSH 登录继续执行 `prepare_control_plane_medium.sh`、`one_click_config.sh`、basic gate 与部署主链；不要沿用 root 生成 runtime UID/GID。",
+        "Docker Engine Yum repo 默认按 official、aliyun_cn、tuna_cn 顺序尝试；中国国内网络下优先使用 `--network-profile cn`，单独修复 Docker repo 时也可显式传入 `--docker-repo-source aliyun_cn`，内网制品源可设置 `OPENCLAW_DOCKER_CENTOS_REPO_URL`。",
+        "离线机器若已经具备 Docker / Compose，可执行 `--configure-kernel --configure-daemon --open-firewall`，执行范围限定为本地配置类步骤。",
+        "离线新机若尚未装好 Docker / Compose，先挂载本地 RPM / YUM 源，不要传 `--offline`；随后按 `--install-base-tools --configure-kernel` 与 `--install-docker --install-compose --configure-daemon --open-firewall` 分步安装和配置。",
+        "若只想修复 CentOS 7 repo 失效，再执行：`sudo bash ./scripts/setup/prepare_docker_host.sh --repair-centos7-vault-repos`。",
+        "若进入 Compose / jq 二进制回退，脚本会按 docker_host.json 的已登记 SHA256 做 fail-closed 校验。"
+      ]
+    },
+    "step_sections": [
+      {
+        "title": "第 1 步：确认系统版本、架构与绑定 IP",
+        "commands": [
+          "cat /etc/os-release",
+          "uname -m",
+          "hostname -I",
+          "hostname -I | tr ' ' '\\n' | grep -E '^(10\\.|172\\.(1[6-9]|2[0-9]|3[0-1])\\.|192\\.168\\.)' | head -n 1"
+        ],
+        "notes": [
+          "`OPENCLAW_INGRESS_LISTEN_IP` 固定先取 `hostname -I` 输出中的首个私网 IPv4；只有部署网卡不是该地址时，才填写目标网卡 IP。",
+          "文档中的 IP 示例只作占位；实际填写值以目标机探测结果为准。"
+        ]
+      },
+      {
+        "title": "第 2 步：修复 CentOS 7 初始机 YUM 仓库（如遇 baseurl 错误）",
+        "commands": [
+          "sudo yum makecache fast",
+          "sudo bash ./scripts/setup/prepare_docker_host.sh --repair-centos7-vault-repos",
+          "sudo bash ./scripts/setup/prepare_docker_host.sh --repair-centos7-vault-repos --network-profile cn",
+          "sudo bash ./scripts/setup/prepare_docker_host.sh --repair-centos7-vault-repos --centos7-vault-source aliyun_cn",
+          "sudo env OPENCLAW_CENTOS7_VAULT_BASE_URL='https://<internal-mirror>/centos-vault/7.9.2009' bash ./scripts/setup/prepare_docker_host.sh --repair-centos7-vault-repos",
+          "sudo yum clean all",
+          "sudo yum makecache fast"
+        ],
+        "notes": [
+          "若报错 `Cannot find a valid baseurl for repo: base/7/x86_64`，说明默认 mirrorlist 已不可用；必须切到 CentOS 7 vault repo 再继续安装。",
+          "修复脚本默认按 official、aliyun_cn、tuna_cn 顺序尝试；中国国内网络优先使用 `--network-profile cn`，单独修复 repo 时也可直接指定 `--centos7-vault-source aliyun_cn`，内网 vault 用 `OPENCLAW_CENTOS7_VAULT_BASE_URL` 覆盖。",
+          "修复脚本会先备份 `/etc/yum.repos.d/*.repo`，再重写 `CentOS-Base.repo`。"
+        ]
+      },
+      {
+        "title": "第 3 步：安装宿主机预工具",
+        "commands": [
+          "sudo yum install -y yum-utils device-mapper-persistent-data lvm2 curl wget git tar unzip zip vim-enhanced less which bind-utils net-tools lsof rsync ca-certificates chrony iptables iproute openssl",
+          "sudo yum install -y jq || true",
+          "sudo yum install -y epel-release jq || true",
+          "command -v vim less wget jq dig ss ip lsof"
+        ],
+        "notes": [
+          "`vim-enhanced`、`less`、`wget`、`bind-utils`、`net-tools`、`lsof` 属于现场排障高频工具，准备阶段需要显式安装。",
+          "CentOS 7 默认 Base / Updates 仓库经常不直接提供 `jq`；当前统一以 `prepare_docker_host.sh --install-base-tools` 为准，由脚本自动尝试 `epel-release` 或 jq 官方静态二进制补装，并在结束前强制校验 `jq`、`dig`、`ss`、`ip` 等命令全部存在。",
+          "jq 静态二进制回退必须命中已登记 SHA256；校验失败或缺少校验值时直接失败，不安装未校验下载物。"
+        ]
+      },
+      {
+        "title": "第 4 步：配置时区、系统时间、NTP、内核模块与 sysctl",
+        "commands": [
+          "sudo bash ./scripts/setup/update_system_time.sh",
+          "bash ./scripts/doctor/check_system_time.sh",
+          "timedatectl status",
+          "cat <<'EOF2' | sudo tee /etc/modules-load.d/br_netfilter.conf\nbr_netfilter\nEOF2",
+          "sudo modprobe br_netfilter",
+          "cat <<'EOF2' | sudo tee /etc/sysctl.d/99-docker.conf\nnet.bridge.bridge-nf-call-iptables = 1\nnet.bridge.bridge-nf-call-ip6tables = 1\nnet.ipv4.ip_forward = 1\nEOF2",
+          "sudo sysctl --system"
+        ],
+        "notes": [
+          "时间同步是证书有效期、镜像拉取校验、调度 run ledger 与日志排序的共同前提；服务器快照恢复后先执行 update_system_time.sh，再用 check_system_time.sh 复核。",
+          "在线模式会用多源 HTTPS HTTP Date 基准与本机 UTC 时间比对；漂移超过默认 300 秒时，update_system_time.sh 会在启用 NTP / chronyd 后按可信基准直接校正系统时间，直接校正受可信时间窗口与最大跳变阈值约束。",
+          "这是 Docker bridge / private ingress / 宿主机防火墙协同的前提项，不能跳过。"
+        ]
+      },
+      {
+        "title": "第 5 步：安装 Docker Engine 26.1.4",
+        "commands": [
+          "sudo yum remove -y docker docker-client docker-client-latest docker-common docker-latest docker-latest-logrotate docker-logrotate docker-engine docker-ce docker-ce-cli || true",
+          "sudo bash ./scripts/setup/prepare_docker_host.sh --install-docker",
+          "sudo bash ./scripts/setup/prepare_docker_host.sh --install-docker --network-profile cn",
+          "sudo bash ./scripts/setup/prepare_docker_host.sh --install-docker --docker-repo-source aliyun_cn",
+          "docker version",
+          "docker info | sed -n \"1,120p\""
+        ],
+        "notes": [
+          "当前 CentOS 7 存量支持路径固定使用 `26.1.4` 组合。",
+          "`prepare_docker_host.sh --install-docker` 会先用官方 Docker Yum repo，失败后自动尝试国内加速源；国内网络优先使用 `--network-profile cn`，单独修复 Docker repo 时也可指定 `--docker-repo-source aliyun_cn`，内网制品源用 `OPENCLAW_DOCKER_CENTOS_REPO_URL` 覆盖。"
+        ]
+      },
+      {
+        "title": "第 6 步：安装 Docker Compose V2 2.27.1 插件",
+        "commands": [
+          "rpm -q docker-compose-plugin >/dev/null 2>&1 || sudo yum install -y docker-compose-plugin-2.27.1-1.el7",
+          "test ! -f /usr/local/lib/docker/cli-plugins/docker-compose || sudo rm -f /usr/local/lib/docker/cli-plugins/docker-compose",
+          "docker compose version"
+        ],
+        "notes": [
+          "安装策略为：优先复用或安装 `docker-compose-plugin-2.27.1-1.el7`；只有 RPM 无法提供建议版本时，`prepare_docker_host.sh --install-compose` 才回退到二进制下载。",
+          "若目标机到 GitHub Releases 较慢，可在执行脚本前显式设置 `OPENCLAW_COMPOSE_DOWNLOAD_URL` 指向内网制品源或镜像下载地址；脚本会自动启用重试、断点续传与低速保护。",
+          "若存在 `/usr/local/lib/docker/cli-plugins/docker-compose` 覆盖件，必须删除该文件，确保 RPM 插件版本生效。",
+          "Compose 二进制回退同样必须命中已登记 SHA256；校验失败或缺少校验值时直接失败，不允许继续安装未校验下载物。"
+        ]
+      },
+      {
+        "title": "第 7 步：配置 Docker daemon 与日志滚动",
+        "commands": [
+          "sudo bash ./scripts/setup/prepare_docker_host.sh --configure-daemon",
+          "sudo env OPENCLAW_DOCKER_REGISTRY_MIRRORS='https://<internal-mirror-1>,https://<internal-mirror-2>' bash ./scripts/setup/prepare_docker_host.sh --configure-daemon",
+          "docker info | grep -E \"Storage Driver|Logging Driver\""
+        ],
+        "notes": [
+          "若目标机已有 `/etc/docker/daemon.json`，先备份再覆盖；仓库脚本会自动留备份。",
+          "registry-mirrors 默认来自 `config/governance/support/docker_host.json`；企业内网或特定地区可用 `OPENCLAW_DOCKER_REGISTRY_MIRRORS` 覆盖。",
+          "中国网络默认 profile 下，Python / Nginx 默认固定为 Daocloud tag@digest pin；Docker daemon registry-mirrors 作为补充拉取加速。"
+        ]
+      },
+      {
+        "title": "第 8 步：预开放宿主机 80/443",
+        "commands": [
+          "sudo bash ./scripts/setup/prepare_docker_host.sh --open-firewall",
+          "sudo firewall-cmd --list-services",
+          "sudo firewall-cmd --permanent --zone=docker --get-target"
+        ],
+        "notes": [
+          "`--open-firewall` 只预开放 80/443，并在 firewalld 运行时确保 permanent `docker` zone 存在且 target 为 `ACCEPT`；`18789` 与 `19001` 继续只绑定宿主机本地。",
+          "若该步骤修复了 Docker / firewalld zone，脚本会重启 Docker 并执行 Docker bridge 烟测；存在 ingress 边界证据的环境需要重新执行 `apply_ingress_boundary_rules.sh --env-file deploy/.env`。",
+          "若 `OPENCLAW_INGRESS_BOUNDARY_MODE=host_firewall`，完成 one_click_config 后必须执行 `apply_ingress_boundary_rules.sh --env-file deploy/.env`，并把 80/443 限制到 `OPENCLAW_INGRESS_ALLOWED_SOURCE_CIDRS`。"
+        ]
+      },
+      {
+        "title": "第 9 步：执行仓库预检并进入 one_click 主路径",
+        "commands": [
+          "bash ./scripts/doctor/check_docker_host_readiness.sh",
+          "bash ./scripts/doctor/check_docker_host_readiness.sh --offline",
+          "bash ./scripts/setup/prepare_control_plane_medium.sh",
+          "bash ./scripts/setup/prepare_control_plane_medium.sh --offline --image-archive <local-path>",
+          "bash ./scripts/setup/one_click_config.sh",
+          "bash ./scripts/setup/one_click_test_basic.sh"
+        ],
+        "notes": [
+          "`check_docker_host_readiness.sh` 只做只读预检；真正修复宿主机前提统一通过 `prepare_docker_host.sh`。",
+          "在线与离线只选择对应模式的一组 readiness / control-plane medium 命令；不要在同一轮部署中混跑两种模式。",
+          "`check_docker_host_readiness.sh` 会先调用 `check_system_time.sh`；系统时间未闭合时不得继续 Docker / Compose、镜像来源或 one_click 主链。",
+          "JSON 真源解析固定走仓库脚本内 jq / curl 路径；readiness 不执行 host 控制面命令，也不替代 prepare_control_plane_medium.sh。",
+          "仓库级静态 Python 入口治理由仓库发布门禁覆盖；目标机 readiness 只负责宿主机、Docker、Compose、网络与镜像来源只读检查。",
+          "对带 canonical / acceleration / selected runtime source 分层的对象，预检会先探测当前 selected runtime source；若 selected source 不可达，再继续探测 `../operations/runtime-service-reference.md` 中声明的 acceleration candidates。",
+          "Python / Nginx 默认固定为 Daocloud tag@digest pin；宿主机预检只验证本地缓存与当前 selected source 传输链路，不在此阶段复做精确 tag@digest artifact 判定。",
+          "`check_deployment_image_readiness.sh`、`load_deployment_images.sh` 与 `ensure_control_plane_image.sh` 支持显式指定归档，未指定时自动尝试 `state/image_artifacts/` 下最新的 `deployment_images_*.tar`；归档按合同校验部署镜像角色，并在导入后写出包含 pin、managed role tag 与 image id 的 verified local refs。host 控制面进入前统一显式执行 `prepare_control_plane_medium.sh`，由该步骤完成 OPENCLAW_CONTROL_PLANE_IMAGE 准备。",
+          "Ubuntu 22.04 推荐基线提供 readiness 检测与准备指引；Docker / Compose 缺失时按已安装环境修 PATH/daemon、未安装环境预先安装 Docker/Compose、离线环境准备离线安装包和镜像归档三路处理。",
+          "启用的 provider / API 入口预检只验证 DNS/TLS/HTTP reachability；只要能收到 HTTP 响应码，就判定网络连通，不把 base URL 当作业务健康检查接口。",
+          "若预检发现当前 selected source 不可达但 acceleration candidate 可用，脚本只给出只读诊断；后续 `pull_images.sh` 默认用 `PULL_GATEWAY_CANDIDATE_MODE=auto-switch` 只改当前 `deploy/.env`，或按显式 `fail-fast/off` 模式处理。selected / candidate 都不可达时使用离线镜像归档。",
+          "`one_click_test_basic.sh` 通过后会写出 latest basic gate proof；`one_click_deploy.sh` 会校验同一 env/mode 的 proof，不得跳过 basic gate 直接部署。"
+        ]
+      }
+    ],
+    "notes": [],
+    "host_readiness_entrypoint": {
+      "summary": "宿主机准备完成后，必须通过唯一只读准入入口 check_docker_host_readiness.sh；该入口会先复核系统时间，通过前不得进入 one_click_config.sh。",
+      "commands": [
+        "bash ./scripts/doctor/check_docker_host_readiness.sh",
+        "bash ./scripts/doctor/check_docker_host_readiness.sh --offline"
+      ],
+      "notes": [
+        "`check_docker_host_readiness.sh` 只做只读预检；真正修复系统时间或其他宿主机前提统一通过 `prepare_docker_host.sh`。",
+        "JSON 真源解析固定走仓库脚本内 jq / curl 路径；readiness 不执行 host 控制面命令，也不替代 prepare_control_plane_medium.sh。",
+        "readiness 通过后，进入 host 控制面命令前必须显式执行 `prepare_control_plane_medium.sh`。"
+      ]
+    }
+  },
+  "export_commands": [
+    "bash ./scripts/setup/export_clean_delivery_bundle.sh --bundle runtime-core --clean"
+  ],
+  "verify_notes": []
+}

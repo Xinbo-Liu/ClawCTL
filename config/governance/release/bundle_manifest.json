@@ -1,0 +1,341 @@
+{
+  "schemaVersion": 1,
+  "sharedExcludes": [
+    ".git/**",
+    "*.zip",
+    "deploy/.env",
+    "deploy/site.env",
+    "agent/extensions/*/deploy/*.env",
+    "deploy/nginx/certs/**",
+    ".local_mounts/**"
+  ],
+  "bundles": {
+    "runtime-core": {
+      "outputPrefix": "openclaw_runtime_core",
+      "description": "仅保留运行主链路、control-plane 与最小 runtime 脚本；docs/governance/setup/doctor/workspace templates 不进入本包。",
+      "budget": {
+        "maxZipBytes": 650000,
+        "maxFiles": 360
+      },
+      "exclude": [
+        "python/openclaw/lib/runtime/surface.py"
+      ],
+      "include": [
+        "COMMERCIAL_LICENSE.md",
+        "LICENSE",
+        "LICENSES/**",
+        "NOTICE",
+        "openclaw/**",
+        "openclaw-stack.lock.json",
+        "README.md",
+        "THIRD_PARTY_NOTICES.md",
+        "pyproject.toml",
+        "agent/README.md",
+        "agent/control_plane/**",
+        "config/control_plane/**",
+        "config/gateway/**",
+        "config/governance/validation/absent_surfaces.json",
+        "config/image_pins/openclaw.env",
+        "config/image_pins/runtime.env",
+        "config/runtime/**",
+        "config/services/**",
+        "deploy/**",
+        "python/openclaw/cli.py",
+        "python/openclaw/__init__.py",
+        "python/openclaw/control_plane/**",
+        "python/openclaw/internal_api/**",
+        "python/openclaw/lib/__init__.py",
+        "python/openclaw/lib/channels/**",
+        "python/openclaw/lib/cli/**",
+        "python/openclaw/lib/control_plane/object_families.py",
+        "python/openclaw/lib/dispatch/target_registry.py",
+        "python/openclaw/lib/http/**",
+        "python/openclaw/lib/io/**",
+        "python/openclaw/lib/io/json_access.py",
+        "python/openclaw/lib/models/**",
+        "python/openclaw/lib/repo/layout.py",
+        "python/openclaw/lib/repo/absent_surfaces.py",
+        "python/openclaw/lib/runtime/path_resolver.py",
+        "python/openclaw/lib/runtime/**",
+        "python/openclaw/lib/runtime/state.py",
+        "python/openclaw/lib/repo/static_truth.py",
+        "python/openclaw/runtime/__init__.py",
+        "python/openclaw/runtime/generated_paths/**",
+        "python/openclaw/runtime/healthcheck.py",
+        "python/openclaw/runtime/path_lint.py",
+        "python/openclaw/runtime/path_resolve_cli.py",
+        "python/openclaw/runtime/path_surface.py",
+        "python/openclaw/runtime/path_view.py",
+        "python/openclaw/runtime/workspace_templates.py",
+        "python/openclaw/scheduler/**",
+        "python/openclaw/specs/**",
+        "scripts/agent_runtime/**",
+        "scripts/control_plane/**",
+        "scripts/gateway/run_gateway_probe.sh",
+        "scripts/gateway/run_gateway_status_deep.sh",
+        "scripts/gateway/run_security_audit.sh",
+        "scripts/lib/image_env.sh",
+        "scripts/runtime/container_openclaw_cli",
+        "scripts/runtime/container_python",
+        "scripts/runtime/run_openclaw_official_cli.sh",
+        "scripts/runtime/run_openclaw_python_tool.sh",
+        "scripts/runtime/run_python_container.sh",
+        "scripts/runtime/run_runtime_container_command.sh",
+        "scripts/runtime/run_runtime_service_action.sh",
+        "scripts/runtime/runtime_compose_lib.sh",
+        "scripts/runtime/runtime_container_lib.sh",
+        "scripts/runtime/runtime_docker_lib.sh",
+        "scripts/runtime/runtime_target_lib.sh",
+        "scripts/runtime/show_runtime_compose_config.sh",
+        "scripts/runtime/show_runtime_container_logs.sh",
+        "scripts/runtime/show_runtime_service_status.sh"
+      ],
+      "must_not_ship": [
+        "docs/**",
+        "agent/governance/**",
+        "config/governance/docs/**",
+        "config/governance/entrypoints/**",
+        "config/governance/flows/**",
+        "config/governance/release/**",
+        "config/governance/support/**",
+        "config/governance/validation/closure_rules.json",
+        "config/deploy_env/**",
+        "config/setup_flow/**",
+        "config/upstream/**",
+        "config/workspace_templates/**",
+        "python/openclaw/docs/**",
+        "python/openclaw/doctor/**",
+        "python/openclaw/setup/**",
+        "python/openclaw/guards/**",
+        "python/openclaw/images/**",
+        "python/openclaw/lib/testing/acceptance_surface.py",
+        "python/openclaw/lib/control_plane/agent_cli_surface.py",
+        "python/openclaw/lib/dispatch/observability_surface.py",
+        "python/openclaw/lib/dispatch/operations_surface.py",
+        "python/openclaw/lib/testing/full_test/__init__.py",
+        "python/openclaw/lib/control_plane/diagnostic_surface.py",
+        "python/openclaw/lib/control_plane/recovery_operations_surface.py",
+        "python/openclaw/lib/control_plane/router_route_surface.py",
+        "python/openclaw/lib/runtime/surface.py",
+        "python/openclaw/lib/control_plane/script_catalog_surface.py",
+        "scripts/README.md",
+        "scripts/docs/**",
+        "scripts/doctor/**",
+        "scripts/images/**",
+        "scripts/setup/**",
+        "scripts/gateway/run_shadow_upgrade_verify.sh",
+        "scripts/runtime/check_runtime_evidence_prereqs.sh",
+        "scripts/runtime/export_runtime_acceptance_evidence.sh",
+        "scripts/runtime/sync_workspace_templates.sh",
+        "scripts/runtime/verify_python_runtime_container.sh"
+      ]
+    },
+    "ops-toolkit": {
+      "outputPrefix": "openclaw_ops_toolkit",
+      "description": "运维、安装、排障与治理检查资产，使用统一运维工具包命名。",
+      "include": [
+        "COMMERCIAL_LICENSE.md",
+        "LICENSE",
+        "LICENSES/**",
+        "NOTICE",
+        "openclaw/__init__.py",
+        "openclaw-stack.lock.json",
+        "README.md",
+        "THIRD_PARTY_NOTICES.md",
+        "pyproject.toml",
+        "agent/**",
+        "config/**",
+        "deploy/**",
+        "docs/operations/**",
+        "python/openclaw/cli.py",
+        "python/openclaw/__init__.py",
+        "python/openclaw/control_plane/**",
+        "python/openclaw/docs/**",
+        "python/openclaw/doctor/**",
+        "python/openclaw/guards/**",
+        "python/openclaw/images/**",
+        "python/openclaw/internal_api/**",
+        "python/openclaw/lib/**",
+        "python/openclaw/runtime/**",
+        "python/openclaw/scheduler/**",
+        "python/openclaw/setup/**",
+        "python/openclaw/specs/**",
+        "scripts/README.md",
+        "scripts/doctor/**",
+        "scripts/docs/**",
+        "scripts/images/**",
+        "scripts/lib/**",
+        "scripts/runtime/check_runtime_evidence_prereqs.sh",
+        "scripts/runtime/container_openclaw_cli",
+        "scripts/runtime/container_python",
+        "scripts/runtime/export_runtime_acceptance_evidence.sh",
+        "scripts/runtime/run_openclaw_official_cli.sh",
+        "scripts/runtime/run_openclaw_python_tool.sh",
+        "scripts/runtime/run_python_container.sh",
+        "scripts/runtime/run_runtime_container_command.sh",
+        "scripts/runtime/run_runtime_service_action.sh",
+        "scripts/runtime/runtime_compose_lib.sh",
+        "scripts/runtime/runtime_container_lib.sh",
+        "scripts/runtime/runtime_docker_lib.sh",
+        "scripts/runtime/runtime_target_lib.sh",
+        "scripts/runtime/show_runtime_compose_config.sh",
+        "scripts/runtime/show_runtime_container_logs.sh",
+        "scripts/runtime/show_runtime_service_status.sh",
+        "scripts/runtime/sync_workspace_templates.sh",
+        "scripts/runtime/verify_python_runtime_container.sh",
+        "scripts/setup/**",
+        "scripts/gateway/**",
+        "scripts/control_plane/**",
+        "scripts/agent_runtime/**"
+      ],
+      "must_not_ship": [
+        "docs/getting-started/**"
+      ]
+    },
+    "full-source-governance": {
+      "outputPrefix": "openclaw_full_source_governance",
+      "description": "完整源码、文档、治理与运维资料交付包，使用统一 full source governance 命名。",
+      "budget": {
+        "maxZipBytes": 2000000
+      },
+      "include": [
+        ".github/**",
+        ".gitignore",
+        "COMMERCIAL_LICENSE.md",
+        "LICENSE",
+        "LICENSES/**",
+        "NOTICE",
+        "openclaw/__init__.py",
+        "openclaw-stack.lock.json",
+        "README.md",
+        "THIRD_PARTY_NOTICES.md",
+        "pyproject.toml",
+        "agent/**",
+        "config/**",
+        "deploy/**",
+        "docs/**",
+        "python/**",
+        "scripts/**"
+      ],
+      "artifactSmoke": [
+        {
+          "id": "control_plane_summary",
+          "cwd": ".",
+          "env": {
+            "PYTHONPATH": "python",
+            "OPENCLAW_CONTROL_PLANE_SERVICE_CONFIG_PATH": "{artifact_root}/config/control_plane/profiles/agent_platform.service.json",
+            "HOST_STATE_DIR": "{artifact_state_root}",
+            "OPENCLAW_READY_CACHE_TTL_SECONDS": "0",
+            "PYTHONDONTWRITEBYTECODE": "1"
+          },
+          "command": [
+            "{python}",
+            "-B",
+            "-m",
+            "openclaw.cli",
+            "control-plane",
+            "summary",
+            "overview"
+          ]
+        },
+        {
+          "id": "scheduler_once",
+          "cwd": ".",
+          "env": {
+            "PYTHONPATH": "python",
+            "OPENCLAW_CONTROL_PLANE_SERVICE_CONFIG_PATH": "{artifact_root}/config/control_plane/profiles/agent_platform.service.json",
+            "HOST_STATE_DIR": "{artifact_state_root}",
+            "OPENCLAW_READY_CACHE_TTL_SECONDS": "0",
+            "PYTHONDONTWRITEBYTECODE": "1"
+          },
+          "command": [
+            "{python}",
+            "-B",
+            "-m",
+            "openclaw.cli",
+            "control-plane",
+            "scheduler-runtime",
+            "--once"
+          ]
+        },
+        {
+          "id": "control_plane_readyz",
+          "cwd": ".",
+          "env": {
+            "PYTHONPATH": "python",
+            "OPENCLAW_CONTROL_PLANE_SERVICE_CONFIG_PATH": "{artifact_root}/config/control_plane/profiles/agent_platform.service.json",
+            "HOST_STATE_DIR": "{artifact_state_root}",
+            "OPENCLAW_READY_CACHE_TTL_SECONDS": "0",
+            "PYTHONDONTWRITEBYTECODE": "1"
+          },
+          "command": [
+            "{python}",
+            "-B",
+            "-c",
+            "import json,sys; from openclaw.internal_api.routes.health import render_ready; payload=render_ready(); print(json.dumps(payload, ensure_ascii=False)); raise SystemExit(0 if str(payload.get('status') or '').lower() == 'ready' else 1)"
+          ]
+        },
+        {
+          "id": "platform_profile_surface",
+          "cwd": ".",
+          "env": {
+            "PYTHONPATH": "python",
+            "OPENCLAW_CONTROL_PLANE_SERVICE_CONFIG_PATH": "{artifact_root}/config/control_plane/profiles/agent_platform.service.json",
+            "HOST_STATE_DIR": "{artifact_state_root}",
+            "OPENCLAW_READY_CACHE_TTL_SECONDS": "0",
+            "PYTHONDONTWRITEBYTECODE": "1"
+          },
+          "command": [
+            "{python}",
+            "-B",
+            "-m",
+            "openclaw.release.artifact_smoke",
+            "platform-profile",
+            "--config-path",
+            "{artifact_root}/config/control_plane/profiles/agent_platform.service.json",
+            "--extension-id",
+            "agent_platform"
+          ]
+        },
+        {
+          "id": "base_kernel_surface",
+          "cwd": ".",
+          "env": {
+            "PYTHONPATH": "python",
+            "OPENCLAW_CONTROL_PLANE_SERVICE_CONFIG_PATH": "{artifact_root}/config/control_plane/service.json",
+            "HOST_STATE_DIR": "{artifact_state_root}",
+            "OPENCLAW_READY_CACHE_TTL_SECONDS": "0",
+            "PYTHONDONTWRITEBYTECODE": "1"
+          },
+          "command": [
+            "{python}",
+            "-B",
+            "-m",
+            "openclaw.release.artifact_smoke",
+            "base-kernel",
+            "--config-path",
+            "{artifact_root}/config/control_plane/service.json"
+          ]
+        },
+        {
+          "id": "python_tests",
+          "cwd": ".",
+          "env": {
+            "PYTHONPATH": "python",
+            "OPENCLAW_CONTROL_PLANE_SERVICE_CONFIG_PATH": "{artifact_root}/config/control_plane/profiles/agent_platform.service.json",
+            "HOST_STATE_DIR": "{artifact_state_root}",
+            "OPENCLAW_READY_CACHE_TTL_SECONDS": "0",
+            "PYTHONDONTWRITEBYTECODE": "1"
+          },
+          "command": [
+            "{python}",
+            "-B",
+            "-m",
+            "openclaw.testing.repo_unittest",
+            "-q"
+          ]
+        }
+      ]
+    }
+  }
+}

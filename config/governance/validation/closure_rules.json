@@ -1,0 +1,533 @@
+{
+  "checker": {
+    "shell_entrypoint": "scripts/docs/check_documentation_object_closure.sh",
+    "python_module": "python/openclaw/docs/validators/object_closure.py"
+  },
+  "entries": [
+    {
+      "path": "docs/getting-started/quickstart.md",
+      "command_refs": [
+        {
+          "config_rel_path": "config/governance/entrypoints/setup_entrypoints.json",
+          "key_path": [
+            "entrypoints",
+            "one_click_test_basic",
+            "command"
+          ],
+          "label": "one_click_test_basic.command"
+        },
+        {
+          "config_rel_path": "config/governance/entrypoints/setup_entrypoints.json",
+          "key_path": [
+            "entrypoints",
+            "one_click_deploy",
+            "command"
+          ],
+          "label": "one_click_deploy.command"
+        }
+      ],
+      "string_list_refs": [
+        {
+          "config_rel_path": "config/governance/flows/deploy_stage_flow.json",
+          "key_path": [
+            "stages",
+            "fix_permissions",
+            "next_commands"
+          ],
+          "label": "deploy_flow.fix_permissions.next_commands"
+        },
+        {
+          "config_rel_path": "config/governance/flows/deploy_stage_flow.json",
+          "key_path": [
+            "stages",
+            "bootstrap",
+            "next_commands"
+          ],
+          "label": "deploy_flow.bootstrap.next_commands"
+        },
+        {
+          "config_rel_path": "config/governance/flows/deploy_stage_flow.json",
+          "key_path": [
+            "stages",
+            "check_runtime_compose_contract",
+            "next_commands"
+          ],
+          "label": "deploy_flow.check_runtime_compose_contract.next_commands"
+        },
+        {
+          "config_rel_path": "config/governance/flows/deploy_stage_flow.json",
+          "key_path": [
+            "stages",
+            "docker_compose_up",
+            "next_commands"
+          ],
+          "label": "deploy_flow.docker_compose_up.next_commands"
+        },
+        {
+          "config_rel_path": "config/governance/flows/deploy_stage_flow.json",
+          "key_path": [
+            "stages",
+            "docker_compose_ps",
+            "next_commands"
+          ],
+          "label": "deploy_flow.docker_compose_ps.next_commands"
+        }
+      ],
+      "service_target_refs": [
+        {
+          "target": "gateway",
+          "fields": [
+            "target"
+          ]
+        },
+        {
+          "target": "ingress",
+          "fields": [
+            "target"
+          ]
+        },
+        {
+          "target": "internal-api",
+          "fields": [
+            "target"
+          ]
+        },
+        {
+          "target": "scheduler",
+          "fields": [
+            "target"
+          ]
+        }
+      ]
+    },
+    {
+      "path": "docs/operations/runtime-service-reference.md",
+      "string_refs": [
+        {
+          "config_rel_path": "config/runtime/openclaw.runtime_contract.json",
+          "key_path": [
+            "upstream_release",
+            "release_discovery",
+            "github_latest_release_api"
+          ],
+          "label": "openclaw.release_discovery.github_latest_release_api"
+        },
+        {
+          "config_rel_path": "config/runtime/openclaw.runtime_contract.json",
+          "key_path": [
+            "upstream_release",
+            "image_repositories",
+            "official_release_image_repo"
+          ],
+          "label": "openclaw.image_repositories.official_release_image_repo"
+        },
+        {
+          "config_rel_path": "config/runtime/openclaw.runtime_contract.json",
+          "key_path": [
+            "upstream_release",
+            "image_repositories",
+            "default_official_gateway_image_repo"
+          ],
+          "label": "openclaw.image_repositories.default_official_gateway_image_repo"
+        }
+      ],
+      "string_list_refs": [
+        {
+          "config_rel_path": "config/runtime/openclaw.runtime_contract.json",
+          "key_path": [
+            "upstream_release",
+            "image_repositories",
+            "allowed_candidate_image_repos"
+          ],
+          "label": "openclaw.image_repositories.allowed_candidate_image_repos"
+        }
+      ],
+      "runtime_path_refs": [
+        {
+          "entry_id": "gateway_host_state_dir",
+          "view": "host"
+        }
+      ]
+    },
+    {
+      "path": "docs/getting-started/quickstart.md",
+      "command_refs": [
+        {
+          "config_rel_path": "config/governance/entrypoints/setup_entrypoints.json",
+          "key_path": [
+            "entrypoints",
+            "one_click_config",
+            "command"
+          ],
+          "label": "one_click_config.command"
+        },
+        {
+          "config_rel_path": "config/governance/entrypoints/setup_entrypoints.json",
+          "key_path": [
+            "entrypoints",
+            "one_click_test_basic",
+            "command"
+          ],
+          "label": "one_click_test_basic.command"
+        },
+        {
+          "config_rel_path": "config/governance/entrypoints/setup_entrypoints.json",
+          "key_path": [
+            "entrypoints",
+            "one_click_deploy",
+            "command"
+          ],
+          "label": "one_click_deploy.command"
+        },
+        {
+          "config_rel_path": "config/governance/entrypoints/setup_entrypoints.json",
+          "key_path": [
+            "entrypoints",
+            "one_click_test_full",
+            "command"
+          ],
+          "label": "one_click_test_full.command"
+        }
+      ],
+      "string_list_refs": [
+        {
+          "config_rel_path": "config/governance/docs/getting_started_surface.json",
+          "key_path": [
+            "quickstart",
+            "pairing_commands"
+          ],
+          "label": "quickstart.pairing_commands"
+        }
+      ],
+      "service_target_refs": [
+        {
+          "target": "gateway",
+          "fields": [
+            "target"
+          ]
+        },
+        {
+          "target": "ingress",
+          "fields": [
+            "target"
+          ]
+        },
+        {
+          "target": "internal-api",
+          "fields": [
+            "target"
+          ]
+        },
+        {
+          "target": "scheduler",
+          "fields": [
+            "target"
+          ]
+        }
+      ]
+    },
+    {
+      "path": "docs/operations/runtime-service-reference.md",
+      "string_refs": [
+        {
+          "config_rel_path": "config/runtime/openclaw.runtime_contract.json",
+          "key_path": [
+            "upstream_release",
+            "image_repositories",
+            "official_release_image_repo"
+          ],
+          "label": "official_gateway.canonical_source.repo"
+        },
+        {
+          "config_rel_path": "config/runtime/openclaw.runtime_contract.json",
+          "key_path": [
+            "upstream_release",
+            "image_repositories",
+            "default_official_gateway_image_repo"
+          ],
+          "label": "official_gateway.acceleration_sources[0].repo"
+        },
+        {
+          "config_rel_path": "config/runtime/source_strategy.json",
+          "key_path": [
+            "images",
+            "runtime_python",
+            "canonical_source",
+            "repo"
+          ],
+          "label": "runtime_python.canonical_source.repo"
+        },
+        {
+          "config_rel_path": "config/runtime/source_strategy.json",
+          "key_path": [
+            "images",
+            "runtime_python",
+            "acceleration_sources",
+            "0",
+            "repo"
+          ],
+          "label": "runtime_python.acceleration_sources[0].repo"
+        },
+        {
+          "config_rel_path": "config/runtime/source_strategy.json",
+          "key_path": [
+            "images",
+            "nginx_runtime",
+            "canonical_source",
+            "repo"
+          ],
+          "label": "nginx_runtime.canonical_source.repo"
+        },
+        {
+          "config_rel_path": "config/runtime/source_strategy.json",
+          "key_path": [
+            "images",
+            "nginx_runtime",
+            "acceleration_sources",
+            "0",
+            "repo"
+          ],
+          "label": "nginx_runtime.acceleration_sources[0].repo"
+        }
+      ],
+      "string_list_refs": [
+        {
+          "config_rel_path": "config/runtime/source_strategy.json",
+          "key_path": [
+            "governance_rules"
+          ],
+          "label": "source_strategy.governance_rules"
+        }
+      ]
+    },
+    {
+      "path": "docs/getting-started/quickstart.md",
+      "command_refs": [
+        {
+          "config_rel_path": "config/governance/entrypoints/setup_entrypoints.json",
+          "key_path": [
+            "entrypoints",
+            "one_click_config",
+            "command"
+          ],
+          "label": "one_click_config.command"
+        },
+        {
+          "config_rel_path": "config/governance/entrypoints/setup_entrypoints.json",
+          "key_path": [
+            "entrypoints",
+            "one_click_test_basic",
+            "command"
+          ],
+          "label": "one_click_test_basic.command"
+        },
+        {
+          "config_rel_path": "config/governance/entrypoints/setup_entrypoints.json",
+          "key_path": [
+            "entrypoints",
+            "one_click_deploy",
+            "command"
+          ],
+          "label": "one_click_deploy.command"
+        },
+        {
+          "config_rel_path": "config/governance/entrypoints/setup_entrypoints.json",
+          "key_path": [
+            "entrypoints",
+            "one_click_test_full",
+            "command"
+          ],
+          "label": "one_click_test_full.command"
+        }
+      ],
+      "service_target_refs": []
+    },
+    {
+      "path": "docs/operations/security-boundary.md",
+      "service_target_refs": [
+        {
+          "target": "gateway",
+          "fields": [
+            "service"
+          ]
+        },
+        {
+          "target": "ingress",
+          "fields": [
+            "service"
+          ]
+        },
+        {
+          "target": "internal-api",
+          "fields": [
+            "service"
+          ]
+        },
+        {
+          "target": "scheduler",
+          "fields": [
+            "service"
+          ]
+        }
+      ],
+      "runtime_path_refs": [
+        {
+          "entry_id": "state_root",
+          "view": "host"
+        },
+        {
+          "entry_id": "state_root",
+          "view": "gateway"
+        },
+        {
+          "entry_id": "gateway_host_state_dir",
+          "view": "host"
+        }
+      ]
+    },
+    {
+      "path": "README.md",
+      "string_list_refs": [
+        {
+          "config_rel_path": "config/governance/docs/docs_registry.json",
+          "lookup_list_key_path": [
+            "pages"
+          ],
+          "lookup_match_key_path": [
+            "path"
+          ],
+          "lookup_match_value": "README.md",
+          "key_path": [
+            "entrypointContract",
+            "requiredRefs"
+          ],
+          "label": "documentation_entrypoints.README.requiredRefs",
+          "item_key_path": [
+            "path"
+          ]
+        }
+      ]
+    },
+    {
+      "path": "docs/README.md",
+      "string_list_refs": [
+        {
+          "config_rel_path": "config/governance/docs/docs_registry.json",
+          "lookup_list_key_path": [
+            "pages"
+          ],
+          "lookup_match_key_path": [
+            "path"
+          ],
+          "lookup_match_value": "docs/README.md",
+          "key_path": [
+            "entrypointContract",
+            "requiredRefs"
+          ],
+          "label": "documentation_entrypoints.docs_readme.requiredRefs",
+          "item_key_path": [
+            "path"
+          ]
+        }
+      ]
+    },
+    {
+      "path": "docs/getting-started/README.md",
+      "string_list_refs": [
+        {
+          "config_rel_path": "config/governance/docs/docs_registry.json",
+          "lookup_list_key_path": [
+            "pages"
+          ],
+          "lookup_match_key_path": [
+            "path"
+          ],
+          "lookup_match_value": "docs/getting-started/README.md",
+          "key_path": [
+            "entrypointContract",
+            "requiredRefs"
+          ],
+          "label": "documentation_entrypoints.getting_started_readme.requiredRefs",
+          "item_key_path": [
+            "path"
+          ]
+        }
+      ]
+    },
+    {
+      "path": "docs/architecture/README.md",
+      "string_list_refs": [
+        {
+          "config_rel_path": "config/governance/docs/docs_registry.json",
+          "lookup_list_key_path": [
+            "pages"
+          ],
+          "lookup_match_key_path": [
+            "path"
+          ],
+          "lookup_match_value": "docs/architecture/README.md",
+          "key_path": [
+            "entrypointContract",
+            "requiredRefs"
+          ],
+          "label": "documentation_entrypoints.architecture_readme.requiredRefs",
+          "item_key_path": [
+            "path"
+          ]
+        }
+      ]
+    },
+    {
+      "path": "docs/operations/README.md",
+      "string_list_refs": [
+        {
+          "config_rel_path": "config/governance/docs/docs_registry.json",
+          "lookup_list_key_path": [
+            "pages"
+          ],
+          "lookup_match_key_path": [
+            "path"
+          ],
+          "lookup_match_value": "docs/operations/README.md",
+          "key_path": [
+            "entrypointContract",
+            "requiredRefs"
+          ],
+          "label": "documentation_entrypoints.operations_readme.requiredRefs",
+          "item_key_path": [
+            "path"
+          ]
+        }
+      ]
+    },
+    {
+      "path": "docs/architecture/supported-deployment-boundary.md",
+      "service_target_refs": [
+        {
+          "target": "gateway",
+          "fields": [
+            "service"
+          ]
+        },
+        {
+          "target": "ingress",
+          "fields": [
+            "service"
+          ]
+        },
+        {
+          "target": "internal-api",
+          "fields": [
+            "service"
+          ]
+        },
+        {
+          "target": "scheduler",
+          "fields": [
+            "service"
+          ]
+        }
+      ]
+    }
+  ]
+}

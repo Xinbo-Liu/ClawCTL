@@ -1,0 +1,526 @@
+{
+  "schema_version": 1,
+  "title": "deploy env schema",
+  "description": "现行部署输入口径：official gateway token auth + private ingress + runtime UID/GID 配置。",
+  "generated_artifacts": {
+    "deployment_inputs_doc": "docs/getting-started/deployment-inputs.md"
+  },
+  "groups": [
+    {
+      "id": "service_auth",
+      "title": "Gateway 与内部服务访问令牌",
+      "doc_order": 10
+    },
+    {
+      "id": "ingress",
+      "title": "private ingress TLS 与访问主机名",
+      "doc_order": 20
+    },
+    {
+      "id": "runtime_images",
+      "title": "运行镜像与基础运行时",
+      "doc_order": 30
+    },
+    {
+      "id": "optional",
+      "title": "可选项",
+      "doc_order": 50
+    }
+  ],
+  "fields": [
+    {
+      "key": "OPENCLAW_GATEWAY_TOKEN",
+      "group": "service_auth",
+      "required": true,
+      "manual_required": false,
+      "generated": "random_token",
+      "secret": true,
+      "doc_summary": "Gateway token",
+      "doc_location": "deploy/.env",
+      "validator": {
+        "type": "secret_like",
+        "min_length": 20
+      }
+    },
+    {
+      "key": "OPENCLAW_INTERNAL_API_TOKEN",
+      "group": "service_auth",
+      "required": true,
+      "manual_required": false,
+      "generated": "random_token",
+      "secret": true,
+      "doc_summary": "Internal API token",
+      "doc_location": "deploy/.env",
+      "validator": {
+        "type": "secret_like",
+        "min_length": 20
+      }
+    },
+    {
+      "key": "OPENCLAW_INGRESS_HSTS_MAX_AGE",
+      "group": "ingress",
+      "required": true,
+      "manual_required": false,
+      "default_kind": "literal",
+      "default": "300",
+      "doc_summary": "Ingress HSTS max-age",
+      "doc_location": "deploy/site.env",
+      "validator": {
+        "type": "non_negative_int"
+      }
+    },
+    {
+      "key": "OPENCLAW_TLS_MODE",
+      "group": "ingress",
+      "required": true,
+      "manual_required": false,
+      "default_kind": "literal",
+      "default": "self_signed",
+      "doc_summary": "Ingress TLS mode（`self_signed` 或 `provided_files`）",
+      "doc_location": "deploy/site.env",
+      "validator": {
+        "type": "enum",
+        "values": [
+          "self_signed",
+          "provided_files"
+        ]
+      }
+    },
+    {
+      "key": "OPENCLAW_INGRESS_LISTEN_IP",
+      "group": "ingress",
+      "doc_order": 10,
+      "required": true,
+      "manual_required": true,
+      "default_kind": "placeholder",
+      "placeholder": "__REQUIRED__",
+      "doc_summary": "private ingress 在目标机绑定的唯一私网或 loopback IP",
+      "doc_location": "deploy/site.env",
+      "validator": {
+        "type": "private_ingress_bind_ip"
+      },
+      "site_env_annotations": [
+        "含义：private ingress 在目标机绑定的唯一私网或 loopback IP。",
+        "来源：第 1 步 `init_private_ingress.sh` 通常已回填；只有实际部署网卡不是默认探测地址时才改写。",
+        "loopback 只在浏览器与目标服务位于同一操作系统实例时允许；跨 OS / 跨网络实例访问场景不属于该例外。",
+        "跨 OS / 跨网络实例访问时，填写目标机对访问端可达的私网 IP；不要填写访问端地址、上游网关地址，也不要误写成 loopback。",
+        "不要填写：hostname、`0.0.0.0`、`::`、公网地址、访问端地址。",
+        "校验：访问端必须能把 `OPENCLAW_TLS_CN` 解析到该地址；compose 渲染结果中的 ingress 80/443 也必须绑定到该地址。若填写 loopback，则浏览器与 curl 验证也必须运行在同一操作系统实例。",
+        "建议先确认当前宿主机目标私网 IPv4："
+      ],
+      "site_env_commands": [
+        "hostname -I",
+        "hostname -I | tr ' ' '\\n' | grep -E '^(10\\.|172\\.(1[6-9]|2[0-9]|3[0-1])\\.|192\\.168\\.)' | head -n 1"
+      ],
+      "doc_details": {
+        "step2_role": "第 1 步通常自动回填；第 2 步负责复核，必要时填写真实部署网卡地址。只有浏览器与目标服务位于同一操作系统实例时，才允许填写 loopback。",
+        "meaning": "这是目标机 private ingress 对宿主机 80/443 的唯一绑定地址；可以是 IPv4 或 IPv6；只有浏览器与目标服务位于同一操作系统实例时，才允许使用 loopback。",
+        "how_to_get": [
+          "优先执行 `bash ./scripts/setup/init_private_ingress.sh` 自动回填。",
+          "若默认探测到的不是实际部署网卡，填写目标机真正承接浏览器访问的私网 IP。",
+          "只有浏览器与目标服务位于同一操作系统实例时，才允许手工填写 `127.0.0.1`；跨机器、跨 OS / 跨网络实例、VPN 或上游代理场景都不属于该例外。",
+          "跨 OS / 跨网络实例访问时，填写目标机对访问端可达的私网 IP；不要沿用访问端地址、上游网关地址，也不要误写成 loopback。"
+        ],
+        "format": "只接受 RFC1918/loopback IPv4 或 ULA/loopback IPv6 字面量；不接受 hostname、`0.0.0.0`、`::` 或公网地址。",
+        "obtain_commands": [
+          "hostname -I",
+          "hostname -I | tr ' ' '\\n' | grep -E '^(10\\.|172\\.(1[6-9]|2[0-9]|3[0-1])\\.|192\\.168\\.)' | head -n 1"
+        ],
+        "common_errors": [
+          "把访问端 IP、域名、Docker bridge 地址或公网地址填进该字段。",
+          "把访问端地址或上游网关地址当成目标机 ingress 绑定地址。",
+          "把 `127.0.0.1` 用在跨机器、跨 OS / 跨网络实例或任何需要跨网络访问的场景。"
+        ],
+        "verify": [
+          "执行 `bash ./scripts/setup/init_private_ingress.sh` 或人工改写后，重新执行 `bash ./scripts/setup/one_click_config.sh`。",
+          "再执行 `bash ./scripts/runtime/run_openclaw_python_tool.sh setup env validate --env-file deploy/.env`，并确认访问端解析结果落到该地址。",
+          "若填写 loopback，则 `curl --resolve`、浏览器访问与名称解析核对都必须在同一操作系统实例内完成；跨 OS / 跨网络实例访问时必须解析到目标机私网地址。"
+        ]
+      }
+    },
+    {
+      "key": "OPENCLAW_TLS_CN",
+      "group": "ingress",
+      "doc_order": 20,
+      "required": true,
+      "manual_required": true,
+      "default_kind": "placeholder",
+      "placeholder": "__REQUIRED__",
+      "doc_summary": "唯一访问主机名、证书主机名与 Gateway Control UI origin",
+      "doc_location": "deploy/site.env",
+      "validator": {
+        "type": "tls_hostname"
+      },
+      "site_env_examples": "OPENCLAW_TLS_CN=openclaw.internal.example",
+      "site_env_annotations": [
+        "含义：唯一访问主机名、证书主机名与 Gateway Control UI origin。",
+        "来源：第 1 步 `init_private_ingress.sh` 通常已回填；只有主机名策略变化时才改写。",
+        "跨 OS / 跨网络实例访问时，访问端 DNS/hosts 必须把该名称解析到目标机 ingress 地址，而不是访问端地址或上游网关地址。",
+        "不要填写：目标机 IP、未纳入正式访问计划的域名、IPv4 dotted-quad 形态、通配符、带下划线、空 label 或与证书 SAN 不一致的名称。",
+        "校验：访问端 DNS/hosts 必须把该名称解析到 `OPENCLAW_INGRESS_LISTEN_IP`；provided_files 模式下外部证书必须包含精确 dNSName SAN。"
+      ],
+      "doc_details": {
+        "step2_role": "第 1 步通常自动回填；第 2 步负责复核，必要时填写正式访问主机名。",
+        "meaning": "该字段同时用于浏览器访问名称、证书主机名与 Gateway Control UI origin。",
+        "how_to_get": [
+          "按内网 DNS、hosts 策略或正式证书计划确定唯一主机名，并保持与访问端解析口径一致。",
+          "跨 OS / 跨网络实例访问时，在访问端 DNS/hosts 中把该名称固定解析到目标机 ingress 地址。",
+          "Windows 访问端若没有可用内网 DNS 且依赖 hosts 覆盖，不要只看 `Resolve-DnsName`；必须同时核对 hosts 文件内容，并用 `ping <OPENCLAW_TLS_CN>` 或浏览器首连确认实际解析结果。"
+        ],
+        "format": "必须是 ASCII DNS 主机名；只允许字母、数字、点与短横线，不允许 IP、IPv4 dotted-quad 形态、通配符、下划线、空白、尾随点、空 label、超长 label 或非 DNS label 字符。",
+        "common_errors": [
+          "把目标机 IP 当成主机名填写，或让该名称与证书、访问端解析结果不一致。",
+          "把该名称解析到访问端地址或上游网关地址，导致浏览器没有进入目标机 ingress。"
+        ],
+        "verify": [
+          "Linux 访问端执行 `getent hosts <OPENCLAW_TLS_CN>`；macOS 执行 `dscacheutil -q host -a name <OPENCLAW_TLS_CN>`。",
+          "Windows 有内网 DNS 时执行 `Resolve-DnsName -Name <OPENCLAW_TLS_CN>`；若依赖 hosts 覆盖，则同时查看 hosts 文件并执行 `ping <OPENCLAW_TLS_CN>`，不要只把 `Resolve-DnsName` 当成最终验证。",
+          "以上结果都必须落到 `OPENCLAW_INGRESS_LISTEN_IP`。",
+          "provided_files 模式下，外部证书必须包含精确 `dNSName:<OPENCLAW_TLS_CN>` SAN。",
+          "跨 OS / 跨网络实例访问时，访问端 DNS/hosts 核对结果必须直接落到目标机 ingress 地址。"
+        ]
+      }
+    },
+    {
+      "key": "OPENCLAW_TLS_CERT_SOURCE_PATH",
+      "group": "ingress",
+      "doc_order": 40,
+      "required": false,
+      "manual_required": true,
+      "default_kind": "literal",
+      "default": "",
+      "doc_summary": "provided_files 模式的外部证书文件路径（`OPENCLAW_TLS_MODE=provided_files` 时必填）",
+      "doc_location": "deploy/site.env",
+      "validator": {
+        "type": "non_empty"
+      },
+      "conditional_required": {
+        "when": {
+          "key": "OPENCLAW_TLS_MODE",
+          "equals": "provided_files"
+        },
+        "reason": "provided_files 模式必须提供证书文件路径"
+      },
+      "site_env_examples": "OPENCLAW_TLS_CERT_SOURCE_PATH=/srv/certs/openclaw.internal.example.crt",
+      "site_env_annotations": [
+        "含义：provided_files 模式下供 ingress 复制使用的外部证书文件路径。",
+        "仅在 `OPENCLAW_TLS_MODE=provided_files` 时填写。",
+        "校验：证书必须是未过期 PEM X.509/fullchain，包含精确 `dNSName:OPENCLAW_TLS_CN` SAN，并与 `OPENCLAW_TLS_KEY_SOURCE_PATH` 指向的未加密 PEM 私钥匹配。",
+        "约束：文件不得位于或指向 `deploy/nginx/certs/` 输出目录。"
+      ],
+      "doc_details": {
+        "step2_role": "仅在 `OPENCLAW_TLS_MODE=provided_files` 时人工填写。",
+        "meaning": "切到 provided_files 模式后，ingress 会从该路径复制外部 PEM 证书或 fullchain。",
+        "how_to_get": "填写目标机可读取的证书绝对路径。",
+        "format": "必须是目标机可读取的 PEM X.509 证书或 fullchain 文件路径；文件不得位于或指向 `deploy/nginx/certs/` 输出目录。",
+        "common_errors": "只切换 `OPENCLAW_TLS_MODE=provided_files`，却遗漏证书路径、提供 CN-only/wildcard-only 证书、过期证书，或提供未被目标机与访问端信任的签发链。",
+        "verify": "执行 `bash ./scripts/setup/one_click_config.sh` 与 `bash ./scripts/runtime/run_openclaw_python_tool.sh setup env validate --env-file deploy/.env`；部署时 `gen_cert.sh` 还会继续校验证书与私钥匹配关系。"
+      }
+    },
+    {
+      "key": "OPENCLAW_TLS_KEY_SOURCE_PATH",
+      "group": "ingress",
+      "doc_order": 50,
+      "required": false,
+      "manual_required": true,
+      "default_kind": "literal",
+      "default": "",
+      "doc_summary": "provided_files 模式的外部私钥文件路径（`OPENCLAW_TLS_MODE=provided_files` 时必填）",
+      "doc_location": "deploy/site.env",
+      "validator": {
+        "type": "non_empty"
+      },
+      "conditional_required": {
+        "when": {
+          "key": "OPENCLAW_TLS_MODE",
+          "equals": "provided_files"
+        },
+        "reason": "provided_files 模式必须提供私钥文件路径"
+      },
+      "site_env_examples": "OPENCLAW_TLS_KEY_SOURCE_PATH=/srv/certs/openclaw.internal.example.key",
+      "site_env_annotations": [
+        "含义：provided_files 模式下供 ingress 复制使用的外部私钥文件路径。",
+        "仅在 `OPENCLAW_TLS_MODE=provided_files` 时填写。",
+        "校验：必须是未加密 PEM 私钥，并与 `OPENCLAW_TLS_CERT_SOURCE_PATH` 指向证书的公钥配对成功。",
+        "约束：文件不得位于或指向 `deploy/nginx/certs/` 输出目录。"
+      ],
+      "doc_details": {
+        "step2_role": "仅在 `OPENCLAW_TLS_MODE=provided_files` 时人工填写。",
+        "meaning": "切到 provided_files 模式后，ingress 会从该路径复制外部未加密 PEM 私钥。",
+        "how_to_get": "填写目标机可读取的私钥绝对路径。",
+        "format": "必须是目标机可读取的未加密 PEM 私钥文件路径；文件不得位于或指向 `deploy/nginx/certs/` 输出目录。",
+        "common_errors": "只切换 `OPENCLAW_TLS_MODE=provided_files`，却遗漏私钥路径、提供加密私钥，或提供不匹配的私钥。",
+        "verify": "执行 `bash ./scripts/setup/one_click_config.sh` 与 `bash ./scripts/runtime/run_openclaw_python_tool.sh setup env validate --env-file deploy/.env`；部署时 `gen_cert.sh` 还会继续校验证书与私钥匹配关系。"
+      }
+    },
+    {
+      "key": "OPENCLAW_INGRESS_BOUNDARY_MODE",
+      "group": "ingress",
+      "required": true,
+      "manual_required": false,
+      "default_kind": "literal",
+      "default": "host_firewall",
+      "doc_summary": "ingress 来源限制证据模式（`host_firewall` 或 `external_acl`）",
+      "doc_location": "deploy/site.env",
+      "validator": {
+        "type": "enum",
+        "values": [
+          "host_firewall",
+          "external_acl"
+        ]
+      }
+    },
+    {
+      "key": "OPENCLAW_INGRESS_ALLOWED_SOURCE_CIDRS",
+      "group": "ingress",
+      "doc_order": 30,
+      "required": true,
+      "manual_required": true,
+      "default_kind": "placeholder",
+      "placeholder": "__REQUIRED__",
+      "doc_summary": "允许访问 private ingress 80/443 的来源网段（逗号分隔，仅接受私网或 loopback IPv4/IPv6 CIDR）",
+      "doc_location": "deploy/site.env",
+      "validator": {
+        "type": "private_cidr_csv"
+      },
+      "site_env_annotations": [
+        "含义：允许访问 private ingress 80/443 的来源网段。",
+        "获取：填写“目标机最终看到的源地址网段”。直连办公网/堡垒机时，也必须以目标机日志、上游转发记录或抓包看到的来源地址为准；通过 VPN 时，填 VPN 地址池或 VPN 出口 NAT 网段；经上游 ACL/安全组/LB 时，填上游实际放行到目标机的源网段。",
+        "目标机本机验收：one_click_deploy 默认会在目标机本机通过 ingress 请求 /healthz 与 /readyz，因此该字段还必须包含 OPENCLAW_INGRESS_LISTEN_IP 对应的本机来源 /32（IPv4）或 /128（IPv6）。",
+        "填写原则：按当前确需放行的最小来源面填写；不要为了省事把整个办公私网、宿主机大网段或泛化虚拟交换机网段直接放开。",
+        "跨 OS / 跨网络实例访问时，优先填写目标机实际看到的访问端源 IP `/32`；只有虚拟链路、VPN、NAT 或上游代理以网段呈现时才填写对应网段。若网络层把访问端流量翻译成网关地址，则填写该翻译后地址 `/32` 或对应链路网段。",
+        "不要填写：Docker/容器网段、公网 CIDR；除本机验收必需的 `OPENCLAW_INGRESS_LISTEN_IP` 精确主机段外，不要把目标机所在大网段当作来源面。",
+        "校验：必须与 Nginx 渲染 allowlist、host_firewall 规则或 external_acl 证据中的 `source_cidrs` 归一化后精确一致。"
+      ],
+      "doc_details": {
+        "step2_role": "第 2 步必须人工确认；这是 private ingress 来源限制的固定输入项。",
+        "meaning": "该字段定义“谁可以访问 ingress”，描述的是流量来源面，而不是目标机绑定地址。",
+        "how_to_get": [
+          "直连办公网或堡垒机访问时，未确认目标机实际看到的来源地址就填写访问端所在网段。",
+          "通过 VPN 访问时，填写 VPN 地址池或 VPN 出口 NAT 网段；不要机械填写用户电脑本地 Wi-Fi 网段。",
+          "通过上游 ACL、安全组、负载均衡或代理访问时，填写目标机最终看到、且被上游放行到目标机的源地址网段。",
+          "同时加入目标机本机执行 full test 时的来源地址：通常就是 `OPENCLAW_INGRESS_LISTEN_IP/32`（IPv4）或 `/128`（IPv6）。",
+          "始终按最小必要来源面填写；没有业务必要时，不要把整个 10.0.0.0/8、192.168.0.0/16 或泛化虚拟交换机大网段直接写入。",
+          "跨 OS / 跨网络实例访问时，优先收窄为目标机实际看到的访问端源 IP `/32`；若网络层只暴露链路网段或网关翻译地址，再填写该链路网段或翻译后 `/32`。"
+        ],
+        "obtain_commands": [
+          "ip route get <OPENCLAW_INGRESS_LISTEN_IP>",
+          "ip -o -4 addr show",
+          "Get-NetIPAddress -AddressFamily IPv4 | Format-Table InterfaceAlias,IPAddress,PrefixLength",
+          "ip route get <OPENCLAW_INGRESS_LISTEN_IP>  # 在 Linux 宿主机读取 src，优先把该 src 收窄成 /32"
+        ],
+        "format": "只允许逗号分隔的私网或 loopback IPv4/IPv6 CIDR；系统会归一化网络前缀、拒绝重复项，并要求输入值按最小必要范围填写。",
+        "common_errors": [
+          "遗漏目标机本机验收来源，导致 one_click_deploy 的 `/healthz` / `/readyz` 检查在目标机本机返回 403。",
+          "把 Docker bridge 网段、容器网段或任意公网 CIDR 写进该字段。",
+          "VPN / NAT 场景只按终端本机网段填写，忽略目标机实际看到的源地址面。",
+          "为了图省事直接放开整个办公私网、虚拟交换机大网段或超出当前业务所需的泛化私网段。",
+          "字段值与 Nginx 渲染 allowlist、host_firewall 或 external_acl 证据中的 `source_cidrs` / `ip_families` 不一致。",
+          "把访问端本地网卡整段、目标机所在大网段、本地 Wi-Fi 网段或未实际命中的 NAT 前地址写进该字段，而不是目标机实际看到的来源地址面。"
+        ],
+        "verify": [
+          "执行 `bash ./scripts/setup/one_click_config.sh` 后，先执行 `bash ./scripts/runtime/run_openclaw_python_tool.sh setup env validate --env-file deploy/.env`。",
+          "配置校验会确认 `OPENCLAW_INGRESS_ALLOWED_SOURCE_CIDRS` 包含目标机本机验收来源；缺失时不要继续到 full test。",
+          "再立即执行 `sudo bash ./scripts/setup/apply_ingress_boundary_rules.sh --env-file deploy/.env` 与 `sudo bash ./scripts/doctor/check_ingress_boundary_evidence.sh --env-file deploy/.env`，不要等到 full test 才发现来源限制口径错误。",
+          "部署渲染 `nginx.gateway.conf` 后，部署用户会复用 root 侧基础 evidence，对当前 Nginx allowlist 做本地校验，并把 `nginx_policy` 合并回 evidence；只有基础 evidence 缺失、env 漂移或本地 Nginx 校验失败时，才补跑 `sudo bash ./scripts/doctor/check_ingress_boundary_evidence.sh --env-file deploy/.env --require-nginx-policy`。",
+          "external_acl 模式下，证据文件中的 `source_cidrs` 必须与该字段归一化后集合一致。",
+          "跨 OS / 跨网络实例访问时，先确认浏览器访问目标机时目标机实际看到的来源地址，再让 host_firewall 或 external_acl 证据与该地址面精确一致。"
+        ]
+      }
+    },
+    {
+      "key": "OPENCLAW_INGRESS_BOUNDARY_EVIDENCE_PATH",
+      "group": "ingress",
+      "doc_order": 60,
+      "required": false,
+      "manual_required": true,
+      "default_kind": "literal",
+      "default": "",
+      "doc_summary": "external_acl 模式的结构化 ingress 边界证据文件路径（`OPENCLAW_INGRESS_BOUNDARY_MODE=external_acl` 时必填）",
+      "doc_location": "deploy/site.env",
+      "validator": {
+        "type": "non_empty"
+      },
+      "conditional_required": {
+        "when": {
+          "key": "OPENCLAW_INGRESS_BOUNDARY_MODE",
+          "equals": "external_acl"
+        },
+        "reason": "external_acl 模式必须提供外部来源限制证据文件"
+      },
+      "site_env_annotations": [
+        "含义：external_acl 模式下的结构化 JSON 证据文件路径。",
+        "仅在 `OPENCLAW_INGRESS_BOUNDARY_MODE=external_acl` 时填写。",
+        "校验：文件至少必须提供 `schema_version`、`generated_at`、`source_cidrs`、`allowed_ports`、`default_deny`、`ip_families`、`enforcement_plane`，并且至少提供 `target_bind_ip` 或 `target_hostnames` 之一，用来证明与当前部署输入一致。"
+      ],
+      "doc_details": {
+        "step2_role": "仅在 `OPENCLAW_INGRESS_BOUNDARY_MODE=external_acl` 时人工填写。",
+        "meaning": "该文件为 external_acl 模式提供结构化来源限制证据。",
+        "how_to_get": "填写目标机可读取的 JSON 证据文件路径；文件内容必须由网络侧真实 ACL 或安全组策略导出。",
+        "format": "必须是结构化 JSON 文件路径；文件内容至少包含 `schema_version`、`generated_at`、`source_cidrs`、`allowed_ports`、`default_deny`、`ip_families`、`enforcement_plane`，并且至少包含 `target_bind_ip` 或 `target_hostnames` 之一。",
+        "common_errors": [
+          "只切换到 `external_acl` 模式，却未提供证据文件。",
+          "证据文件缺失 `source_cidrs` / `allowed_ports` / `default_deny` / `ip_families` / `enforcement_plane` 等关键键。",
+          "证据文件既没有 `target_bind_ip`，也没有 `target_hostnames`，导致无法证明当前 ACL 面向的就是当前部署目标。"
+        ],
+        "verify": [
+          "执行 `bash ./scripts/doctor/check_ingress_boundary_evidence.sh --env-file deploy/.env`，确认 external_acl 证据与当前部署输入逐项一致；host_firewall 模式下改用 root 侧命令物化并核对宿主机规则。",
+          "重点核对 `source_cidrs`、`allowed_ports`、`default_deny`、`ip_families`、`enforcement_plane`，以及 `target_bind_ip` / `target_hostnames` 中至少一项能够证明当前部署目标。"
+        ]
+      }
+    },
+    {
+      "key": "CONTAINER_TZ",
+      "group": "ingress",
+      "required": true,
+      "manual_required": false,
+      "default_kind": "literal",
+      "default": "Asia/Shanghai",
+      "doc_summary": "Container timezone",
+      "doc_location": "deploy/site.env",
+      "validator": {
+        "type": "non_empty"
+      }
+    },
+    {
+      "key": "OPENCLAW_OFFICIAL_GATEWAY_IMAGE",
+      "group": "runtime_images",
+      "required": true,
+      "manual_required": false,
+      "pin_key": "OPENCLAW_OFFICIAL_GATEWAY_IMAGE",
+      "doc_summary": "Official OpenClaw gateway image",
+      "doc_location": "config/image_pins/openclaw.env",
+      "validator": {
+        "type": "image_ref"
+      }
+    },
+    {
+      "key": "OPENCLAW_RUNTIME_PYTHON_IMAGE",
+      "group": "runtime_images",
+      "required": true,
+      "manual_required": false,
+      "pin_key": "OPENCLAW_RUNTIME_PYTHON_IMAGE",
+      "doc_summary": "Runtime Python image",
+      "doc_location": "config/image_pins/runtime.env",
+      "validator": {
+        "type": "image_ref"
+      }
+    },
+    {
+      "key": "NGINX_IMAGE",
+      "group": "runtime_images",
+      "required": true,
+      "manual_required": false,
+      "pin_key": "NGINX_IMAGE",
+      "doc_summary": "Nginx image",
+      "doc_location": "config/image_pins/runtime.env",
+      "validator": {
+        "type": "image_ref"
+      }
+    },
+    {
+      "key": "HOST_STATE_ROOT",
+      "group": "runtime_images",
+      "required": true,
+      "manual_required": false,
+      "generated": "host_state_root",
+      "doc_summary": "Host state root (repo-relative or absolute)",
+      "doc_location": "deploy/.env",
+      "validator": {
+        "type": "non_empty"
+      }
+    },
+    {
+      "key": "OPENCLAW_CONTROL_PLANE_PROFILE",
+      "group": "optional",
+      "doc_order": 10,
+      "required": true,
+      "manual_required": false,
+      "default_kind": "literal",
+      "default": "agent_platform",
+      "doc_summary": "Control-plane service profile id（由 registry 映射为运行态配置路径）",
+      "doc_location": "deploy/site.env",
+      "validator": {
+        "type": "control_plane_profile_id"
+      },
+      "doc_details_always": true,
+      "site_env_examples": [
+        "OPENCLAW_CONTROL_PLANE_PROFILE=agent_platform",
+        "OPENCLAW_CONTROL_PLANE_PROFILE=<extension-profile-id>",
+        "OPENCLAW_CONTROL_PLANE_PROFILE=<combination-profile-id>"
+      ],
+      "site_env_annotations": [
+        "含义：选择当前部署启用的 control-plane service profile；人工只填写 profile id，不填写 JSON 文件路径。",
+        "来源：支持值来自 config/control_plane/profile_registry.tsv 与有效扩展 profile。",
+        "生成：one_click_config 会自动映射生成 OPENCLAW_CONTROL_PLANE_SERVICE_CONFIG_PATH，并按该 profile 装载扩展 deploy env schema、扩展内部 agent/extensions/<extension-id>/deploy/extension.env、dispatch target registry 与模型输入。"
+      ],
+      "doc_details": {
+        "step2_role": "默认使用 agent_platform；启用业务扩展或受控组合 profile 时填写对应 profile id。",
+        "meaning": [
+          "该字段选择 active control-plane service profile，并驱动扩展 deploy env schema、扩展内部 agent/extensions/<extension-id>/deploy/extension.env、dispatch target registry、模型输入与运行态路径合并。"
+        ],
+        "how_to_get": [
+          "先执行 profile 列表命令，确认要启用的 profile id。",
+          "默认保留 agent_platform。",
+          "启用单个业务扩展时，填写 profile 列表中登记或有效发现的扩展 profile id。",
+          "启用仓内受控组合 profile 时，填写 profile_registry.tsv 中登记的组合 profile id。",
+          "组合 profile 中 OLLAMA_BASE_URL 与 OLLAMA_MODEL_REF 是共享模型输入，写入 deploy/site.env；扩展专属 provider、角色、通知目标与功能开关变量写入对应 agent/extensions/<extension-id>/deploy/extension.env。",
+          "不要填写 /opt/openclaw-tools/.../*.service.json 路径。"
+        ],
+        "obtain_commands": [
+          "bash ./scripts/runtime/run_openclaw_python_tool.sh control-plane config profiles --format text"
+        ],
+        "format": [
+          "只允许已登记或有效发现的 profile id；例如 agent_platform、扩展 profile id 或组合 profile id。"
+        ],
+        "common_errors": [
+          "把 /opt/openclaw-tools/.../*.service.json 路径填到 deploy/site.env。",
+          "把扩展自身变量写到 deploy/site.env，而不是写入对应扩展内部 agent/extensions/<extension-id>/deploy/extension.env。",
+          "profile id 与同时存在的 OPENCLAW_CONTROL_PLANE_SERVICE_CONFIG_PATH 指向不一致。"
+        ],
+        "verify": [
+          "执行 `bash ./scripts/setup/one_click_config.sh` 生成 `deploy/.env`；生成结果会同时写出 `OPENCLAW_CONTROL_PLANE_PROFILE` 与由 profile 推导的 `OPENCLAW_CONTROL_PLANE_SERVICE_CONFIG_PATH`。",
+          "执行 `bash ./scripts/runtime/run_openclaw_python_tool.sh setup env validate --env-file deploy/.env`，确认 profile id 可解析、运行态路径与 profile registry 映射一致。",
+          "启用 dispatch registry 时，执行 `bash ./scripts/runtime/run_openclaw_python_tool.sh setup env validate-dispatch-registry --env-file deploy/.env`，确认 active profile 关联的 dispatch target registry 可加载。"
+        ]
+      }
+    },
+    {
+      "key": "OPENCLAW_CONTROL_PLANE_SERVICE_CONFIG_PATH",
+      "group": "optional",
+      "required": true,
+      "manual_required": false,
+      "generated": "control_plane_service_config_path",
+      "doc_summary": "Container control-plane service/profile path（由 OPENCLAW_CONTROL_PLANE_PROFILE 生成）",
+      "doc_location": "deploy/.env",
+      "site_env_hidden": true,
+      "validator": {
+        "type": "non_empty"
+      }
+    },
+    {
+      "key": "OPENCLAW_RUNTIME_UID",
+      "group": "runtime_images",
+      "required": true,
+      "manual_required": false,
+      "generated": "current_uid",
+      "doc_summary": "Runtime bind user UID",
+      "doc_location": "deploy/site.env",
+      "validator": {
+        "type": "non_negative_int"
+      }
+    },
+    {
+      "key": "OPENCLAW_RUNTIME_GID",
+      "group": "runtime_images",
+      "required": true,
+      "manual_required": false,
+      "generated": "current_gid",
+      "doc_summary": "Runtime bind group GID",
+      "doc_location": "deploy/site.env",
+      "validator": {
+        "type": "non_negative_int"
+      }
+    }
+  ]
+}

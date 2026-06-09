@@ -1,0 +1,191 @@
+{
+  "generated_artifacts": {
+    "setup_followup_doc": "docs/getting-started/quickstart.md"
+  },
+  "title": "setup 阶段后续动作",
+  "intro": [
+    "本页汇总宿主机准备 / readiness / one_click 主链各阶段在成功通过后的默认衔接动作。",
+    "真正执行顺序以 docs/getting-started/quickstart.md、docs/getting-started/environment-setup.md 与 docs/operations/runtime-service-reference.md 为准；本页负责把这些固定顺序整理为可复用的后续动作索引。"
+  ],
+  "entries": {
+    "prepare_docker_host": {
+      "title": "prepare_docker_host.sh",
+      "command": "sudo bash ./scripts/setup/prepare_docker_host.sh [选项]",
+      "scenarios": {
+        "host_prepared": {
+          "title": "宿主机基础环境已完成或已补齐",
+          "when": "prepare_docker_host.sh 已完成当前目标机所需的内核、Docker、Compose、daemon 与防火墙准备。",
+          "commands": [
+            "bash ./scripts/doctor/check_docker_host_readiness.sh",
+            "cp deploy/site.env.example deploy/site.env",
+            "vim deploy/site.env"
+          ],
+          "notes": [
+            "prepare_docker_host.sh 完成后不要直接跳到 one_click_deploy；必须先通过 check_docker_host_readiness.sh，再回到 quickstart 第 0 步与第 1 步完成 private ingress 选择与 deploy/site.env 填写。",
+            "进入 one_click_config.sh 或任意 run_openclaw_python_tool.sh 子命令前，必须显式准备 host 控制面执行介质。"
+          ],
+          "references": [
+            "docs/getting-started/quickstart.md",
+            "docs/getting-started/environment-setup.md"
+          ]
+        }
+      }
+    },
+    "check_docker_host_readiness": {
+      "title": "check_docker_host_readiness.sh",
+      "command": "bash ./scripts/doctor/check_docker_host_readiness.sh [--offline]",
+      "scenarios": {
+        "readiness_passed_online": {
+          "title": "宿主机 readiness 已通过（在线）",
+          "when": "Docker / Compose、CentOS 7 宿主机支持策略与当前运行来源前提已满足继续进入主链的条件。",
+          "commands": [
+            "cp deploy/site.env.example deploy/site.env",
+            "vim deploy/site.env",
+            "bash ./scripts/setup/prepare_control_plane_medium.sh",
+            "bash ./scripts/setup/one_click_config.sh",
+            "bash ./scripts/setup/one_click_test_basic.sh"
+          ],
+          "notes": [
+            "若 deploy/site.env 未填写，先回到 quickstart 第 0 步与第 1 步补齐 private ingress 与部署输入，再执行上面的 one_click 主链入口。",
+            "该脚本只证明宿主机前提通过；deploy env、镜像就绪性与 compose 合同的统一门禁使用 one_click_test_basic。"
+          ],
+          "references": [
+            "docs/getting-started/quickstart.md",
+            "docs/operations/troubleshooting.md"
+          ]
+        },
+        "readiness_passed_offline": {
+          "title": "宿主机 readiness 已通过（离线）",
+          "when": "Docker / Compose、CentOS 7 宿主机支持策略与离线运行来源前提已满足继续进入离线主链的条件。",
+          "commands": [
+            "cp deploy/site.env.example deploy/site.env",
+            "vim deploy/site.env",
+            "bash ./scripts/setup/prepare_control_plane_medium.sh --offline --image-archive <local-path>",
+            "bash ./scripts/setup/one_click_config.sh",
+            "bash ./scripts/setup/one_click_test_basic.sh --offline --image-archive <local-path>"
+          ],
+          "notes": [
+            "离线链路中的 <local-path> 必须替换为目标机本地已复制好的 deployment_images_*.tar。",
+            "readiness 通过只说明宿主机准入条件已满足；deploy/site.env、镜像归档与 one_click 主链需要继续闭合。"
+          ],
+          "references": [
+            "docs/getting-started/quickstart.md",
+            "docs/getting-started/image-preparation.md",
+            "docs/operations/troubleshooting.md"
+          ]
+        }
+      }
+    },
+    "one_click_config": {
+      "title": "one_click_config.sh",
+      "command": "bash ./scripts/setup/one_click_config.sh",
+      "scenarios": {
+        "success_default": {
+          "title": "deploy/.env 已重新生成",
+          "when": "deploy/.env、dispatch runtime env 与 config_summary 已对齐当前 deploy/site.env / 启用扩展内部 agent/extensions/<extension-id>/deploy/extension.env / deploy/targets.d 输入。",
+          "commands": [
+            "bash ./scripts/setup/one_click_test_basic.sh"
+          ],
+          "notes": [
+            "若当前是离线目标机，后续 basic gate 与 deploy 都要继续显式携带同一份 deployment_images_*.tar。"
+          ],
+          "references": [
+            "docs/getting-started/quickstart.md"
+          ]
+        }
+      }
+    },
+    "one_click_test_basic": {
+      "title": "one_click_test_basic.sh",
+      "command": "bash ./scripts/setup/one_click_test_basic.sh",
+      "scenarios": {
+        "success_online": {
+          "title": "online basic gate 已通过",
+          "when": "deploy env、宿主机 readiness、镜像就绪性、镜像覆盖合同、compose 合同与 runtime bind user 合同都已满足在线部署前置条件。",
+          "commands": [
+            "bash ./scripts/setup/one_click_deploy.sh"
+          ],
+          "notes": [
+            "不要跳过 one_click_deploy 直接执行 full test；full test 只承接成功部署后的运行态验证。"
+          ],
+          "references": [
+            "docs/getting-started/quickstart.md"
+          ]
+        },
+        "success_offline": {
+          "title": "offline basic gate 已通过",
+          "when": "离线目标机已通过相同 deployment_images_*.tar 的 basic gate 预检。",
+          "commands": [
+            "bash ./scripts/setup/one_click_deploy.sh --offline --image-archive <local-path>"
+          ],
+          "notes": [
+            "继续执行 one_click_deploy 时，必须沿用与 basic gate 预检一致的 deployment_images_*.tar；示例路径替换成目标机本地真实路径。"
+          ],
+          "references": [
+            "docs/getting-started/quickstart.md",
+            "docs/getting-started/image-preparation.md"
+          ]
+        }
+      }
+    },
+    "one_click_deploy": {
+      "title": "one_click_deploy.sh",
+      "command": "bash ./scripts/setup/one_click_deploy.sh",
+      "scenarios": {
+        "success_start_services": {
+          "title": "部署成功且 runtime 服务已启动",
+          "when": "one_click_deploy 已完成默认启动链、部署后 full test 与 runtime evidence 导出。",
+          "commands": [
+            "bash ./scripts/runtime/show_runtime_service_status.sh"
+          ],
+          "notes": [
+            "默认部署链已经自动执行 required_run_ledger_jobs 对应的 run_all_once、one_click_test_full 与 runtime acceptance evidence 导出；使用 --skip-acceptance 后，按 run ledger 状态选择 post_deploy_acceptance 或 post_deploy_full_acceptance 闭合 deployment acceptance 与 runtime evidence。",
+            "deployment acceptance 默认顺序、通过标准与证据产物统一查看 runtime-service-reference。"
+          ],
+          "references": [
+            "docs/getting-started/quickstart.md",
+            "docs/operations/runtime-service-reference.md",
+            "docs/operations/troubleshooting.md"
+          ]
+        },
+        "success_prepare_only": {
+          "title": "部署成功但使用了 --prepare-only",
+          "when": "one_click_deploy 只完成准备阶段，没有启动 runtime 服务。",
+          "commands": [
+            "bash ./scripts/runtime/run_runtime_service_action.sh up --all --force-recreate",
+            "bash ./scripts/runtime/show_runtime_service_status.sh",
+            "bash ./scripts/setup/one_click_deploy.sh --resume-from post_deploy_acceptance"
+          ],
+          "notes": [
+            "prepare-only 不能视为部署已完成；必须先把 runtime 服务真正拉起，再进入 full test 与 runtime evidence 导出。",
+            "`--resume-from post_deploy_acceptance` 是服务已启动后闭合 required run ledger jobs、full test 与 runtime evidence 的入口；发送动作按当前 target 配置执行。"
+          ],
+          "references": [
+            "docs/getting-started/quickstart.md",
+            "docs/operations/runtime-service-reference.md"
+          ]
+        }
+      }
+    },
+    "one_click_test_full": {
+      "title": "one_click_test_full.sh",
+      "command": "bash ./scripts/setup/one_click_test_full.sh",
+      "scenarios": {
+        "success_default": {
+          "title": "full test 已通过",
+          "when": "deployment acceptance 与 full test summary 已落盘，当前部署已具备标准运行态验收结论。",
+          "commands": [
+            "bash ./scripts/setup/one_click_deploy.sh --resume-from post_deploy_full_acceptance"
+          ],
+          "notes": [
+            "需要交付归档、留档或交接时，使用 post_deploy_full_acceptance 执行 full test 并导出 runtime evidence。"
+          ],
+          "references": [
+            "docs/operations/runtime-service-reference.md",
+            "docs/operations/troubleshooting.md"
+          ]
+        }
+      }
+    }
+  }
+}

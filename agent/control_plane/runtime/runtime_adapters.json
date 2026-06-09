@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "adapters": [
+    {
+      "id": "python_module",
+      "title": "Python 模块 Runtime Adapter",
+      "description": "通过 Python 模块主入口承载 agent runtime，并统一接收 control-plane 透传参数。",
+      "module": "openclaw.control_plane.runtime.adapters",
+      "configValidator": "validate_python_module_config",
+      "runner": "run_python_module",
+      "supportedEntrypointKinds": [
+        "python_cli",
+        "openclaw_runtime",
+        "delivery_adapter"
+      ],
+      "supportedExecutorKinds": [
+        "python_cli",
+        "openclaw_runtime",
+        "delivery_adapter"
+      ]
+    }
+  ]
+}

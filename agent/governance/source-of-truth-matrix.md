@@ -1,0 +1,24 @@
+# 真源矩阵
+
+| 主题                       | 正式真源                                                                                                               | 允许派生                                                                     | 禁止项                                                     |
+|--------------------------|--------------------------------------------------------------------------------------------------------------------|--------------------------------------------------------------------------|---------------------------------------------------------|
+| control-plane profile 映射 | `config/control_plane/profile_registry.tsv`、`config/control_plane/repo_combination_profiles.json` 与通过严格校验的自动发现结果 | Python / shell profile 选择、`--control-plane-profile` 解析、profile layout 校验 | 额外 profile 常量表、无效目录进入可选 profile 列表                      |
+| 默认运行 profile service     | `config/control_plane/profiles/agent_platform.service.json`                                                        | 部署脚本默认值、artifact smoke、doctor                                            | 维护额外默认 profile 常量或 profile 分支                           |
+| 受管扩展包索引                  | `agent/extensions/index.json` 与通过严格校验的 `agent/extensions/<extension-id>/` 自动发现结果                                   | managed extension 解析结果、module / runtime / doctor 扫描根                     | 把仓内托管扩展包写成“不常驻”或“仓外 only”                               |
+| repo contract 真源         | `config/governance/support/repo_contracts.json`                                                                    | Python `contracts.py`、shell `repo_contracts.sh`、文档/渲染器静态合同读取             | 维护 TSV 真源、额外解析器分支或硬编码静态合同路径                             |
+| 仓库内正式 extension          | `config/control_plane/extensions.d/*.json`                                                                         | 已解析 extension 视图、运行时 governance surface                                  | 在 README、脚本或测试里硬编码未登记 extension 入口                      |
+| 模块主清单与局部资产               | `agent/extensions/<extension-id>/agent/modules/<module_ref>/module.json` 与同目录资产                                    | agent / implementation / skill / permission / tool 派生视图                  | 在 README、job JSON、脚本帮助中重复维护模块合同                         |
+| 扩展包共享对象                  | `agent/extensions/<extension-id>/agent/control_plane/jobs/*.json`、`groups/*.json`、`models/*.json`、`targets/*.json` | 控制平面 registry、dispatch / recovery / diagnostics surface                  | 在 base config、脚本注释或文档中维护额外对象清单                          |
+| 工作区模板注册表                 | `config/workspace_templates/manifest.json`                                                                         | runtime `workspace_*` 入口、workspace template surface                      | 在 README、目录说明或脚本帮助中手写模板清单                               |
+| 工作区模板本体                  | `config/workspace_templates/<workspace_ref>/`                                                                      | Gateway workspace 文档、router 参考页                                          | 在模块目录或其他目录复制一份模板骨架                                      |
+| agent plane 治理规则         | `agent/governance/*.md`                                                                                            | `docs/architecture/*.md` 的项目级摘要                                          | 在 README 或局部模块文档里重写治理原则                                 |
+| 仓库禁止存在面事实                | `config/governance/validation/absent_surfaces.json`                                                                | delivery cleanliness、path lint、repo baseline 结构化校验                       | 在主仓库根面创建扩展专属 profile、源码、脚本或并列装配目录                       |
+| Python 包布局与入口守卫          | `docs/architecture/python-package-layout.md` 与 `python/openclaw/doctor/platform/architecture_import_guards.py`     | `check_architecture_import_guards.sh`、package layout 回归测试                | 新增模块 alias、替代导入、重复 repo root resolver 或任意 `sys.path` 修改 |
+| 本地残留策略                   | `config/governance/support/local_workspace_policy.json`                                                            | cleanup、delivery bundle、local workspace hygiene 检查                       | 在 shell、Python 或文档中各自维护可清理目标、派生物模式或 bundle exclude      |
+| 静态发布门禁顺序                 | `python/openclaw/doctor/release/repo_release_gate_support.py`                                                      | `run_repo_release_gate.sh` 帮助面、JSON 结果与发布门禁摘要                            | 在 README、脚本说明或测试中手写另一套发布门禁顺序                            |
+
+## 补充说明
+
+- 仓内 extension 通过已登记的正式 profile、有效自动发现 profile 或仓内合同 service 的显式 `--config-path` 接入；profile registry 不允许用非合同路径为 service 增加别名，仓外非标准 extension manifest 不属于正式入口。
+- 自动发现 profile 必须只启用 `agent_platform` 与自身扩展，并且所有扩展贡献的 registry 文件与 surface 真源都留在扩展根目录内；任何可见且带 `id` 的 manifest 与扩展索引未知字段直接判为无效。
+- 所有模板、脚手架、doctor 与 guard 都必须以上述真源矩阵为准。

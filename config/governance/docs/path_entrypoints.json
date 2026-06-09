@@ -1,0 +1,60 @@
+{
+  "schema_version": 1,
+  "generated_artifacts": {
+    "path_entrypoint_doc": "docs/getting-started/deployment-inputs.md"
+  },
+  "entrypoints": {
+    "deploy_env_query": {
+      "id": "deploy_env_query",
+      "title": "部署 env 查询入口",
+      "purpose": "统一读取 deploy/.env 中的单个或多个键值。",
+      "command": "bash ./scripts/runtime/run_openclaw_python_tool.sh setup env query-env <KEY>",
+      "examples": [
+        "bash ./scripts/runtime/run_openclaw_python_tool.sh setup env query-env OPENCLAW_TLS_CN",
+        "bash ./scripts/runtime/run_openclaw_python_tool.sh setup env query-env OPENCLAW_INGRESS_LISTEN_IP",
+        "bash ./scripts/runtime/run_openclaw_python_tool.sh setup env query-env-batch OPENCLAW_TLS_CN OPENCLAW_INGRESS_LISTEN_IP --format shell",
+        "bash ./scripts/runtime/run_openclaw_python_tool.sh setup env query-env OPENCLAW_TLS_CN --format json"
+      ],
+      "notes": [
+        "默认读取 deploy/.env；需要覆盖时显式传 --env-file。",
+        "单值查询用 query-env；需要在 shell 中一次取回多个键时，优先使用 query-env-batch，并结合 `source <(...)>` 消费 `--format shell` 输出的 shell-escaped 赋值。",
+        "本入口只查询运行时消费值；deploy/site.env、启用扩展内部 agent/extensions/<extension-id>/deploy/extension.env 与 deploy/targets.d/*.env 是人工输入入口。"
+      ]
+    },
+    "runtime_paths_surface": {
+      "id": "runtime_paths_surface",
+      "title": "逻辑路径与派生产物入口",
+      "purpose": "统一提供逻辑路径解析、路径索引查看以及派生产物校验/重生成入口。",
+      "command": "bash ./scripts/runtime/run_openclaw_python_tool.sh runtime paths resolve <entry_id> --view <view>",
+      "examples": [
+        "bash ./scripts/runtime/run_openclaw_python_tool.sh runtime paths resolve state_root --view host",
+        "bash ./scripts/runtime/run_openclaw_python_tool.sh runtime paths resolve workspace_router_local_ro --view gateway",
+        "bash ./scripts/runtime/run_openclaw_python_tool.sh runtime paths show-index",
+        "bash ./scripts/runtime/run_openclaw_python_tool.sh runtime paths check-generated",
+        "bash ./scripts/runtime/run_openclaw_python_tool.sh runtime paths render-generated"
+      ],
+      "notes": [
+        "活动文档与人工排障只暴露 runtime paths 入口。",
+        "show-entry 可输出逻辑对象定义；show-index 可输出常用对象索引。",
+        "check-generated / render-generated 用于路径派生产物的人手校验与重生成；统一通过 openclaw CLI 入口执行。"
+      ]
+    }
+  },
+  "common_entries": [
+    {
+      "entry_id": "state_root",
+      "title": "运行态根目录",
+      "description": "当前 host state root；host 侧排障与证据导出首先需要定位此对象。"
+    },
+    {
+      "entry_id": "dispatch_config_dir",
+      "title": "分发运行配置目录",
+      "description": "scheduler 运行态中 dispatch target 派生产物所在目录。"
+    },
+    {
+      "entry_id": "workspace_router_local_ro",
+      "title": "router_local_ro 工作区",
+      "description": "Gateway 本地只读初始路由工作区；涉及 /local_ro 与路径排障时优先查看该对象。"
+    }
+  ]
+}

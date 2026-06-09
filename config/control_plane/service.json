@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "service": {
+    "name": "openclaw-control-plane",
+    "schedulerServiceName": "openclaw-control-plane-scheduler",
+    "stateDirName": "control_plane_scheduler",
+    "heartbeatFile": "control_plane_scheduler_heartbeat.json",
+    "statusFile": "control_plane_scheduler_status.json",
+    "historyFile": "control_plane_scheduler_history.jsonl",
+    "gatewayServiceName": "openclaw-official-gateway",
+    "internalApiServiceName": "openclaw-internal-api",
+    "agentAccessLogFile": "control_plane_agent_access_log.jsonl",
+    "autoExportAgentGroupEvidence": true
+  },
+  "defaults": {
+    "timezone": "Asia/Shanghai",
+    "tickSeconds": 15,
+    "recentHistoryLimit": 20
+  },
+  "registry": {
+    "jobsDir": "jobs",
+    "modelsDir": "models",
+    "targetsDir": "targets"
+  },
+  "extensions": {
+    "manifestsDirs": [
+      "extensions.d"
+    ],
+    "enabledExtensionIds": []
+  },
+  "schemas": {
+    "jobsSchema": "schemas/job.schema.json",
+    "modelsSchema": "schemas/model.schema.json",
+    "targetsSchema": "schemas/target.schema.json"
+  }
+}

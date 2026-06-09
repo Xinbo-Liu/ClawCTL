@@ -1,0 +1,160 @@
+{
+  "schema_version": 1,
+  "title": "docker host supported policy",
+  "policies": {
+    "supported_centos7": {
+      "description": "CentOS 7 x86_64 是受支持的存量老系统部署路径；要求 overlay2、runc、containerd、iptables 与 systemd 前提闭合，Docker/Compose 允许高于最低版本但必须通过支持验收链。该路径不作为默认推荐安全基线，新部署优先使用维护期内的 Linux 宿主机。",
+      "os_family": "centos",
+      "os_version": "7",
+      "arch": [
+        "x86_64"
+      ],
+      "preflight_entrypoint": "scripts/setup/prepare_docker_host.sh",
+      "acceptance_entrypoint": "scripts/doctor/check_docker_host_readiness.sh",
+      "docker_server": {
+        "minimum": "26.1.4",
+        "recommended": "26.1.4"
+      },
+      "docker_compose": {
+        "minimum": "2.27.1",
+        "recommended": "2.27.1"
+      },
+      "storage_driver_required": "overlay2",
+      "required_commands": [
+        "runc",
+        "containerd",
+        "iptables",
+        "setfacl"
+      ],
+      "centos_vault_repositories": [
+        {
+          "id": "official",
+          "base_url": "https://vault.centos.org/7.9.2009",
+          "region": "global",
+          "role": "canonical"
+        },
+        {
+          "id": "aliyun_cn",
+          "base_url": "https://mirrors.aliyun.com/centos-vault/7.9.2009",
+          "region": "cn",
+          "role": "acceleration"
+        },
+        {
+          "id": "tuna_cn",
+          "base_url": "https://mirrors.tuna.tsinghua.edu.cn/centos-vault/7.9.2009",
+          "region": "cn",
+          "role": "acceleration"
+        }
+      ],
+      "docker_yum_repositories": [
+        {
+          "id": "official",
+          "url": "https://download.docker.com/linux/centos/docker-ce.repo",
+          "region": "global",
+          "role": "canonical"
+        },
+        {
+          "id": "aliyun_cn",
+          "url": "https://mirrors.aliyun.com/docker-ce/linux/centos/docker-ce.repo",
+          "region": "cn",
+          "role": "acceleration"
+        },
+        {
+          "id": "tuna_cn",
+          "url": "https://mirrors.tuna.tsinghua.edu.cn/docker-ce/linux/centos/docker-ce.repo",
+          "region": "cn",
+          "role": "acceleration"
+        }
+      ],
+      "docker_daemon": {
+        "registry_mirrors": [
+          "https://docker.m.daocloud.io",
+          "https://docker.nju.edu.cn",
+          "https://docker.mirrors.ustc.edu.cn"
+        ]
+      },
+      "network_profiles": [
+        {
+          "id": "cn",
+          "region": "cn",
+          "centos7_vault_source": "aliyun_cn",
+          "docker_repo_source": "aliyun_cn",
+          "registry_mirrors_source": "docker_daemon.registry_mirrors",
+          "purpose": "中国国内网络首轮部署 profile；把 CentOS 7 vault repo 与 Docker Yum repo 固定到 aliyun_cn，Docker daemon registry-mirrors 继续来自 docker_daemon.registry_mirrors 或 OPENCLAW_DOCKER_REGISTRY_MIRRORS。"
+        },
+        {
+          "id": "global",
+          "region": "global",
+          "centos7_vault_source": "official",
+          "docker_repo_source": "official",
+          "registry_mirrors_source": "docker_daemon.registry_mirrors",
+          "purpose": "国际网络出口 profile；把 CentOS 7 vault repo 与 Docker Yum repo 固定到官方源，Docker daemon registry-mirrors 按统一 daemon 基线写入。"
+        }
+      ],
+      "unsupported_conditions": [
+        "跳过 prepare_docker_host.sh 直接手工拼装 Docker 宿主机。",
+        "readiness 未通过时继续进入 one_click 主链。",
+        "偏离真源维护 daemon / compose / next-step 或 failure-routing 的第二份口径。",
+        "未提供本地 RPM / YUM 源却要求离线新机直接完成 Docker / Compose 安装。"
+      ],
+      "compose_binary_linux_x86_64": {
+        "sha256": "ddc876fe2a89d5b7ea455146b0975bfe52904eecba9b192193377d6f99d69ad9"
+      },
+      "jq_binary_linux_amd64": {
+        "version": "1.7.1",
+        "sha256": "5942c9b0934e510ee61eb3e30273f1b3fe2590df93933a93d7c58b81d19c8ff5"
+      }
+    }
+  },
+  "entrypoint": {
+    "title": "prepare_docker_host.sh",
+    "command": "sudo bash ./scripts/setup/prepare_docker_host.sh",
+    "command_examples": [
+      "sudo bash ./scripts/setup/prepare_docker_host.sh --all",
+      "sudo bash ./scripts/setup/prepare_docker_host.sh --all --network-profile cn",
+      "sudo bash ./scripts/setup/prepare_docker_host.sh --repair-centos7-vault-repos",
+      "sudo bash ./scripts/setup/prepare_docker_host.sh --repair-centos7-vault-repos --network-profile cn",
+      "sudo bash ./scripts/setup/prepare_docker_host.sh --repair-centos7-vault-repos --centos7-vault-source aliyun_cn",
+      "sudo bash ./scripts/setup/prepare_docker_host.sh --update-system-time",
+      "sudo bash ./scripts/setup/prepare_docker_host.sh --install-base-tools --configure-kernel",
+      "sudo bash ./scripts/setup/prepare_docker_host.sh --install-docker --install-compose --configure-daemon",
+      "sudo bash ./scripts/setup/prepare_docker_host.sh --install-docker --install-compose --network-profile cn --configure-daemon",
+      "sudo bash ./scripts/setup/prepare_docker_host.sh --install-docker --install-compose --docker-repo-source aliyun_cn --configure-daemon",
+      "sudo bash ./scripts/setup/prepare_docker_host.sh --configure-kernel --configure-daemon --open-firewall"
+    ],
+    "purpose": "CentOS 7 存量老系统路径的宿主机准备入口；统一处理 vault repo 修复、预工具安装、系统时间校验 / 更新、Docker / Compose 安装、daemon 基线、防火墙 80/443 预开放与 firewalld docker zone 合同。host_firewall 的来源限制由 apply_ingress_boundary_rules.sh 负责。",
+    "notes": [
+      "当前脚本不会自动 sudo；请以 root 或 sudo 显式执行。",
+      "中国国内网络首轮部署固定执行 `sudo bash ./scripts/setup/prepare_docker_host.sh --all --network-profile cn`；该 profile 会把 CentOS 7 vault repo 与 Docker Yum repo 同时固定到 aliyun_cn，并继续写入 docker_host 真源中的 registry-mirrors。",
+      "CentOS 7 初始机若出现 \"Cannot find a valid baseurl for repo: base/7/x86_64\"，先执行 --repair-centos7-vault-repos；该步骤默认按 centos_vault_repositories 顺序尝试 official、aliyun_cn、tuna_cn，中国国内网络下优先使用 `--network-profile cn`，单独修复 repo 时也可显式传入 `--centos7-vault-source aliyun_cn`，内网 vault 可用 `OPENCLAW_CENTOS7_VAULT_BASE_URL` 覆盖。",
+      "--all 默认顺序：网络安装前预校时 -> 修复 CentOS 7 repo（必要时） -> 安装预工具 -> 配置系统时间与内核 -> 安装 Docker -> 安装 Compose -> 配置 daemon -> 预开放 80/443 并收口 firewalld docker zone。",
+      "Docker Engine Yum repo 默认按 docker_yum_repositories 顺序尝试 official、aliyun_cn、tuna_cn；中国国内网络下优先使用 `--network-profile cn`，单独修复 Docker repo 时也可显式传入 `--docker-repo-source aliyun_cn`，内网源可用 `OPENCLAW_DOCKER_CENTOS_REPO_URL` 覆盖。",
+      "Docker daemon registry-mirrors 默认来自 docker_daemon.registry_mirrors；企业内网或特定地区可用 `OPENCLAW_DOCKER_REGISTRY_MIRRORS` 以逗号或换行分隔覆盖。",
+      "--open-firewall 会在 firewalld 运行时确保 permanent `docker` zone 存在且 target 为 `ACCEPT`，必要时重启 Docker 并执行 Docker bridge 烟测；存在 ingress 边界证据的环境在修复 Docker / firewalld 后必须重新执行 apply_ingress_boundary_rules.sh。",
+      "--update-system-time 会设置时区、启用 NTP / chronyd，并按多源 HTTPS HTTP Date 基准校验 / 修复系统时间；用于处理服务器快照恢复后的时钟漂移和证书时间错误。",
+      "若 deploy/.env 选择 `OPENCLAW_INGRESS_BOUNDARY_MODE=host_firewall`，完成 one_click_config.sh 后必须执行 `sudo bash ./scripts/setup/apply_ingress_boundary_rules.sh --env-file deploy/.env` 与 `sudo bash ./scripts/setup/fix_permissions.sh`，再进入 one_click_test_basic.sh。",
+      "--install-compose 安装策略为：优先复用或安装 docker-compose-plugin-2.27.1-1.el7；仅当 RPM 无法提供建议版本时，才回退 OPENCLAW_COMPOSE_DOWNLOAD_URL 或官方发布地址，并自动清理会遮蔽 RPM 插件的 /usr/local/lib/docker/cli-plugins/docker-compose 覆盖件。",
+      "Compose / jq 进入二进制回退时，必须命中 docker_host.json 已登记的 SHA256；校验失败或缺少校验值时直接 fail-closed，不安装未校验下载物。",
+      "预工具安装会同时提供 setfacl（acl 包）；private ingress 在 cap_drop: ALL 下读取证书和写 nginx 日志依赖该 ACL 合同。",
+      "prepare_docker_host.sh 只负责宿主机准备；完成后必须再执行 check_docker_host_readiness.sh，通过后才允许进入 one_click 主链。",
+      "--offline 只用于跳过外网探测或只执行本地配置类步骤；不会安装需要在线 yum / curl 的预工具、Docker、Compose。",
+      "离线新机若还没有本地 RPM / YUM 源，不能直接执行 --all --offline。",
+      "若已经挂载本地 YUM 源或离线 RPM 仓库，请不要传 --offline，直接按安装步骤执行。"
+    ],
+    "references": [
+      "docs/getting-started/environment-setup.md",
+      "docs/getting-started/quickstart.md",
+      "docs/operations/runtime-service-reference.md",
+      "docs/operations/troubleshooting.md"
+    ]
+  },
+  "help_surface": {
+    "title": "帮助面与执行面边界",
+    "lines": [
+      "--help / 未知参数 只输出 CentOS 7 存量老系统路径的宿主机准备入口说明，不依赖 Docker、Docker daemon 或控制面镜像状态。",
+      "真正执行 prepare_docker_host 时，才允许进入 repo 修复、yum 安装、daemon 改写与防火墙开放。",
+      "该帮助面只解释宿主机准备职责边界；完整路径以 environment-setup.md、quickstart.md、runtime-service-reference.md 与 troubleshooting.md 为准。",
+      "宿主机准备完成后必须执行 check_docker_host_readiness.sh。"
+    ]
+  }
+}

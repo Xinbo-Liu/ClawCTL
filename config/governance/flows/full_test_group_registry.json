@@ -1,0 +1,57 @@
+{
+  "title": "one_click_test_full 分组执行注册表",
+  "generated_artifacts": {
+    "full_test_doc": "docs/operations/runtime-service-reference.md"
+  },
+  "groups": {
+    "service": {
+      "script_checks": [
+        {
+          "id": "ingress_boundary_evidence",
+          "failure_status": "fail",
+          "failure_action": "先确认 private ingress 是唯一宿主机端口暴露面，nginx.gateway.conf 包含来源 allowlist，并补齐宿主机防火墙或外部 ACL 证据文件",
+          "use_env": "with_env",
+          "command": "bash \"$ROOT_DIR/scripts/doctor/check_ingress_boundary_evidence.sh\" --env-file \"$ENV_FILE\" --require-nginx-policy --no-write"
+        },
+        {
+          "id": "internal_api_runtime",
+          "failure_status": "fail",
+          "failure_action": "先检查 internal-api 日志与 /readyz，再复核控制平面只读接口",
+          "use_env": "plain",
+          "command": "bash \"$ROOT_DIR/scripts/doctor/check_internal_api_runtime.sh\""
+        },
+        {
+          "id": "control_plane_registry",
+          "failure_status": "fail",
+          "failure_action": "先修复 config/control_plane 的 jobs / agents / models / implementations / targets 引用关系",
+          "use_env": "plain",
+          "command": "bash \"$ROOT_DIR/scripts/runtime/run_openclaw_python_tool.sh\" control-plane validate registry"
+        },
+        {
+          "id": "control_plane_runtime",
+          "failure_status": "fail",
+          "failure_action": "先查看 scheduler 状态/日志与控制平面摘要，再复核 heartbeat 与 state 文件",
+          "use_env": "plain",
+          "command": "bash \"$ROOT_DIR/scripts/doctor/check_control_plane_runtime.sh\""
+        },
+        {
+          "id": "official_openclaw_cli",
+          "failure_status": "fail",
+          "failure_action": "查看官方 CLI 证据：<current-host-state-root>/setup/official_cli/",
+          "use_env": "plain",
+          "command": "bash \"$ROOT_DIR/scripts/doctor/check_openclaw_official_runtime_contract.sh\" --root-dir \"$ROOT_DIR\""
+        }
+      ],
+      "followups_if_failed": {
+        "ingress_boundary_evidence": [
+          "复核 ingress 边界证据：sudo bash ./scripts/doctor/check_ingress_boundary_evidence.sh --env-file deploy/.env --require-nginx-policy",
+          "复核统一状态：bash ./scripts/runtime/show_runtime_service_status.sh"
+        ],
+        "official_openclaw_cli": [
+          "手工复核 gateway：bash ./scripts/runtime/run_openclaw_official_cli.sh --target gateway -- doctor",
+          "手工复核 gateway：bash ./scripts/runtime/run_openclaw_official_cli.sh --target gateway -- security audit --deep --json"
+        ]
+      }
+    }
+  }
+}

@@ -1,0 +1,375 @@
+{
+  "schema_version": 1,
+  "title": "运行态统一入口参考",
+  "generated_doc": "docs/operations/runtime-service-reference.md",
+  "intro": [
+    "本页定义 **运行态入口、deployment acceptance 默认顺序，以及 runtime acceptance 证据归档**。",
+    "runtime 服务名、容器名与 target 边界由 service registry、testing manifest 与 runtime entrypoints 共同定义。",
+    "当前 compose 运行治理固定显式声明为 user + cap_drop ALL + no-new-privileges + read_only + init: true + cgroup: private + pull_policy: never；镜像拉取统一前置到 one-click 的镜像阶段。",
+    "acceptance / runtime evidence / health / recovery / dispatch observability 的固定对象路径统一回 `config/control_plane/object_families.json` 与 `agent/README.md`；本页只维护运行入口与顺序。"
+  ],
+  "entrypoints": [
+    {
+      "entry_id": "service_status",
+      "title": "统一查看服务状态",
+      "command": "bash ./scripts/runtime/show_runtime_service_status.sh",
+      "when": "确认启用的 runtime target 是否在线、healthy。",
+      "notes": [
+        "优先用于部署后首轮核对与日常值守。",
+        "支持追加 --target 精确查看单个 target。"
+      ],
+      "examples": [
+        {
+          "title": "查看全部 runtime target 状态",
+          "steps": [
+            "bash ./scripts/runtime/show_runtime_service_status.sh"
+          ],
+          "notes": [
+            "用于部署刚完成后的首轮整体确认。",
+            "输出同时包含 docker compose ps 与 target 摘要。"
+          ]
+        },
+        {
+          "title": "只看 gateway 与 ingress",
+          "steps": [
+            "bash ./scripts/runtime/show_runtime_service_status.sh --target gateway --target ingress"
+          ],
+          "notes": [
+            "适合 HTTPS 入口或 Control UI 异常时先缩小范围。"
+          ]
+        },
+        {
+          "title": "只输出 target 摘要",
+          "steps": [
+            "bash ./scripts/runtime/show_runtime_service_status.sh --skip-compose-ps"
+          ],
+          "notes": [
+            "适合人工复核时快速查看 running / healthy 结论。"
+          ]
+        }
+      ]
+    },
+    {
+      "entry_id": "container_logs",
+      "title": "查看容器日志",
+      "command": "bash ./scripts/runtime/show_runtime_container_logs.sh --target gateway",
+      "when": "需要排查单个 runtime target 的最近日志或持续跟随。",
+      "notes": [
+        "所有已声明的 runtime target 都通过同一入口查看。",
+        "稳定文档默认入口使用本脚本，不直接调用 docker logs <container>。"
+      ],
+      "examples": [
+        {
+          "title": "查看 gateway 最近 200 行日志",
+          "steps": [
+            "bash ./scripts/runtime/show_runtime_container_logs.sh --target gateway"
+          ]
+        },
+        {
+          "title": "只看 ingress 最近 80 行日志",
+          "steps": [
+            "bash ./scripts/runtime/show_runtime_container_logs.sh --target ingress --lines 80"
+          ]
+        },
+        {
+          "title": "持续跟随 scheduler 日志",
+          "steps": [
+            "bash ./scripts/runtime/show_runtime_container_logs.sh --target scheduler --follow"
+          ],
+          "notes": [
+            "--follow 只支持单个 target 或 container。"
+          ]
+        }
+      ]
+    },
+    {
+      "entry_id": "service_action",
+      "title": "统一执行服务动作",
+      "command": "bash ./scripts/runtime/run_runtime_service_action.sh restart --target gateway",
+      "when": "需要对单个或多个 runtime target 执行 start / stop / restart / up。",
+      "notes": [
+        "target 解析统一由 service registry 派生。",
+        "不要在活动文档里散写 docker compose restart <service>。"
+      ],
+      "examples": [
+        {
+          "title": "重启 gateway 与 ingress",
+          "steps": [
+            "bash ./scripts/runtime/run_runtime_service_action.sh restart --target gateway --target ingress"
+          ]
+        },
+        {
+          "title": "启动或重建 scheduler",
+          "steps": [
+            "bash ./scripts/runtime/run_runtime_service_action.sh up --target scheduler --force-recreate"
+          ],
+          "notes": [
+            "适合 --prepare-only 之后人工补启动单个 target，或在 bootstrap 刷新运行态 env 后让 scheduler 重新读取环境。"
+          ]
+        },
+        {
+          "title": "停止全部 runtime target",
+          "steps": [
+            "bash ./scripts/runtime/run_runtime_service_action.sh stop --all"
+          ]
+        }
+      ]
+    },
+    {
+      "entry_id": "gateway_status_deep",
+      "title": "官方 Gateway 运行态深查",
+      "command": "bash ./scripts/gateway/run_gateway_status_deep.sh",
+      "when": "需要查看 official gateway status --deep、probe、安全审计等治理结果。",
+      "notes": [
+        "该类入口只面向 gateway target。",
+        "真实运行证据需要通过 export_runtime_acceptance_evidence.sh 导出到 <current-host-state-root>/control_plane/release/evidence。"
+      ],
+      "examples": [
+        {
+          "title": "执行官方 Gateway 深查",
+          "steps": [
+            "bash ./scripts/gateway/run_gateway_status_deep.sh"
+          ],
+          "notes": [
+            "等价于在 gateway target 内执行 official CLI `gateway status --json --deep`。"
+          ]
+        },
+        {
+          "title": "先跑 probe 再跑深查",
+          "steps": [
+            "bash ./scripts/gateway/run_gateway_probe.sh",
+            "bash ./scripts/gateway/run_gateway_status_deep.sh"
+          ]
+        },
+        {
+          "title": "补做安全审计",
+          "steps": [
+            "bash ./scripts/gateway/run_security_audit.sh"
+          ]
+        }
+      ]
+    },
+    {
+      "entry_id": "ingress_boundary_evidence",
+      "title": "private ingress 边界证据",
+      "command": "sudo bash ./scripts/doctor/check_ingress_boundary_evidence.sh --env-file deploy/.env --require-nginx-policy",
+      "when": "需要确认 private ingress 只有 80/443 暴露、内部服务不发布宿主机端口，Nginx 来源 allowlist 渲染结果、只读控制面 API Gateway token 校验与代理，且来源限制规则由宿主机防火墙或外部 ACL 语义证明时。",
+      "notes": [
+        "host_firewall 模式下优先用 root 侧命令写出证据；默认把结果写到 <current-host-state-root>/control_plane/setup/ingress_boundary_evidence.json，并定向回收给部署用户读取。",
+        "`host_firewall` 模式会按 `OPENCLAW_INGRESS_ALLOWED_SOURCE_CIDRS` 逐项核对 firewalld / nftables / iptables 规则；若使用 iptables，必须由 `DOCKER-USER` 明确覆盖允许来源与默认拒绝，INPUT 链单独放行不视为充分证据。",
+        "若环境启用 IPv6，边界证据必须覆盖 IPv6；未提供 IPv6 证据时，必须在宿主机或上游网络层显式禁用 IPv6 暴露面。",
+        "`external_acl` 模式要求 `OPENCLAW_INGRESS_BOUNDARY_EVIDENCE_PATH` 指向结构化 JSON 证据文件，并且其中 `source_cidrs` / `allowed_ports` / `default_deny` / `ip_families` / `enforcement_plane` / 目标信息与当前部署输入严格对齐。",
+        "更完整的 acceptance / evidence 对象族索引统一看 agent/README.md。"
+      ],
+      "examples": [
+        {
+          "title": "部署后立即核对 ingress 边界证据",
+          "steps": [
+            "sudo bash ./scripts/setup/apply_ingress_boundary_rules.sh --env-file deploy/.env",
+            "sudo bash ./scripts/doctor/check_ingress_boundary_evidence.sh --env-file deploy/.env --require-nginx-policy"
+          ]
+        },
+        {
+          "title": "先查看来源限制相关输入",
+          "steps": [
+            "bash ./scripts/runtime/run_openclaw_python_tool.sh setup env query-env-batch OPENCLAW_INGRESS_BOUNDARY_MODE OPENCLAW_INGRESS_ALLOWED_SOURCE_CIDRS OPENCLAW_INGRESS_BOUNDARY_EVIDENCE_PATH --format shell"
+          ]
+        }
+      ]
+    },
+    {
+      "entry_id": "runtime_evidence_export",
+      "title": "导出运行验收证据",
+      "command": "bash ./scripts/runtime/export_runtime_acceptance_evidence.sh",
+      "when": "需要手工把 acceptance / dispatch runtime / official CLI / shadow verify 结果导出到 <current-host-state-root>/control_plane/release/evidence；one_click_deploy 默认在 full test 通过后自动执行。",
+      "notes": [
+        "执行前先通过 check_runtime_evidence_prereqs.sh --scope evidence-export；该检查与导出脚本默认从 deploy/.env 读取当前 active control-plane profile。",
+        "当前脚本会把 deployment_acceptance.accepted=true、ingress_boundary_evidence.accepted=true 与 runtime_acceptance.accepted=true 作为导出硬门禁；ingress_boundary_evidence 必须包含 Nginx allowlist 与基础设施边界证据闭环，任一不满足都会直接失败。",
+        "deployment acceptance 默认顺序、通过标准与证据产物就在本页下方固定章节。",
+        "delivery_adapter / dispatch 执行能力的失败信号与恢复顺序统一查看 agent/README.md。",
+        "当前交付包只允许保留模板，不允许把 pending_runtime_execution 占位写入 runtime evidence。",
+        "runtime evidence 各对象的固定路径与职责统一看 agent/README.md。"
+      ],
+      "examples": [
+        {
+          "title": "导出 runtime acceptance 证据前的最短顺序",
+          "steps": [
+            "bash ./scripts/runtime/check_runtime_evidence_prereqs.sh --scope evidence-export",
+            "sudo bash ./scripts/doctor/check_ingress_boundary_evidence.sh --env-file deploy/.env --require-nginx-policy",
+            "bash ./scripts/runtime/export_runtime_acceptance_evidence.sh"
+          ]
+        },
+        {
+          "title": "带候选实例影子验证的证据导出",
+          "steps": [
+            "bash ./scripts/runtime/check_runtime_evidence_prereqs.sh --scope evidence-export",
+            "bash ./scripts/gateway/run_shadow_upgrade_verify.sh --require-candidate-runtime",
+            "bash ./scripts/runtime/export_runtime_acceptance_evidence.sh",
+            "bash ./scripts/runtime/check_runtime_evidence_prereqs.sh --scope clean-release"
+          ],
+          "notes": [
+            "其中 shadow verify 默认按最新 pin 候选 Gateway 的最小回归链执行 release/digest 对齐、official runtime contract、internal-api runtime、gateway status --deep 与 gateway probe。",
+            "同时要求候选隔离实例与活动运行面不共享状态目录、容器名或网络。"
+          ]
+        }
+      ]
+    },
+    {
+      "entry_id": "clean_delivery_export",
+      "title": "交付前工作树清洁与导出",
+      "command": "bash ./scripts/setup/export_clean_delivery_bundle.sh --bundle runtime-core --clean",
+      "when": "需要导出最终仓库交付包，并阻断默认可清理目标或派生物混入 zip。",
+      "notes": [
+        "该入口只把 cleanupByDefault=true 的本地残留目标和派生物视为脏残留；`state/openclaw` 与 `state/image_artifacts` 仅被排除出 bundle，不会单独阻断。",
+        "追加 `--clean` 后会先清理默认可清理项，再校验并导出。",
+        "如本地执行过 Python 编译类静态检查，导出前应重新执行该入口。",
+        "zip 文件收集通过 bundle allowlist 与预算门禁完成，不依赖 `find + 排除` 或人工打包。",
+        "该入口固定只导出正式交付所需内容。"
+      ],
+      "examples": [
+        {
+          "title": "导出最终交付包前先做只读检查",
+          "steps": [
+            "bash ./scripts/setup/export_clean_delivery_bundle.sh --check-only --bundle runtime-core"
+          ]
+        },
+        {
+          "title": "清理派生物并导出最终交付包",
+          "steps": [
+            "bash ./scripts/setup/export_clean_delivery_bundle.sh --bundle runtime-core --clean"
+          ]
+        }
+      ]
+    }
+  ],
+  "scenarios": [
+    {
+      "scenario_id": "post_deploy_minimal_check",
+      "title": "部署后最短检查",
+      "steps": [
+        "bash ./scripts/runtime/show_runtime_service_status.sh",
+        "bash ./scripts/runtime/show_runtime_container_logs.sh --target gateway",
+        "bash ./scripts/runtime/show_runtime_container_logs.sh --target ingress",
+        "sudo bash ./scripts/doctor/check_ingress_boundary_evidence.sh --env-file deploy/.env --require-nginx-policy"
+      ]
+    },
+    {
+      "scenario_id": "gateway_runtime_governance",
+      "title": "gateway 运行态治理",
+      "steps": [
+        "bash ./scripts/gateway/run_gateway_probe.sh",
+        "bash ./scripts/gateway/run_gateway_status_deep.sh",
+        "bash ./scripts/gateway/run_security_audit.sh"
+      ]
+    },
+    {
+      "scenario_id": "runtime_evidence_archive",
+      "title": "运行验收归档",
+      "steps": [
+        "bash ./scripts/runtime/check_runtime_evidence_prereqs.sh --scope evidence-export",
+        "sudo bash ./scripts/doctor/check_ingress_boundary_evidence.sh --env-file deploy/.env --require-nginx-policy",
+        "bash ./scripts/runtime/export_runtime_acceptance_evidence.sh"
+      ]
+    },
+    {
+      "scenario_id": "candidate_shadow_verify_archive",
+      "title": "最新 pin 候选实例影子验证并归档到交付材料",
+      "steps": [
+        "bash ./scripts/runtime/check_runtime_evidence_prereqs.sh --scope evidence-export",
+        "sudo bash ./scripts/doctor/check_ingress_boundary_evidence.sh --env-file deploy/.env --require-nginx-policy",
+        "bash ./scripts/gateway/run_shadow_upgrade_verify.sh --require-candidate-runtime",
+        "bash ./scripts/runtime/export_runtime_acceptance_evidence.sh",
+        "bash ./scripts/runtime/check_runtime_evidence_prereqs.sh --scope clean-release"
+      ]
+    },
+    {
+      "scenario_id": "final_delivery_export",
+      "title": "最终交付包导出",
+      "steps": [
+        "bash ./scripts/setup/export_clean_delivery_bundle.sh --check-only",
+        "bash ./scripts/setup/export_clean_delivery_bundle.sh --bundle runtime-core --clean"
+      ]
+    }
+  ],
+  "manual_post_deploy_checks": {
+    "title": "首次部署后的人工补充核对",
+    "intro": "完成 `quickstart.md` 默认步骤后，需要人工确认运行态关键产物与官方 Gateway 深查入口时，统一看本节。",
+    "artifacts_title": "关键运行产物",
+    "artifacts_intro": "至少核对当前 host state root 下的以下派生产物存在：",
+    "artifacts": [
+      "openclaw.json",
+      "cron/jobs.json",
+      "workspace-router_local_ro/{AGENTS.md,SOUL.md,TOOLS.md,IDENTITY.md,USER.md,HEARTBEAT.md,BOOTSTRAP.md,MEMORY.md}",
+      "workspace-<agent_id>/{AGENTS.md,SOUL.md,TOOLS.md,IDENTITY.md,USER.md,HEARTBEAT.md,BOOTSTRAP.md,MEMORY.md}",
+      "agents/main/agent/{AGENTS.md,SOUL.md,TOOLS.md,IDENTITY.md,USER.md,HEARTBEAT.md,BOOTSTRAP.md,MEMORY.md}",
+      "agents/<agent_id>/agent/{AGENTS.md,SOUL.md,TOOLS.md,IDENTITY.md,USER.md,HEARTBEAT.md,BOOTSTRAP.md,MEMORY.md}",
+      "agents/{main,<agent_id>}/sessions/{sessions.json,<default-session>.jsonl}",
+      "exec-approvals.json",
+      "runtime.gateway.env",
+      "runtime.scheduler.env",
+      "runtime.internal-api.env",
+      "nginx.gateway.conf"
+    ],
+    "check_title": "最短人工核对顺序",
+    "steps": [
+      "bash ./scripts/runtime/show_runtime_service_status.sh",
+      "bash ./scripts/doctor/check_internal_api_runtime.sh",
+      "bash ./scripts/doctor/check_control_plane_runtime.sh",
+      "sudo bash ./scripts/doctor/check_ingress_boundary_evidence.sh --env-file deploy/.env --require-nginx-policy",
+      "bash ./scripts/doctor/check_openclaw_official_runtime_contract.sh"
+    ],
+    "points_intro": "核对点：",
+    "points": [
+      "`check_openclaw_official_runtime_contract.sh`、`check_runtime_evidence_prereqs.sh` 与 `export_runtime_acceptance_evidence.sh` 默认继承 `deploy/.env` 的 active control-plane profile；需要显式覆盖时设置 `OPENCLAW_CONTROL_PLANE_PROFILE`。",
+      "`OPENCLAW_TLS_CN` 渲染为唯一访问主机名；",
+      "`<current-host-state-root>/gateway/openclaw.json`、`cron/jobs.json`、`workspace-router_local_ro/`、`agents/*/agent/`、`agents/*/sessions/sessions.json` 与 `workspace-<agent_id>/` 核心文件由当前 active control-plane profile 投影出 Gateway UI 默认路由 agent、业务 agents、agent 文件面、聊天默认会话与定时任务目录；",
+      "`<current-host-state-root>/gateway/nginx.gateway.conf` 已按当前 HSTS、访问主机名、来源 CIDR allowlist、只读控制面 API Gateway token 校验与代理重渲染；",
+      "official Gateway token auth 配置存在；",
+      "访问端浏览器使用 `https://<OPENCLAW_TLS_CN>/` 打开 Control UI，WebSocket URL 使用 `wss://<OPENCLAW_TLS_CN>`，并填入 `OPENCLAW_GATEWAY_TOKEN`；",
+      "private ingress 是唯一宿主机入口，official Gateway 是 Gateway UI 的认证入口；",
+      "`ingress_boundary_evidence.json` 已写出，且 compose/runtime 只允许 private ingress 发布 80/443，Nginx allowlist、只读控制面 API Gateway token 校验、代理与基础设施边界证据均已闭合；",
+      "`doctor`、`security audit --deep --json` 与 `models probe` 的聚合检查通过。"
+    ],
+    "pairing_title": "首次访问 Control UI",
+    "pairing_note": "浏览器首连按固定顺序判断：证书警告先按 `troubleshooting.md#control-ui-certificate-warning` 确认访问端信任链与主机名；`origin not allowed` 表示访问端没有使用 `OPENCLAW_TLS_CN` 或 WebSocket URL 主机名不一致；`gateway token missing` / `unauthorized` 表示未填 `OPENCLAW_GATEWAY_TOKEN` 的真实值；`disconnected (1008): pairing required` 表示 token 已通过、需要批准新设备。SSH 隧道访问仍必须打开 `https://<OPENCLAW_TLS_CN>/`，不能使用 `http://localhost:443/`。浏览器本地凭据丢失或更换浏览器时，重新读取当前 `OPENCLAW_GATEWAY_TOKEN` 并批准新设备，不重新部署、不重新生成 token。首连异常处理顺序统一回到 `troubleshooting.md#control-ui-certificate-warning`、`troubleshooting.md#control-ui-origin-not-allowed`、`troubleshooting.md#control-ui-gateway-token-missing`、`troubleshooting.md#control-ui-token-recovery` 与 `troubleshooting.md#control-ui-first-pairing`。"
+  },
+  "usage_boundary": [
+    "本页统一负责运行态入口与 deployment acceptance；部署主链使用 `docs/getting-started/`。",
+    "需要默认值守顺序时回到 `docs/operations/README.md`。",
+    "需要部署顺序时回到 `docs/getting-started/`。",
+    "需要排障顺序时回到 `docs/operations/troubleshooting.md`。"
+  ],
+  "acceptance_examples": [
+    {
+      "title": "查看 deployment acceptance 最近一次机器摘要",
+      "steps": [
+        "cat <current-host-state-root>/control_plane/setup/one_click_test_full.latest.summary.json"
+      ],
+      "notes": [
+        "适合脚本化读取 blocking_checks / warning_checks / next_actions。"
+      ]
+    },
+    {
+      "title": "查看 deployment acceptance 最近一次人工摘要",
+      "steps": [
+        "cat <current-host-state-root>/control_plane/setup/one_click_test_full.latest.summary.md"
+      ]
+    },
+    {
+      "title": "输出 acceptance 统一摘要",
+      "steps": [
+        "bash ./scripts/runtime/run_openclaw_python_tool.sh runtime acceptance acceptance-summary"
+      ]
+    },
+    {
+      "title": "解析固定对象路径后再查看",
+      "steps": [
+        "bash ./scripts/runtime/run_openclaw_python_tool.sh control-plane objects entry-path --family flow_summary_state --entry one_click_test_full_latest_summary_json",
+        "bash ./scripts/runtime/run_openclaw_python_tool.sh control-plane objects entry-path --family acceptance_state --entry deployment_acceptance"
+      ],
+      "notes": [
+        "需要脚本稳定拿路径时优先用 control-plane objects，而不是手工拼 latest 文件名。"
+      ]
+    }
+  ]
+}

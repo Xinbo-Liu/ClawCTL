@@ -1,0 +1,113 @@
+{
+  "schema_version": 1,
+  "families": {
+    "dispatch_runtime_state": {
+      "label": "dispatch runtime objects",
+      "purpose": "Collect dispatch runtime summary, target registry, runs, queue, and queue_done paths for platform observability and troubleshooting.",
+      "references": [
+        "docs/operations/dispatch-targets.md",
+        "docs/operations/troubleshooting.md"
+      ],
+      "entries": [
+        {
+          "id": "dispatch_runtime_summary_json",
+          "title": "dispatch runtime summary",
+          "path_kind": "runtime_path",
+          "path_ref": "dispatch_runtime_summary_json",
+          "producer": "setup env render-dispatch-runtime / bootstrap",
+          "usage": "Structured summary of the active target registry, provider bindings, default target groups, and dispatch runtime state."
+        },
+        {
+          "id": "dispatch_targets_json",
+          "title": "dispatch targets registry copy",
+          "path_kind": "runtime_path",
+          "path_ref": "dispatch_targets_json",
+          "producer": "setup env render-dispatch-runtime / bootstrap",
+          "usage": "Scheduler-side dispatch target snapshot used by runtime execution and troubleshooting."
+        },
+        {
+          "id": "dispatch_out_dir",
+          "title": "dispatch output directory",
+          "path_kind": "runtime_path",
+          "path_ref": "dispatch_out_dir",
+          "producer": "delivery_adapter / dispatcher",
+          "usage": "Root directory for dispatch.json, status.json, ledger.jsonl, queue, and queue_done outputs."
+        },
+        {
+          "id": "dispatch_runs_dir",
+          "title": "dispatch runs directory",
+          "path_kind": "runtime_path",
+          "path_ref": "dispatch_runs_dir",
+          "producer": "delivery_adapter / dispatcher",
+          "usage": "Per-run dispatch output directories for run-scoped audit artifacts."
+        },
+        {
+          "id": "dispatch_queue_dir",
+          "title": "dispatch queue directory",
+          "path_kind": "runtime_path",
+          "path_ref": "dispatch_queue_dir",
+          "producer": "dispatcher queue manager",
+          "usage": "Host-side resend and retry backlog directory."
+        },
+        {
+          "id": "dispatch_queue_done_dir",
+          "title": "dispatch queue_done directory",
+          "path_kind": "runtime_path",
+          "path_ref": "dispatch_queue_done_dir",
+          "producer": "dispatcher queue manager",
+          "usage": "Completed, expired, or failed resend and retry queue directory."
+        }
+      ]
+    },
+    "dispatch_governance_state": {
+      "label": "dispatch governance audit objects",
+      "purpose": "Collect target acceptance, batch acceptance, rotation sequence, governance audit, and lifecycle audit outputs under one neutral platform family.",
+      "references": [
+        "docs/operations/dispatch-targets.md",
+        "docs/operations/troubleshooting.md"
+      ],
+      "entries": [
+        {
+          "id": "dispatch_target_acceptance_audit_dir",
+          "title": "target acceptance audit directory",
+          "path_kind": "runtime_path",
+          "path_ref": "dispatch_target_acceptance_audit_dir",
+          "producer": "bash ./scripts/runtime/run_openclaw_python_tool.sh dispatch observability show-target-acceptance --target <target_id> --gate-env-file deploy/.env --write-audit",
+          "usage": "Default audit directory for target-scoped acceptance payloads."
+        },
+        {
+          "id": "dispatch_target_batch_acceptance_audit_dir",
+          "title": "batch acceptance audit directory",
+          "path_kind": "runtime_path",
+          "path_ref": "dispatch_target_batch_acceptance_audit_dir",
+          "producer": "bash ./scripts/runtime/run_openclaw_python_tool.sh dispatch observability show-batch-acceptance --batch <batch_id> --gate-env-file deploy/.env --write-audit",
+          "usage": "Default audit directory for batch-scoped acceptance and release-gate payloads."
+        },
+        {
+          "id": "dispatch_target_rotation_sequence_audit_dir",
+          "title": "rotation sequence audit directory",
+          "path_kind": "runtime_path",
+          "path_ref": "dispatch_target_rotation_sequence_audit_dir",
+          "producer": "bash ./scripts/runtime/run_openclaw_python_tool.sh dispatch ops verify-rotation-sequence --gate-env-file deploy/.env --control-plane-profile <profile_id> --write-audit",
+          "usage": "Default audit directory for rotation-sequence verification payloads."
+        },
+        {
+          "id": "dispatch_governance_audit_dir",
+          "title": "dispatch governance audit directory",
+          "path_kind": "runtime_path",
+          "path_ref": "dispatch_governance_audit_dir",
+          "producer": "bash ./scripts/runtime/run_openclaw_python_tool.sh dispatch ops verify-rotation-sequence --gate-env-file deploy/.env --control-plane-profile <profile_id> --write-audit",
+          "usage": "Default audit directory for platform-level dispatch governance checks."
+        },
+        {
+          "id": "dispatch_target_lifecycle_audit_dir",
+          "title": "lifecycle audit directory",
+          "path_kind": "runtime_path",
+          "path_ref": "dispatch_target_lifecycle_audit_dir",
+          "producer": "bash ./scripts/setup/update_dispatch_target_lifecycle.sh --write-audit",
+          "usage": "Default audit directory for disable and decommission lifecycle changes."
+        }
+      ]
+    }
+  }
+}

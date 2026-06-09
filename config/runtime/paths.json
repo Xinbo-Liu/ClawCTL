@@ -1,0 +1,563 @@
+{
+  "version": 1,
+  "module": "runtime_paths",
+  "description": "统一管理宿主机 / official Gateway / scheduler 执行面的路径逻辑对象与映射；Gateway 容器内视角统一收敛到 OpenClaw 官方 Docker 合同。",
+  "roots": {
+    "host_state_root": "__HOST_STATE_ROOT_DEFAULT__",
+    "host_gateway_root": "{host_state_root}/gateway",
+    "host_gateway_logs_root": "{host_gateway_root}/logs",
+    "host_control_plane_root": "{host_state_root}/control_plane",
+    "host_control_plane_setup_root": "{host_control_plane_root}/setup",
+    "scheduler_state_root": "/home/openclaw/.openclaw",
+    "scheduler_control_plane_root": "{scheduler_state_root}",
+    "scheduler_logs_root": "{scheduler_state_root}/logs",
+    "scheduler_gateway_state_root": "/home/openclaw/.openclaw-gateway",
+    "gateway_state_root": "/home/node/.openclaw",
+    "gateway_home_root": "/home/node"
+  },
+  "entries": {
+    "openclaw_home": {
+      "kind": "runtime_dir",
+      "category": "runtime",
+      "owner": "gateway",
+      "create_on_bootstrap": false,
+      "paths": {
+        "host": null,
+        "scheduler": null,
+        "gateway": "{gateway_home_root}"
+      },
+      "env_names": {
+        "gateway": "OPENCLAW_HOME"
+      },
+      "logical_group": "gateway_runtime"
+    },
+    "state_root": {
+      "kind": "runtime_dir",
+      "category": "runtime",
+      "owner": [
+        "host",
+        "gateway",
+        "scheduler"
+      ],
+      "create_on_bootstrap": true,
+      "env_names": {
+        "host": "HOST_STATE_DIR",
+        "scheduler": "OPENCLAW_STATE_DIR",
+        "gateway": "OPENCLAW_STATE_DIR"
+      },
+      "paths": {
+        "host": "{host_state_root}",
+        "scheduler": "{scheduler_state_root}",
+        "gateway": "{gateway_state_root}"
+      },
+      "logical_group": "shared_runtime"
+    },
+    "logs_dir": {
+      "kind": "runtime_dir",
+      "category": "runtime",
+      "owner": [
+        "host",
+        "gateway",
+        "scheduler"
+      ],
+      "create_on_bootstrap": true,
+      "paths": {
+        "host": "{host_control_plane_root}/logs",
+        "scheduler": "{scheduler_logs_root}",
+        "gateway": "{gateway_state_root}/logs"
+      },
+      "env_names": {},
+      "logical_group": "shared_runtime"
+    },
+    "devices_dir": {
+      "kind": "runtime_dir",
+      "category": "runtime",
+      "owner": [
+        "host",
+        "gateway"
+      ],
+      "create_on_bootstrap": true,
+      "paths": {
+        "host": "{host_gateway_root}/devices",
+        "gateway": "{gateway_state_root}/devices"
+      },
+      "env_names": {},
+      "logical_group": "gateway_runtime"
+    },
+    "gateway_logs_dir": {
+      "kind": "runtime_dir",
+      "category": "runtime",
+      "owner": [
+        "host",
+        "gateway"
+      ],
+      "create_on_bootstrap": true,
+      "paths": {
+        "host": "{host_gateway_logs_root}",
+        "scheduler": null,
+        "gateway": "{gateway_state_root}/logs"
+      },
+      "env_names": {},
+      "logical_group": "gateway_logs"
+    },
+    "openclaw_config": {
+      "kind": "runtime_file",
+      "category": "config",
+      "owner": [
+        "host",
+        "gateway"
+      ],
+      "create_parent_on_bootstrap": true,
+      "paths": {
+        "host": "{host_gateway_root}/openclaw.json",
+        "gateway": "{gateway_state_root}/openclaw.json"
+      },
+      "env_names": {
+        "gateway": "OPENCLAW_CONFIG_PATH"
+      },
+      "logical_group": "gateway_runtime"
+    },
+    "exec_approvals": {
+      "kind": "runtime_file",
+      "category": "config",
+      "owner": [
+        "host",
+        "gateway"
+      ],
+      "create_parent_on_bootstrap": true,
+      "paths": {
+        "host": "{host_gateway_root}/exec-approvals.json",
+        "gateway": "{gateway_state_root}/exec-approvals.json"
+      },
+      "env_names": {},
+      "logical_group": "gateway_runtime"
+    },
+    "workspace_router_local_ro": {
+      "kind": "workspace_dir",
+      "category": "workspace",
+      "owner": [
+        "host",
+        "gateway"
+      ],
+      "create_on_bootstrap": true,
+      "paths": {
+        "host": "{host_gateway_root}/workspace-router_local_ro",
+        "gateway": "{gateway_state_root}/workspace-router_local_ro"
+      },
+      "env_names": {},
+      "logical_group": "gateway_workspace"
+    },
+    "gateway_host_state_dir": {
+      "kind": "runtime_dir",
+      "category": "runtime",
+      "owner": [
+        "host",
+        "scheduler"
+      ],
+      "create_on_bootstrap": true,
+      "paths": {
+        "host": "{host_gateway_root}",
+        "scheduler": "{scheduler_gateway_state_root}",
+        "gateway": null
+      },
+      "env_names": {
+        "host": "HOST_GATEWAY_STATE_DIR",
+        "scheduler": "OPENCLAW_GATEWAY_STATE_DIR"
+      },
+      "logical_group": "host_state_views"
+    },
+    "control_plane_host_state_dir": {
+      "kind": "runtime_dir",
+      "category": "runtime",
+      "owner": "host",
+      "create_on_bootstrap": true,
+      "paths": {
+        "host": "{host_control_plane_root}",
+        "scheduler": null,
+        "gateway": null
+      },
+      "env_names": {
+        "host": "HOST_CONTROL_PLANE_STATE_DIR"
+      },
+      "logical_group": "host_state_views"
+    },
+    "extension_envs_dir": {
+      "kind": "runtime_dir",
+      "category": "runtime",
+      "owner": [
+        "host",
+        "scheduler"
+      ],
+      "create_on_bootstrap": true,
+      "paths": {
+        "host": "{host_control_plane_root}/extension_envs",
+        "scheduler": "{scheduler_control_plane_root}/extension_envs",
+        "gateway": null
+      },
+      "env_names": {
+        "host": "HOST_EXTENSION_ENVS_DIR",
+        "scheduler": "EXTENSION_ENVS_DIR"
+      },
+      "logical_group": "control_plane_extension_envs"
+    },
+    "extension_wheelhouse_dir": {
+      "kind": "runtime_dir",
+      "category": "runtime",
+      "owner": [
+        "host",
+        "scheduler"
+      ],
+      "create_on_bootstrap": true,
+      "paths": {
+        "host": "{host_control_plane_root}/wheelhouse/extensions",
+        "scheduler": "{scheduler_control_plane_root}/wheelhouse/extensions",
+        "gateway": null
+      },
+      "env_names": {
+        "host": "HOST_EXTENSION_WHEELHOUSE_DIR",
+        "scheduler": "EXTENSION_WHEELHOUSE_DIR"
+      },
+      "logical_group": "control_plane_extension_envs"
+    },
+    "runtime_host_env": {
+      "kind": "runtime_file",
+      "category": "config",
+      "owner": "host",
+      "create_parent_on_bootstrap": true,
+      "paths": {
+        "host": "{host_control_plane_root}/runtime.host.env",
+        "scheduler": null,
+        "gateway": null
+      },
+      "env_names": {
+        "host": "HOST_RUNTIME_HOST_ENV"
+      },
+      "logical_group": "control_plane_runtime_env"
+    },
+    "runtime_gateway_env": {
+      "kind": "runtime_file",
+      "category": "config",
+      "owner": [
+        "host",
+        "gateway"
+      ],
+      "create_parent_on_bootstrap": true,
+      "paths": {
+        "host": "{host_gateway_root}/runtime.gateway.env",
+        "scheduler": null,
+        "gateway": null
+      },
+      "env_names": {
+        "host": "HOST_RUNTIME_GATEWAY_ENV"
+      },
+      "logical_group": "control_plane_runtime_env"
+    },
+    "runtime_scheduler_env": {
+      "kind": "runtime_file",
+      "category": "config",
+      "owner": [
+        "host",
+        "scheduler"
+      ],
+      "create_parent_on_bootstrap": true,
+      "paths": {
+        "host": "{host_control_plane_root}/runtime.scheduler.env",
+        "scheduler": null,
+        "gateway": null
+      },
+      "env_names": {
+        "host": "HOST_RUNTIME_SCHEDULER_ENV"
+      },
+      "logical_group": "control_plane_runtime_env"
+    },
+    "runtime_scheduler_app_env": {
+      "kind": "runtime_file",
+      "category": "config",
+      "owner": [
+        "host",
+        "scheduler"
+      ],
+      "create_parent_on_bootstrap": true,
+      "paths": {
+        "host": "{host_control_plane_root}/runtime.scheduler.app.env",
+        "scheduler": null,
+        "gateway": null
+      },
+      "env_names": {
+        "host": "HOST_RUNTIME_SCHEDULER_APP_ENV"
+      },
+      "logical_group": "control_plane_runtime_env"
+    },
+    "runtime_internal_api_env": {
+      "kind": "runtime_file",
+      "category": "config",
+      "owner": [
+        "host",
+        "scheduler"
+      ],
+      "create_parent_on_bootstrap": true,
+      "paths": {
+        "host": "{host_control_plane_root}/runtime.internal-api.env",
+        "scheduler": null,
+        "gateway": null
+      },
+      "env_names": {
+        "host": "HOST_RUNTIME_INTERNAL_API_ENV"
+      },
+      "logical_group": "control_plane_runtime_env"
+    },
+    "runtime_internal_api_app_env": {
+      "kind": "runtime_file",
+      "category": "config",
+      "owner": [
+        "host",
+        "scheduler"
+      ],
+      "create_parent_on_bootstrap": true,
+      "paths": {
+        "host": "{host_control_plane_root}/runtime.internal-api.app.env",
+        "scheduler": null,
+        "gateway": null
+      },
+      "env_names": {
+        "host": "HOST_RUNTIME_INTERNAL_API_APP_ENV"
+      },
+      "logical_group": "control_plane_runtime_env"
+    },
+    "nginx_gateway_conf": {
+      "kind": "runtime_file",
+      "category": "config",
+      "owner": "host",
+      "create_parent_on_bootstrap": true,
+      "paths": {
+        "host": "{host_gateway_root}/nginx.gateway.conf",
+        "scheduler": null,
+        "gateway": null
+      },
+      "env_names": {
+        "host": "HOST_NGINX_GATEWAY_CONF"
+      },
+      "logical_group": "gateway_runtime"
+    },
+    "path_index_json": {
+      "kind": "runtime_file",
+      "category": "config",
+      "owner": "host",
+      "create_parent_on_bootstrap": true,
+      "paths": {
+        "host": "{host_control_plane_root}/path-index.json",
+        "scheduler": null,
+        "gateway": null
+      },
+      "env_names": {
+        "host": "HOST_PATH_INDEX_JSON"
+      },
+      "logical_group": "control_plane_setup"
+    },
+    "path_index_markdown": {
+      "kind": "runtime_file",
+      "category": "config",
+      "owner": "host",
+      "create_parent_on_bootstrap": true,
+      "paths": {
+        "host": "{host_control_plane_root}/path-index.md",
+        "scheduler": null,
+        "gateway": null
+      },
+      "env_names": {
+        "host": "HOST_PATH_INDEX_MARKDOWN"
+      },
+      "logical_group": "control_plane_setup"
+    },
+    "config_summary_json": {
+      "kind": "runtime_file",
+      "category": "config",
+      "owner": "host",
+      "create_parent_on_bootstrap": true,
+      "paths": {
+        "host": "{host_control_plane_setup_root}/config_summary.json",
+        "scheduler": null,
+        "gateway": null
+      },
+      "env_names": {
+        "host": "HOST_CONFIG_SUMMARY_JSON"
+      },
+      "logical_group": "control_plane_setup"
+    },
+    "deployment_acceptance_setup_json": {
+      "kind": "runtime_file",
+      "category": "config",
+      "owner": "host",
+      "create_parent_on_bootstrap": true,
+      "paths": {
+        "host": "{host_control_plane_setup_root}/deployment_acceptance.json",
+        "scheduler": null,
+        "gateway": null
+      },
+      "env_names": {
+        "host": "HOST_DEPLOYMENT_ACCEPTANCE_JSON"
+      },
+      "logical_group": "control_plane_setup"
+    },
+    "one_click_test_full_latest_summary_json": {
+      "kind": "runtime_file",
+      "category": "config",
+      "owner": "host",
+      "create_parent_on_bootstrap": true,
+      "paths": {
+        "host": "{host_control_plane_setup_root}/one_click_test_full.latest.summary.json",
+        "scheduler": null,
+        "gateway": null
+      },
+      "env_names": {
+        "host": "HOST_ONE_CLICK_TEST_FULL_LATEST_SUMMARY_JSON"
+      },
+      "logical_group": "control_plane_setup"
+    },
+    "one_click_test_full_latest_summary_markdown": {
+      "kind": "runtime_file",
+      "category": "config",
+      "owner": "host",
+      "create_parent_on_bootstrap": true,
+      "paths": {
+        "host": "{host_control_plane_setup_root}/one_click_test_full.latest.summary.md",
+        "scheduler": null,
+        "gateway": null
+      },
+      "env_names": {
+        "host": "HOST_ONE_CLICK_TEST_FULL_LATEST_SUMMARY_MARKDOWN"
+      },
+      "logical_group": "control_plane_setup"
+    },
+    "one_click_deploy_latest_summary_json": {
+      "kind": "runtime_file",
+      "category": "config",
+      "owner": "host",
+      "create_parent_on_bootstrap": true,
+      "paths": {
+        "host": "{host_control_plane_setup_root}/one_click_deploy.latest.summary.json",
+        "scheduler": null,
+        "gateway": null
+      },
+      "env_names": {
+        "host": "HOST_ONE_CLICK_DEPLOY_LATEST_SUMMARY_JSON"
+      },
+      "logical_group": "control_plane_setup"
+    },
+    "one_click_deploy_latest_summary_markdown": {
+      "kind": "runtime_file",
+      "category": "config",
+      "owner": "host",
+      "create_parent_on_bootstrap": true,
+      "paths": {
+        "host": "{host_control_plane_setup_root}/one_click_deploy.latest.summary.md",
+        "scheduler": null,
+        "gateway": null
+      },
+      "env_names": {
+        "host": "HOST_ONE_CLICK_DEPLOY_LATEST_SUMMARY_MARKDOWN"
+      },
+      "logical_group": "control_plane_setup"
+    },
+    "gateway_local_ro_dir": {
+      "kind": "runtime_dir",
+      "category": "runtime",
+      "owner": "host",
+      "create_on_bootstrap": true,
+      "paths": {
+        "host": "{host_gateway_root}/local_ro_gateway",
+        "scheduler": null,
+        "gateway": null
+      },
+      "env_names": {
+        "host": "HOST_GATEWAY_LOCAL_RO_DIR"
+      },
+      "logical_group": "gateway_runtime"
+    },
+    "gateway_nginx_logs_dir": {
+      "kind": "runtime_dir",
+      "category": "log",
+      "owner": "host",
+      "create_on_bootstrap": true,
+      "paths": {
+        "host": "{host_gateway_logs_root}/nginx-gateway",
+        "scheduler": null,
+        "gateway": null
+      },
+      "env_names": {
+        "host": "HOST_GATEWAY_NGINX_LOG_DIR"
+      },
+      "logical_group": "gateway_logs"
+    }
+  },
+  "view_contract": {
+    "internal_view_keys": [
+      "host",
+      "gateway",
+      "scheduler"
+    ],
+    "public_view_names": {
+      "host": "host",
+      "gateway": "gateway",
+      "scheduler": "scheduler"
+    },
+    "reserved_internal_keys": {
+      "gateway": {
+        "status": "canonical",
+        "public_name": "gateway",
+        "runtime_env_file": "<current-host-state-root>/runtime.gateway.env",
+        "rationale": "`gateway` 是 official Gateway 的唯一运行视角。",
+        "future_rule": "文档、脚本、检查统一使用 `gateway`；Gateway 视角不得写成 control-plane。"
+      },
+      "scheduler": {
+        "status": "canonical",
+        "public_name": "scheduler",
+        "runtime_env_file": "<current-host-state-root>/runtime.scheduler.env",
+        "rationale": "`scheduler` 是业务作业与 delivery_adapter 调用的唯一运行视角。",
+        "future_rule": "文档、脚本、检查统一使用 `scheduler`；不得引入共享控制面视角或第二个 dispatch 运行服务。"
+      }
+    }
+  },
+  "gateway_exec_approvals": {
+    "description": "official Gateway exec-approvals 路径规格；base 真源位于 config/gateway/exec-approvals.gateway.json，并可按 active extension 叠加额外 agent 审批片段；运行态副本固定写入 <current-host-state-root>/gateway/exec-approvals.json。",
+    "repo_output": "config/gateway/exec-approvals.gateway.json",
+    "host_output": "{host_state_root}/gateway/exec-approvals.json"
+  },
+  "logical_groups": {
+    "shared_runtime": {
+      "label": "共享运行根",
+      "description": "跨 host / gateway / scheduler 视角都需要解析的基础根与通用日志对象。"
+    },
+    "gateway_runtime": {
+      "label": "Gateway 运行态",
+      "description": "official Gateway 自身运行目录、配置与设备对象。"
+    },
+    "gateway_logs": {
+      "label": "Gateway 日志",
+      "description": "Gateway 与 private ingress 侧的日志对象。"
+    },
+    "gateway_workspace": {
+      "label": "Gateway Workspace",
+      "description": "official Gateway 读取的 workspace 挂载对象。"
+    },
+    "host_state_views": {
+      "label": "宿主机状态视图",
+      "description": "宿主机下 gateway / control_plane 的分层根目录对象。"
+    },
+    "control_plane_extension_envs": {
+      "label": "扩展运行环境",
+      "description": "managed extension 独立 venv 与离线 wheelhouse 的运行态派生产物。"
+    },
+    "control_plane_runtime_env": {
+      "label": "运行态 env",
+      "description": "render_paths 生成的 host/gateway/scheduler/internal-api 运行态 env 文件。"
+    },
+    "control_plane_setup": {
+      "label": "部署与验收摘要",
+      "description": "setup/config/full-test/acceptance 生成的摘要、索引与配置文件。"
+    }
+  },
+  "generated_artifacts": {
+    "path_group_reference_doc": "docs/architecture/path-governance.md"
+  }
+}

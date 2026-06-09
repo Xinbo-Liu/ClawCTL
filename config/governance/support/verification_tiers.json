@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "kind": "openclaw_verification_tiers",
+  "tiers": [
+    {
+      "id": "official_release",
+      "title": "正式 Docker / 控制面容器门禁",
+      "status": "release_required",
+      "releaseRequired": true,
+      "diagnosticOnly": false,
+      "description": "用于提交前、发版前和目标机交付前的正式 release pass；固定要求 Docker daemon 与控制面容器执行介质。",
+      "commands": [
+        "bash ./scripts/testing/check_repo_test_readiness.sh",
+        "bash ./scripts/setup/prepare_control_plane_medium.sh",
+        "bash ./scripts/testing/run_repo_unittest.sh",
+        "bash ./scripts/doctor/run_repo_release_gate.sh",
+        "bash ./scripts/runtime/run_openclaw_python_tool.sh control-plane facts overview --all-profiles --format json --no-local-probe"
+      ]
+    },
+    {
+      "id": "host_diagnostic",
+      "title": "Windows 宿主机诊断回归",
+      "status": "diagnostic_only",
+      "releaseRequired": false,
+      "diagnosticOnly": true,
+      "description": "仅用于无 Docker 或本地快速定位时的宿主机诊断补充；不得替代正式 Docker / 控制面容器门禁。",
+      "commands": [
+        "python -B -m openclaw.testing.repo_host suite repo-check -q",
+        "python -B -m openclaw.doctor.platform.docstring_governance --mode report",
+        "bash ./scripts/runtime/run_openclaw_python_tool.sh control-plane facts overview --format json --no-local-probe"
+      ]
+    }
+  ]
+}

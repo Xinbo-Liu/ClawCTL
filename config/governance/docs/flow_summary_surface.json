@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "generated_artifacts": {
+    "flow_summary_doc": "docs/operations/troubleshooting.md"
+  },
+  "intro": [
+    "本页只负责统一说明 deploy success / deploy failure / acceptance summary 相关控制面的默认入口，以及 one_click_deploy / one_click_test_full 最近一次 latest 摘要固定路径。",
+    "动态 run-specific 摘要写入各自日志目录；该说明面只覆盖 fixed latest mirror 与统一摘要入口，供排障页与 setup 入口引用固定的最近一次摘要位置。",
+    "固定 latest 摘要路径统一来自 `config/governance/release/summary_manifest.json`；deploy success / run failure / full test 的固定摘要标题与下一步分节统一来自 `config/governance/docs/summary_output_surface.json`。",
+    "deploy success 文本必须明确区分“部署镜像合同”与“compose 运行镜像集合”；镜像角色、统一状态命令与离线归档规则统一查看 `docs/getting-started/image-preparation.md`。",
+    "对象固定路径统一来自 `config/control_plane/object_families.json`；本页不复制 deployment acceptance / runtime evidence / control-plane object family 的完整对象表。"
+  ],
+  "usage_commands": [
+    "bash ./scripts/runtime/run_openclaw_python_tool.sh setup flow deploy-success success-summary [--format text|json] [--env-file <path>] [--log-path <path>] [--summary-json-path <path>] [--summary-md-path <path>] [--status success|prepared]",
+    "bash ./scripts/runtime/run_openclaw_python_tool.sh setup flow deploy-failure failure-summary --flow deploy --stage <stage> --timestamp <iso> --log-path <path> [--summary-json-path <path>] [--summary-md-path <path>] [--exit-code <n>] [--mode online|offline] [--resume-from <stage>] [--image-archive-path <path>] [--format text|json]",
+    "bash ./scripts/runtime/run_openclaw_python_tool.sh runtime acceptance acceptance-summary [--format json] [--root <repo-root>]"
+  ],
+  "boundary": [
+    "deployment acceptance required checks、runtime acceptance pass criteria、job artifact policy、dispatch runtime 对象表与部署镜像合同说明以各自真源和运行参考文档为准。",
+    "one_click_deploy / one_click_test_full 的 run-specific summary 以 logs/ 下按时间戳落盘的原始摘要为准；该说明面只覆盖 fixed latest mirror。",
+    "run_failure 的 next_steps 由 deploy_flow_control_plane.render_next_commands() 动态生成；本页只负责固定摘要入口与引用边界。"
+  ]
+}

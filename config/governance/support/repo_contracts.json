@@ -1,0 +1,255 @@
+{
+  "schema_version": 1,
+  "contracts": [
+    {
+      "id": "runtime.paths",
+      "relative_path": "config/runtime/paths.json",
+      "format": "json"
+    },
+    {
+      "id": "runtime.service_registry",
+      "relative_path": "config/runtime/service_registry.json",
+      "format": "json"
+    },
+    {
+      "id": "runtime.testing_manifest",
+      "relative_path": "config/runtime/testing_manifest.json",
+      "format": "json"
+    },
+    {
+      "id": "runtime.runtime_contract",
+      "relative_path": "config/runtime/openclaw.runtime_contract.json",
+      "format": "json"
+    },
+    {
+      "id": "runtime.source_strategy",
+      "relative_path": "config/runtime/source_strategy.json",
+      "format": "json"
+    },
+    {
+      "id": "image_pins.openclaw",
+      "relative_path": "config/image_pins/openclaw.env",
+      "format": "env"
+    },
+    {
+      "id": "image_pins.runtime",
+      "relative_path": "config/image_pins/runtime.env",
+      "format": "env"
+    },
+    {
+      "id": "deploy_env.schema",
+      "relative_path": "config/deploy_env/schema.json",
+      "format": "json"
+    },
+    {
+      "id": "gateway.readonly_manifest",
+      "relative_path": "config/gateway_readonly_manifest.json",
+      "format": "json"
+    },
+    {
+      "id": "gateway.ui_skill_governance",
+      "relative_path": "config/gateway/openclaw-ui.skills.json",
+      "format": "json"
+    },
+    {
+      "id": "gateway.exec_approvals",
+      "relative_path": "config/gateway/exec-approvals.gateway.json",
+      "format": "json"
+    },
+    {
+      "id": "control_plane.agent_cli_surface",
+      "relative_path": "config/control_plane/agent_cli_surface.json",
+      "format": "json"
+    },
+    {
+      "id": "control_plane.object_families",
+      "relative_path": "config/control_plane/object_families.json",
+      "format": "json"
+    },
+    {
+      "id": "workspace_templates.manifest",
+      "relative_path": "config/workspace_templates/manifest.json",
+      "format": "json"
+    },
+    {
+      "id": "governance.repo_python_bootstrap",
+      "relative_path": "config/governance/support/repo_python_bootstrap.env",
+      "format": "env"
+    },
+    {
+      "id": "governance.docs_registry",
+      "relative_path": "config/governance/docs/docs_registry.json",
+      "format": "json"
+    },
+    {
+      "id": "governance.script_catalog_surface",
+      "relative_path": "config/governance/docs/script_catalog_surface.json",
+      "format": "json"
+    },
+    {
+      "id": "governance.router_route_surface",
+      "relative_path": "config/governance/docs/router_route_surface.json",
+      "format": "json"
+    },
+    {
+      "id": "governance.runtime_entrypoints",
+      "relative_path": "config/governance/entrypoints/runtime_entrypoints.json",
+      "format": "json"
+    },
+    {
+      "id": "governance.setup_entrypoints",
+      "relative_path": "config/governance/entrypoints/setup_entrypoints.json",
+      "format": "json"
+    },
+    {
+      "id": "governance.default_deployment_flow",
+      "relative_path": "config/governance/flows/default_deployment_flow.json",
+      "format": "json"
+    },
+    {
+      "id": "governance.deploy_stage_flow",
+      "relative_path": "config/governance/flows/deploy_stage_flow.json",
+      "format": "json"
+    },
+    {
+      "id": "governance.full_test_group_registry",
+      "relative_path": "config/governance/flows/full_test_group_registry.json",
+      "format": "json"
+    },
+    {
+      "id": "governance.bundle_manifest",
+      "relative_path": "config/governance/release/bundle_manifest.json",
+      "format": "json"
+    },
+    {
+      "id": "governance.summary_manifest",
+      "relative_path": "config/governance/release/summary_manifest.json",
+      "format": "json"
+    },
+    {
+      "id": "governance.full_test_surface",
+      "relative_path": "config/governance/docs/full_test_surface.json",
+      "format": "json"
+    },
+    {
+      "id": "governance.summary_output_surface",
+      "relative_path": "config/governance/docs/summary_output_surface.json",
+      "format": "json"
+    },
+    {
+      "id": "governance.run_failure_surface",
+      "relative_path": "config/governance/docs/run_failure_surface.json",
+      "format": "json"
+    },
+    {
+      "id": "governance.acceptance_surface",
+      "relative_path": "config/governance/docs/acceptance_surface.json",
+      "format": "json"
+    },
+    {
+      "id": "governance.setup_failures",
+      "relative_path": "config/governance/docs/setup_failures.json",
+      "format": "json"
+    },
+    {
+      "id": "governance.setup_followups",
+      "relative_path": "config/governance/docs/setup_followups.json",
+      "format": "json"
+    },
+    {
+      "id": "governance.setup_handoff",
+      "relative_path": "config/governance/docs/setup_handoff.json",
+      "format": "json"
+    },
+    {
+      "id": "governance.dispatch_operations_surface",
+      "relative_path": "config/governance/docs/dispatch_operations_surface.json",
+      "format": "json"
+    },
+    {
+      "id": "governance.dispatch_observability_surface",
+      "relative_path": "config/governance/docs/dispatch_observability_surface.json",
+      "format": "json"
+    },
+    {
+      "id": "governance.diagnostic_surface",
+      "relative_path": "config/governance/docs/diagnostic_surface.json",
+      "format": "json"
+    },
+    {
+      "id": "governance.path_entrypoints",
+      "relative_path": "config/governance/docs/path_entrypoints.json",
+      "format": "json"
+    },
+    {
+      "id": "governance.recovery_operations_surface",
+      "relative_path": "config/governance/docs/recovery_operations_surface.json",
+      "format": "json"
+    },
+    {
+      "id": "governance.documentation_closure_rules",
+      "relative_path": "config/governance/validation/closure_rules.json",
+      "format": "json"
+    },
+    {
+      "id": "governance.absent_surfaces",
+      "relative_path": "config/governance/validation/absent_surfaces.json",
+      "format": "json"
+    },
+    {
+      "id": "governance.keyword_gate_inventory",
+      "relative_path": "config/governance/validation/keyword_gate_inventory.json",
+      "format": "json"
+    },
+    {
+      "id": "governance.centos7_host_shell_guard",
+      "relative_path": "config/governance/validation/centos7_host_shell_guard.json",
+      "format": "json"
+    },
+    {
+      "id": "governance.docker_host_support",
+      "relative_path": "config/governance/support/docker_host.json",
+      "format": "json"
+    },
+    {
+      "id": "governance.host_python_governance",
+      "relative_path": "config/governance/support/host_python_governance.json",
+      "format": "json"
+    },
+    {
+      "id": "governance.ingress_boundary_evidence",
+      "relative_path": "config/governance/support/ingress_boundary_evidence.json",
+      "format": "json"
+    },
+    {
+      "id": "governance.install_defaults",
+      "relative_path": "config/governance/support/install_defaults.json",
+      "format": "json"
+    },
+    {
+      "id": "governance.local_workspace_policy",
+      "relative_path": "config/governance/support/local_workspace_policy.json",
+      "format": "json"
+    },
+    {
+      "id": "governance.verification_tiers",
+      "relative_path": "config/governance/support/verification_tiers.json",
+      "format": "json"
+    },
+    {
+      "id": "governance.getting_started_surface",
+      "relative_path": "config/governance/docs/getting_started_surface.json",
+      "format": "json"
+    },
+    {
+      "id": "governance.getting_started_sections",
+      "relative_path": "config/governance/docs/getting_started_sections.json",
+      "format": "json"
+    },
+    {
+      "id": "setup.control_plane_medium",
+      "relative_path": "config/setup_flow/control_plane_medium.json",
+      "format": "json"
+    }
+  ]
+}

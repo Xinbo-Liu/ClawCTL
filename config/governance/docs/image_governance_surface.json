@@ -1,0 +1,112 @@
+{
+  "schema_version": 1,
+  "generated_artifacts": {
+    "image_governance_doc": "docs/getting-started/image-preparation.md"
+  },
+  "contract": {
+    "title": "部署镜像治理面",
+    "purpose": "统一定义部署镜像合同角色、在线/离线准备链路、状态查看命令与 pin 更新后的默认顺序；镜像相关脚本、部署阶段摘要与参考文档统一从此派生。",
+    "image_role_source": {
+      "deployment_contract": "config/runtime/source_strategy.json 中 deployment_contract.enabled=true 的镜像角色",
+      "compose_runtime": "config/runtime/source_strategy.json 中 compose_runtime.enabled=true 的镜像角色",
+      "control_plane_medium": "host 控制面执行介质由 source_strategy 中对应部署合同角色声明，准备入口为 prepare_control_plane_medium.sh"
+    },
+    "status_commands": [
+      "bash ./scripts/images/show_deployment_image_status.sh",
+      "bash ./scripts/images/check_deployment_image_contract.sh --env-file deploy/.env --compose-file state/openclaw/control_plane/setup/docker-compose.effective.yml --require-local",
+      "bash ./scripts/doctor/check_deployment_image_readiness.sh"
+    ],
+    "online_prepare_commands": [
+      "bash ./scripts/images/pull_images.sh",
+      "bash ./scripts/setup/prepare_control_plane_medium.sh",
+      "bash ./scripts/runtime/run_openclaw_python_tool.sh runtime mounts sync-compose --env-file deploy/.env --output state/openclaw/control_plane/setup/docker-compose.effective.yml",
+      "bash ./scripts/images/show_deployment_image_status.sh",
+      "bash ./scripts/images/check_deployment_image_contract.sh --env-file deploy/.env --compose-file state/openclaw/control_plane/setup/docker-compose.effective.yml --require-local",
+      "bash ./scripts/images/verify_gateway_browser.sh"
+    ],
+    "offline_prepare_commands": [
+      "bash ./scripts/images/export_deployment_images.sh",
+      "bash ./scripts/images/load_deployment_images.sh <local-path>",
+      "bash ./scripts/setup/prepare_control_plane_medium.sh --offline --image-archive <local-path>",
+      "bash ./scripts/images/show_deployment_image_status.sh",
+      "bash ./scripts/images/check_deployment_image_contract.sh --env-file deploy/.env --compose-file state/openclaw/control_plane/setup/docker-compose.effective.yml --require-local",
+      "bash ./scripts/images/verify_gateway_browser.sh"
+    ],
+    "notes": [
+      "compose 运行面只允许 source_strategy 声明为 compose_runtime 的镜像；控制面执行介质单独由 OPENCLAW_CONTROL_PLANE_IMAGE 治理。",
+      "deployment_images_*.tar 是 OpenClaw deployment image bundle，必须覆盖 source_strategy 声明的部署镜像合同角色，并包含 deployment-images.contract.json、Docker save tar 与 sha256 清单。",
+      "show_deployment_image_status.sh 负责统一输出角色表、pin ref、source tag、managed role tag、本地可用性与 verified local refs 的 image id 证明状态；check_deployment_image_contract.sh 负责统一校验模板变量集合、最终 effective compose image refs 与部署镜像合同闭合，并确认 compose 未引用 source_strategy 之外的镜像。",
+      "中国国内网络首轮部署先执行 `sudo bash ./scripts/setup/prepare_docker_host.sh --all --network-profile cn`，确保 CentOS 7 vault repo、Docker Yum repo 与 daemon registry-mirrors 同步进入国内网络 profile。",
+      "Gateway official GHCR 只作为 canonical / 默认 pin 真源；pull_images.sh 默认使用 PULL_GATEWAY_CANDIDATE_MODE=auto-switch，在 CN profile 下发现等值 candidate 时只改写当前 deploy/.env，并写出 state/image_pull/gateway_source_selection.json；canonical pin 不改写。若 envRewritten=true，one_click_deploy.sh 会重新加载镜像 env、重渲染 effective compose 并刷新 proof；手工分步执行时也必须在 pull_images 后重渲染 effective compose。",
+      "pull_policy: never 或离线 compose up 前使用 `check_deployment_image_contract.sh --compose-file <effective-compose> --require-local`，确保每个最终 compose image ref 都能被本地 Docker inspect 命中，并具有声明 digest 或 verified local refs 中的合同 image id 证明。",
+      "离线 bundle 导入后会写出 pin、managed role tag 与 image id；compose 运行态只使用合同声明且 image id 仍匹配的 managed role tag 作为 verified local runtime ref，pin ref 仍作为供应链合同。",
+      "update_openclaw_pin.sh / update_runtime_pin.sh 执行后的验证命令统一查看本页。"
+    ]
+  },
+  "surfaces": {
+    "openclaw_pin_candidate": {
+      "id": "openclaw_pin_candidate",
+      "title": "OpenClaw 官方 Gateway candidate 验证顺序",
+      "purpose": "统一定义 `update_openclaw_pin.sh --mode candidate` 的默认验证顺序。",
+      "trigger": "执行 `bash ./scripts/images/update_openclaw_pin.sh --ref <image:tag@sha256:...> --mode candidate`，或执行 `bash ./scripts/images/update_openclaw_pin.sh --candidate-repo <repo> --mode candidate`。",
+      "entry_command": "bash ./scripts/runtime/run_openclaw_python_tool.sh images governance-surface next-steps --surface openclaw_pin_candidate",
+      "next_steps": [
+        "bash ./scripts/images/check_openclaw_digest.sh",
+        "bash ./scripts/images/pull_images.sh",
+        "bash ./scripts/images/show_deployment_image_status.sh",
+        "bash ./scripts/images/check_deployment_image_contract.sh --env-file deploy/.env --compose-file state/openclaw/control_plane/setup/docker-compose.effective.yml --require-local",
+        "bash ./scripts/images/verify_gateway_browser.sh",
+        "bash ./scripts/setup/one_click_deploy.sh --resume-from pull_images",
+        "bash ./scripts/setup/one_click_test_full.sh"
+      ],
+      "notes": [
+        "`one_click_deploy.sh --resume-from pull_images` 从 pull_images 阶段继续执行部署链。",
+        "需要独立核对 digest / overlay 合同时，先执行本页的状态命令，再继续部署。"
+      ]
+    },
+    "openclaw_pin_promote": {
+      "id": "openclaw_pin_promote",
+      "title": "OpenClaw 官方 Gateway promote 验证顺序",
+      "purpose": "定义 `update_openclaw_pin.sh --mode promote` 的默认验证顺序。",
+      "trigger": "执行 `bash ./scripts/images/update_openclaw_pin.sh --ref <image:tag@sha256:...> --mode promote`。",
+      "entry_command": "bash ./scripts/runtime/run_openclaw_python_tool.sh images governance-surface next-steps --surface openclaw_pin_promote",
+      "next_steps": [
+        "bash ./scripts/images/check_openclaw_digest.sh",
+        "bash ./scripts/setup/one_click_config.sh",
+        "bash ./scripts/setup/one_click_test_basic.sh"
+      ],
+      "notes": [
+        "promote 更新仓库默认 pin；`--write-local-env` 会同步更新当前运行态 `deploy/.env`。"
+      ]
+    },
+    "runtime_pin_candidate": {
+      "id": "runtime_pin_candidate",
+      "title": "Python / Nginx candidate 验证顺序",
+      "purpose": "统一定义 `update_runtime_pin.sh --mode candidate` 的默认验证顺序。",
+      "trigger": "执行 `bash ./scripts/images/update_runtime_pin.sh --mode candidate ...`。",
+      "entry_command": "bash ./scripts/runtime/run_openclaw_python_tool.sh images governance-surface next-steps --surface runtime_pin_candidate",
+      "next_steps": [
+        "bash ./scripts/images/show_deployment_image_status.sh",
+        "bash ./scripts/images/check_deployment_image_contract.sh --env-file deploy/.env --compose-file state/openclaw/control_plane/setup/docker-compose.effective.yml --require-local",
+        "bash ./scripts/setup/one_click_deploy.sh --resume-from pull_images"
+      ],
+      "notes": [
+        "runtime candidate 使用部署镜像合同检查核对 compose、归档与控制面边界。"
+      ]
+    },
+    "runtime_pin_promote": {
+      "id": "runtime_pin_promote",
+      "title": "Python / Nginx promote 验证顺序",
+      "purpose": "定义 `update_runtime_pin.sh --mode promote` 的默认验证顺序。",
+      "trigger": "执行 `bash ./scripts/images/update_runtime_pin.sh --mode promote ...`。",
+      "entry_command": "bash ./scripts/runtime/run_openclaw_python_tool.sh images governance-surface next-steps --surface runtime_pin_promote",
+      "next_steps": [
+        "bash ./scripts/setup/one_click_config.sh",
+        "bash ./scripts/setup/one_click_test_basic.sh"
+      ],
+      "notes": [
+        "promote 更新默认 pin；验证顺序包含 `one_click_config.sh` 与 basic gate。"
+      ]
+    }
+  }
+}

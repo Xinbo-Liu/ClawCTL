@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "suites": {
+    "repo-check": {
+      "description": "Windows 无容器主机上的仓库级 Python 回归集；覆盖导包、目标单测与静态门禁相关纯 Python 回归。",
+      "selectors": [
+        "python/openclaw/tests/governance/test_bootstrap.py",
+        "python/openclaw/tests/governance/test_host_python_doc_guard.py",
+        "python/openclaw/tests/testing/test_repo_host.py",
+        "python/openclaw/tests/testing/test_cli_surface_smoke.py",
+        "python/openclaw/tests/testing/test_repo_bootstrap_contracts.py",
+        "python/openclaw/tests/testing/test_repo_unittest.py",
+        "python/openclaw/tests/doctor/test_release_gate.py"
+      ]
+    },
+    "repo-shell-check": {
+      "description": "需要 bash 的仓库级 shell/readiness 集成回归。",
+      "selectors": [
+        "python/openclaw/tests/testing/test_repo_test_readiness.py",
+        "python/openclaw/tests/testing/test_repo_python_env.py"
+      ]
+    }
+  }
+}

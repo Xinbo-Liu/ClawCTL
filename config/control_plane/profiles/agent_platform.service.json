@@ -1,0 +1,11 @@
+{
+  "extends": "@repo/config/control_plane/service.json",
+  "extensions": {
+    "manifestsDirs": [
+      "@repo/config/control_plane/extensions.d"
+    ],
+    "enabledExtensionIds": [
+      "agent_platform"
+    ]
+  }
+}

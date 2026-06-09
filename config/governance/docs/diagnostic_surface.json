@@ -1,0 +1,22 @@
+{
+  "generated_artifacts": {},
+  "actions": {
+    "heading": "",
+    "description": "",
+    "actions": []
+  },
+  "diagnostics": {
+    "heading": "",
+    "description": "",
+    "blockingGroups": [],
+    "sourceDiagnosisGroups": []
+  },
+  "reasons": {
+    "heading": "",
+    "description": "",
+    "routeHintReasons": [],
+    "manualVerifyTaskReasons": [],
+    "manualVerifyResultReasons": [],
+    "manualVerifyBlockingReasons": []
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "title": "setup 阶段统一 handoff",
+  "phase_message_template": "{phaseLabel}{statusLabel}；后续动作请回到统一部署基线，不在当前脚本中硬编码下一步命令。",
+  "references": [
+    {
+      "label": "统一部署基线与执行位置",
+      "path": "docs/getting-started/quickstart.md"
+    },
+    {
+      "label": "one_click 入口职责边界",
+      "path": "docs/getting-started/quickstart.md"
+    },
+    {
+      "label": "setup 成功后的默认衔接动作",
+      "path": "docs/getting-started/quickstart.md"
+    },
+    {
+      "label": "进入 one_click_config.sh 或任意 host 控制面命令前，请先查看",
+      "path": "docs/getting-started/environment-setup.md"
+    }
+  ]
+}

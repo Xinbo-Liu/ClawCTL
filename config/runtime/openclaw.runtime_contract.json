@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "title": "openclaw runtime contract",
+  "purpose": "统一维护 OpenClaw 上游 release 发现源、Gateway 仓库真源、默认 pin promote 仓库与候选镜像源；Gateway release/digest/readiness/文档中的仓库事实统一由本文件提供，当前默认运行 pin 只允许以 config/image_pins/openclaw.env 为真源。",
+  "upstream_release": {
+    "release_discovery": {
+      "github_latest_release_api": "https://api.github.com/repos/openclaw/openclaw/releases/latest",
+      "github_release_url_template": "https://github.com/openclaw/openclaw/releases/tag/v{tag}",
+      "package_url": "https://github.com/openclaw/openclaw/pkgs/container/openclaw"
+    },
+    "image_repositories": {
+      "official_release_image_repo": "ghcr.io/openclaw/openclaw",
+      "default_official_gateway_image_repo": "ghcr.io/openclaw/openclaw",
+      "allowed_candidate_image_repos": [
+        "ghcr.io/openclaw/openclaw",
+        "ghcr.nju.edu.cn/openclaw/openclaw"
+      ]
+    },
+    "governance_notes": [
+      "上游 release 发现源与默认 pin promote 目标统一固定为 official_release_image_repo（ghcr.io）；中国网络镜像站仅作为显式候选验证来源使用。",
+      "Gateway 仓库分层真源统一由本文件提供；check_openclaw_supply_chain.sh、check_openclaw_release.sh、check_openclaw_digest.sh、check_docker_host_readiness.sh 与运行态统一入口参考都以本文件的 Gateway repo 事实为准。",
+      "candidate 验证允许在 allowed_candidate_image_repos 内切换；提升默认 pin 时，以 selected runtime source 返回的实际 digest 为准。",
+      "当前运行版本真源固定为 config/image_pins/openclaw.env；runtime contract 只负责上游 release、候选仓库与模型目录合同。",
+      "Shell 侧合同读取固定通过 scripts/lib/openclaw_runtime_contract.sh + jq 解析 JSON。"
+    ]
+  },
+  "generated_artifacts": {
+    "runtime_contract_doc": "docs/operations/runtime-service-reference.md"
+  }
+}

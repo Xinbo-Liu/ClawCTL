@@ -1,0 +1,114 @@
+{
+  "title": "部署唯一顺序基线",
+  "generated_artifacts": {
+    "setup_entrypoint_doc": "docs/getting-started/quickstart.md",
+    "quickstart_docs": [
+      "docs/getting-started/quickstart.md",
+      "docs/getting-started/environment-setup.md"
+    ],
+    "deployment_doc": "docs/getting-started/quickstart.md"
+  },
+  "default_flow": {
+    "title": "默认 one_click 主链",
+    "steps": [
+      {
+        "entry_id": "one_click_config",
+        "command": "bash ./scripts/setup/one_click_config.sh",
+        "offline_command": "bash ./scripts/setup/one_click_config.sh",
+        "purpose": "根据 deploy/site.env、启用扩展内部 agent/extensions/<extension-id>/deploy/extension.env 与 deploy/targets.d/*.env 生成运行态 deploy/.env，预创建 config_summary 所需的最小 control_plane/setup 目录，并应用 owner-only 权限。"
+      },
+      {
+        "entry_id": "apply_ingress_boundary_rules",
+        "command": "sudo bash ./scripts/setup/apply_ingress_boundary_rules.sh --env-file deploy/.env",
+        "offline_command": "sudo bash ./scripts/setup/apply_ingress_boundary_rules.sh --env-file deploy/.env",
+        "purpose": "把 host_firewall 来源限制真源物化到宿主机 DOCKER-USER 规则；external_acl 模式只做前提校验并保留外部证据路径。"
+      },
+      {
+        "entry_id": "fix_permissions",
+        "command": "bash ./scripts/setup/fix_permissions.sh",
+        "offline_command": "bash ./scripts/setup/fix_permissions.sh",
+        "purpose": "在 basic gate 前修复 zip/scp/git archive 落地后的脚本执行位、运行态目录、ingress ACL 与 owner-only 边界；该步骤幂等，避免把可修复权限漂移留给只读门禁报错。"
+      },
+      {
+        "entry_id": "one_click_test_basic",
+        "command": "bash ./scripts/setup/one_click_test_basic.sh",
+        "offline_command": "bash ./scripts/setup/one_click_test_basic.sh --offline --image-archive <local-path>",
+        "purpose": "作为唯一前置门禁，检查 deploy env、已物化的 ingress 边界证据、Docker 宿主机 readiness、运行镜像就绪性、compose 合同与 runtime UID/GID 合同。"
+      },
+      {
+        "entry_id": "one_click_deploy",
+        "command": "bash ./scripts/setup/one_click_deploy.sh",
+        "offline_command": "bash ./scripts/setup/one_click_deploy.sh --offline --image-archive <local-path>",
+        "purpose": "执行正式部署主链；默认会校验或刷新 basic gate proof，启动 runtime 服务后按当前 profile/extension 的 required run ledger jobs 决定是否先受控执行 run_control_plane_run_all_once.sh，再自动执行部署后 full test 并导出 runtime acceptance evidence，同时把最近一次 one_click_deploy 摘要镜像到固定 latest 路径。阶段矩阵、--resume-from、--require-basic-gate-proof 与 --skip-acceptance 统一查看 docs/getting-started/quickstart.md。"
+      }
+    ],
+    "notes": [
+      "默认 one_click 主链固定为 one_click_config -> apply_ingress_boundary_rules -> fix_permissions -> one_click_test_basic -> one_click_deploy；one_click_deploy 默认按 required run ledger jobs 自动补齐 run-all-once、部署后 full test 与 runtime evidence 导出。",
+      "进入默认主链前，必须先完成宿主机前置链：prepare_docker_host -> check_docker_host_readiness -> prepare_control_plane_medium。",
+      "CentOS 7 存量老系统路径与其它受支持目标机共享同一条默认主链，不存在例外顺序；host_firewall 模式的 ingress 来源限制固定通过 apply_ingress_boundary_rules.sh 物化。",
+      "deployment acceptance 默认顺序、通过标准与证据产物统一查看 docs/operations/runtime-service-reference.md。",
+      "one_click_deploy 的分阶段顺序、--resume-from、固定 latest 摘要路径与恢复执行入口统一查看 docs/getting-started/quickstart.md。",
+      "one_click_test_full 用作服务已启动后的 deployment acceptance 与结构化输出入口；检查组顺序、固定摘要路径与 latest summary 统一查看 docs/operations/runtime-service-reference.md。"
+    ]
+  },
+  "entry_relations": {
+    "deploy_entry_id": "one_click_deploy",
+    "post_deploy_default_command": "bash ./scripts/setup/one_click_test_full.sh",
+    "deployment_stage_reference": "docs/getting-started/quickstart.md",
+    "deployment_acceptance_reference": "docs/operations/runtime-service-reference.md",
+    "full_test_reference": "docs/operations/runtime-service-reference.md"
+  },
+  "deploy_flow": {
+    "stage_order": {
+      "common": [
+        "fix_permissions",
+        "bootstrap",
+        "gen_cert",
+        "render_gateway_ingress_conf",
+        "check_ingress_boundary_evidence"
+      ],
+      "online": [
+        "check_openclaw_release",
+        "pull_images"
+      ],
+      "offline": [
+        "load_deployment_images"
+      ],
+      "browser_verify": "verify_gateway_browser",
+      "compose_config": "docker_compose_config",
+      "service": [
+        "docker_compose_up",
+        "docker_compose_ps"
+      ],
+      "image_contract": "check_deployment_image_contract",
+      "compose_contract": "check_runtime_compose_contract"
+    }
+  },
+  "prerequisites": {
+    "title": "宿主机前置链",
+    "steps": [
+      {
+        "entry_id": "prepare_docker_host",
+        "command": "sudo bash ./scripts/setup/prepare_docker_host.sh --all",
+        "offline_command": "sudo bash ./scripts/setup/prepare_docker_host.sh --configure-kernel --configure-daemon --open-firewall",
+        "purpose": "统一准备 CentOS 7 存量老系统路径宿主机前提；离线新机若尚未安装 Docker / Compose，需先挂载本地 RPM 或本地 YUM 源，再分步执行安装入口。"
+      },
+      {
+        "entry_id": "check_docker_host_readiness",
+        "command": "bash ./scripts/doctor/check_docker_host_readiness.sh",
+        "offline_command": "bash ./scripts/doctor/check_docker_host_readiness.sh --offline",
+        "purpose": "作为唯一宿主机准入入口，检查 Docker / Compose、运行来源连通性与 CentOS 7 宿主机支持策略。"
+      },
+      {
+        "entry_id": "prepare_control_plane_medium",
+        "command": "bash ./scripts/setup/prepare_control_plane_medium.sh",
+        "offline_command": "bash ./scripts/setup/prepare_control_plane_medium.sh --offline --image-archive <local-path>",
+        "purpose": "显式准备 host 控制面执行介质；这是进入 one_click_config.sh 与任意 run_openclaw_python_tool.sh 子命令前的统一前置步骤。"
+      }
+    ],
+    "notes": [
+      "宿主机前置链属于安全准入基线的一部分；任一步未完成时，不得继续进入 one_click 主链。",
+      "prepare_control_plane_medium 位于宿主机 readiness 之后、one_click_config 之前。"
+    ]
+  }
+}

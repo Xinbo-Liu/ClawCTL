@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "title": "ingress boundary evidence policy",
+  "generated_state_path": "host_control_plane:setup/ingress_boundary_evidence.json",
+  "bind_ip_env": "OPENCLAW_INGRESS_LISTEN_IP",
+  "ingress_service": "openclaw-private-ingress",
+  "required_host_ports": [
+    80,
+    443
+  ],
+  "allowed_published_services": [
+    "openclaw-private-ingress"
+  ],
+  "boundary_mode_key": "OPENCLAW_INGRESS_BOUNDARY_MODE",
+  "external_evidence_path_key": "OPENCLAW_INGRESS_BOUNDARY_EVIDENCE_PATH",
+  "modes": [
+    {
+      "id": "host_firewall",
+      "title": "宿主机防火墙证据",
+      "summary": "以宿主机 firewalld / nftables / iptables 规则作为来源限制真相面，并对允许来源段与默认拒绝语义进行核验。"
+    },
+    {
+      "id": "external_acl",
+      "title": "外部 ACL 证据文件",
+      "summary": "当来源限制由云安全组、上游负载均衡或 VPN ACL 承担时，要求提供结构化 JSON 证据文件，并校验其与当前部署输入一致。"
+    }
+  ],
+  "allowed_source_cidrs_key": "OPENCLAW_INGRESS_ALLOWED_SOURCE_CIDRS",
+  "allowed_source_cidrs_format": "comma_separated_private_cidrs",
+  "external_acl_contract": {
+    "format": "json",
+    "required_keys": [
+      "schema_version",
+      "generated_at",
+      "source_cidrs",
+      "allowed_ports",
+      "default_deny",
+      "ip_families",
+      "enforcement_plane"
+    ],
+    "target_keys_any_of": [
+      "target_bind_ip",
+      "target_hostnames"
+    ],
+    "source_match": "exact_set",
+    "ports_match": "exact_required_host_ports",
+    "default_deny_required": true,
+    "ip_families_match": "exact_expected_families"
+  },
+  "host_firewall_contract": {
+    "require_default_deny": true,
+    "require_per_source_port_allow_rules": true,
+    "require_docker_user_for_iptables": true,
+    "require_ip_family_coverage": true,
+    "supported_methods": [
+      "firewalld",
+      "nftables",
+      "iptables"
+    ]
+  }
+}

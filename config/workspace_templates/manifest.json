@@ -1,0 +1,13 @@
+{
+  "module": "workspace_templates",
+  "version": "2",
+  "control_plane": [
+    {
+      "template": "router_local_ro",
+      "target_entry": "workspace_router_local_ro"
+    }
+  ],
+  "stale_dirs": [
+    "<current-host-state-root>/workspace-main"
+  ]
+}

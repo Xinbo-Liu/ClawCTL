@@ -1,0 +1,176 @@
+{
+  "schema_version": 1,
+  "generated_artifacts": {
+    "dispatch_observability_doc": "docs/operations/dispatch-targets.md"
+  },
+  "entries": {
+    "dispatch_runtime_objects_default": {
+      "id": "dispatch_runtime_objects_default",
+      "title": "分发运行态对象默认判读顺序",
+      "purpose": "统一定义 dispatch 运行态排障时优先查看 dispatch.json / status.json / ledger.jsonl / queue / queue_done 的默认顺序，供 observability 文档统一复用。",
+      "entry_command": "bash ./scripts/runtime/run_openclaw_python_tool.sh dispatch observability steps --entry dispatch_runtime_objects_default",
+      "steps": [
+        "dispatch.json -> 先确认具体发给了谁、release_level 是什么、results[] 最终是否成功。",
+        "status.json -> 再确认累计 failed_by_reason / skipped_by_reason / queue 汇总 / trend_lines。",
+        "ledger.jsonl -> 继续定位最近几次失败或跳过的连续趋势。",
+        "queue/ 与 queue_done/ -> 最后确认 retry / resend backlog 是否已经真正闭合。"
+      ],
+      "references": [
+        "docs/operations/dispatch-targets.md",
+        "docs/operations/dispatch-targets.md",
+        "docs/operations/troubleshooting.md"
+      ],
+      "notes": [
+        "本顺序用于解释运行态对象判读顺序；resend / retry / rotation 等执行动作使用对应执行入口。",
+        "若已确认需要恢复动作，统一转到 docs/operations/troubleshooting.md。"
+      ],
+      "prerequisites": [
+        "dispatch latest run 与 ledger 已生成；若目录为空，先确认当天至少执行过一次 dispatch 或 dry-run。"
+      ],
+      "example_commands": [
+        {
+          "title": "定位最新 dispatch run 目录",
+          "command": "latest_run_dir=\"$(ls -1dt \"$(bash ./scripts/runtime/run_openclaw_python_tool.sh runtime paths resolve dispatch_runs_dir --view host)\"/* | head -n 1)\" && echo \"$latest_run_dir\""
+        },
+        {
+          "title": "查看最新 dispatch.json 的 release_level / results / rateLimit",
+          "command": "latest_run_dir=\"$(ls -1dt \"$(bash ./scripts/runtime/run_openclaw_python_tool.sh runtime paths resolve dispatch_runs_dir --view host)\"/* | head -n 1)\" && jq \".release_level,.results,.request.rateLimit\" \"$latest_run_dir/dispatch.json\""
+        },
+        {
+          "title": "查看累计 status.json 的失败/跳过/queue 摘要",
+          "command": "latest_run_dir=\"$(ls -1dt \"$(bash ./scripts/runtime/run_openclaw_python_tool.sh runtime paths resolve dispatch_runs_dir --view host)\"/* | head -n 1)\" && jq \".failed_by_reason,.skipped_by_reason,.queue_breakdown,.trend_lines\" \"$latest_run_dir/status.json\""
+        },
+        {
+          "title": "查看最近 20 条 ledger",
+          "command": "tail -n 20 \"$(bash ./scripts/runtime/run_openclaw_python_tool.sh runtime paths resolve dispatch_out_dir --view host)/ledger.jsonl\""
+        }
+      ],
+      "result_checks": [
+        "dispatch.json 用来回答“单次分发目标、release_level 与 results[] 结果”；status.json 用来回答“累计失败/跳过趋势”；ledger.jsonl 用来回答“连续分发事件”。"
+      ],
+      "common_branches": [
+        "不要只看 status.json 就判断某次发送结果；单次发送必须回 dispatch.json / results[]。",
+        "不要只看 queue/ 就判定 retry 失败；必须结合 queue_done/ 与 ledger.jsonl。"
+      ]
+    },
+    "dispatch_retry_backlog_judgement": {
+      "id": "dispatch_retry_backlog_judgement",
+      "title": "retry backlog 默认判读顺序",
+      "purpose": "统一定义 queue / queue_done / ledger / dispatcher guidance 的默认判读顺序，供 observability 页与 replay 页统一引用。",
+      "entry_command": "bash ./scripts/runtime/run_openclaw_python_tool.sh dispatch observability steps --entry dispatch_retry_backlog_judgement",
+      "steps": [
+        "先看 dispatcher status/show-blocking/explain-latest 里的 queue_breakdown 与 operator_guidance。",
+        "再看 queue/ 当前剩余项是否只集中在单个 target。",
+        "继续看 queue_done/ 是否已有成功处理或过期失败。",
+        "最后结合 ledger.jsonl 判断 backlog 是 verify 阻断、目标端失败还是过期积压。"
+      ],
+      "references": [
+        "docs/operations/dispatch-targets.md",
+        "docs/operations/troubleshooting.md"
+      ],
+      "notes": [
+        "若 backlog 全部受 verify 阻断，不应机械重复执行 retry。",
+        "retry dry-run 不会消费 queue；判断 backlog 是否下降时不要把 dry-run 当成真实恢复。"
+      ],
+      "prerequisites": [
+        "已明确 backlog 对应的 target 或 push run；若范围未知，先看 explain-latest 的 operator_guidance。"
+      ],
+      "example_commands": [
+        {
+          "title": "先看目标当前 status",
+          "command": "bash ./scripts/runtime/run_openclaw_python_tool.sh dispatch ops run-target-operation --operation status --target <target_id> --env-file deploy/.env --control-plane-profile <profile_id> --ensure-running strict"
+        },
+        {
+          "title": "看目标当前 blocking 结论",
+          "command": "bash ./scripts/runtime/run_openclaw_python_tool.sh dispatch ops run-target-operation --operation show_blocking --target <target_id> --env-file deploy/.env --control-plane-profile <profile_id> --ensure-running strict"
+        },
+        {
+          "title": "看目标 explain-latest",
+          "command": "bash ./scripts/runtime/run_openclaw_python_tool.sh dispatch ops run-target-operation --operation explain_latest --target <target_id> --env-file deploy/.env --control-plane-profile <profile_id> --ensure-running strict"
+        },
+        {
+          "title": "直接列出 queue 与 queue_done 中文件",
+          "command": "find \"$(bash ./scripts/runtime/run_openclaw_python_tool.sh runtime paths resolve dispatch_queue_dir --view host)\" -maxdepth 1 -type f | sort && echo \"---\" && find \"$(bash ./scripts/runtime/run_openclaw_python_tool.sh runtime paths resolve dispatch_queue_done_dir --view host)\" -maxdepth 1 -type f | sort"
+        }
+      ],
+      "result_checks": [
+        "若 show_blocking / explain_latest 明确给出 verify 阻断或 release gate 阻断，应先解除阻断，再决定是否 retry。",
+        "queue 中条目减少且 queue_done 出现对应处理记录，才表示 backlog 正在真实下降。"
+      ],
+      "common_branches": [
+        "retry --dry-run true 只做预演，不会消费 queue。",
+        "过期 queue 进入 queue_done 也属于处理完成，不应误判为“retry 没有执行”。"
+      ]
+    },
+    "dispatch_trend_questions": {
+      "id": "dispatch_trend_questions",
+      "title": "dispatch 趋势判读默认问题集",
+      "purpose": "统一定义查看 status.json.ledger.trends 时优先回答的固定问题，供 observability 文档正文统一引用。",
+      "entry_command": "bash ./scripts/runtime/run_openclaw_python_tool.sh dispatch observability steps --entry dispatch_trend_questions",
+      "steps": [
+        "问题 1：异常是从哪一天开始持续出现的。",
+        "问题 2：问题集中在 biz / ops / test 的哪个 target_group。",
+        "问题 3：是 official 发送路径故障，还是 review / degraded 等 release_level 被策略拦住。"
+      ],
+      "references": [
+        "docs/operations/dispatch-targets.md"
+      ],
+      "notes": [
+        "趋势问题用于解释变化来源；target 轮换、停发或恢复动作使用对应执行入口。"
+      ],
+      "prerequisites": [
+        "status.json 已包含 ledger.trends；若为空，说明历史窗口内数据不足。"
+      ],
+      "example_commands": [
+        {
+          "title": "直接查看最新 status.json 的 trends",
+          "command": "latest_run_dir=\"$(ls -1dt \"$(bash ./scripts/runtime/run_openclaw_python_tool.sh runtime paths resolve dispatch_runs_dir --view host)\"/* | head -n 1)\" && jq \".ledger.trends\" \"$latest_run_dir/status.json\""
+        }
+      ],
+      "result_checks": [
+        "按日期、target_group、release_level 三个维度回答趋势问题；不要只凭一条失败日志得出“长期异常”的结论。"
+      ],
+      "common_branches": [
+        "若 by_target_group 只在 test 组异常，不应直接推断 biz/ops 目标也受同样影响。"
+      ]
+    },
+    "dispatch_common_misreadings": {
+      "id": "dispatch_common_misreadings",
+      "title": "dispatch 常见误判检查表",
+      "purpose": "统一定义 dispatch 观察层最常见的误判与固定判读口径。",
+      "entry_command": "bash ./scripts/runtime/run_openclaw_python_tool.sh dispatch observability steps --entry dispatch_common_misreadings",
+      "steps": [
+        "current_release_allowed=false -> 属于策略拦截，不是 provider endpoint 故障。",
+        "request.rateLimit.waitedMs>0 -> 属于限流等待，不能单独当作失败。",
+        "ops_summary / needs_attention 为空 -> 表示当前无需额外摘要，不等于发送异常。",
+        "queue 中有文件 -> 不能直接判定 retry 失败，必须同时看 queue_done、ledger 与最近一次 retry 结果。"
+      ],
+      "references": [
+        "docs/operations/dispatch-targets.md"
+      ],
+      "notes": [
+        "误判检查表用于提醒解释边界；恢复命令以恢复命令矩阵为准。"
+      ],
+      "prerequisites": [
+        "先完成 dispatch.json / status.json / ledger / queue 基础对象判读，再使用误判检查表复核解释边界。"
+      ],
+      "example_commands": [
+        {
+          "title": "查看 target-scoped acceptance，避免只盯着单个字段",
+          "command": "bash ./scripts/runtime/run_openclaw_python_tool.sh dispatch observability show-target-acceptance --target <target_id> --gate-env-file deploy/.env --json"
+        },
+        {
+          "title": "查看 batch acceptance，避免把单 target 结果当成批量治理结果",
+          "command": "bash ./scripts/runtime/run_openclaw_python_tool.sh dispatch observability show-batch-acceptance --batch <batch_id> --gate-env-file deploy/.env --json"
+        }
+      ],
+      "result_checks": [
+        "先区分策略拦截、限流等待、空摘要与真实发送失败，再决定是否进入恢复动作。"
+      ],
+      "common_branches": [
+        "current_release_allowed=false 属于策略问题，不是 provider endpoint 故障。",
+        "request.rateLimit.waitedMs>0 表示等待过，不等于请求失败。"
+      ]
+    }
+  }
+}

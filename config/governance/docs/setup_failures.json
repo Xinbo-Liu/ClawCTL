@@ -1,0 +1,679 @@
+{
+  "generated_artifacts": {
+    "setup_failure_doc": "docs/operations/troubleshooting.md"
+  },
+  "title": "setup 主链失败分流",
+  "intro": [
+    "本页汇总宿主机准备、宿主机 readiness 与 one_click 主链在失败场景下的默认修复入口、下一步命令与回看边界。",
+    "检查定义、通过标准、阶段矩阵、deployment acceptance 与逐项排障细节分别以 docs/getting-started/quickstart.md、docs/operations/runtime-service-reference.md 与 docs/operations/troubleshooting.md 为准；本页负责提供宿主机前置链与 setup 主链失败后的第一跳索引。"
+  ],
+  "entries": {
+    "prepare_docker_host": {
+      "title": "prepare_docker_host.sh",
+      "command": "sudo bash ./scripts/setup/prepare_docker_host.sh [选项]",
+      "scenarios": {
+        "centos7_repo_failed": {
+          "title": "CentOS 7 repo / baseurl 修复失败",
+          "when": "prepare_docker_host.sh 在 yum makecache 或 repo 修复阶段失败，日志包含 base/7/x86_64 baseurl、vault repo 或缓存异常。",
+          "commands": [
+            "sudo bash ./scripts/setup/prepare_docker_host.sh --repair-centos7-vault-repos",
+            "sudo bash ./scripts/setup/prepare_docker_host.sh --repair-centos7-vault-repos --network-profile cn",
+            "sudo bash ./scripts/setup/prepare_docker_host.sh --repair-centos7-vault-repos --centos7-vault-source aliyun_cn",
+            "sudo env OPENCLAW_CENTOS7_VAULT_BASE_URL='https://<internal-mirror>/centos-vault/7.9.2009' bash ./scripts/setup/prepare_docker_host.sh --repair-centos7-vault-repos",
+            "sudo yum clean all",
+            "sudo yum makecache fast",
+            "sudo bash ./scripts/setup/prepare_docker_host.sh --install-base-tools --configure-kernel"
+          ],
+          "notes": [
+            "CentOS 7 vault repo 默认按 official、aliyun_cn、tuna_cn 顺序尝试；国内网络优先使用 `--network-profile cn`，单独修复 repo 时也可指定 `--centos7-vault-source aliyun_cn`，企业内网使用 `OPENCLAW_CENTOS7_VAULT_BASE_URL`。",
+            "先恢复 CentOS 7 vault repo，再继续预工具与 Docker 安装；不要跳过 repo 修复直接进入 one_click 主链。"
+          ],
+          "references": [
+            "docs/getting-started/environment-setup.md",
+            "docs/operations/troubleshooting.md"
+          ]
+        },
+        "base_tools_failed": {
+          "title": "宿主机预工具安装失败",
+          "when": "prepare_docker_host.sh 在 jq / dig / ss / ip 等预工具安装阶段失败。",
+          "commands": [
+            "sudo bash ./scripts/setup/prepare_docker_host.sh --install-base-tools",
+            "command -v jq dig ss ip"
+          ],
+          "notes": [
+            "CentOS 7 默认仓库不一定直接提供 jq；统一修复入口是 prepare_docker_host.sh --install-base-tools。"
+          ],
+          "references": [
+            "docs/getting-started/environment-setup.md",
+            "docs/operations/troubleshooting.md"
+          ]
+        },
+        "system_time_failed": {
+          "title": "系统时间校验或修复失败",
+          "when": "prepare_docker_host.sh 在 --update-system-time 或 --configure-kernel 阶段失败，或日志包含系统时间、HTTP Date、NTP、chronyd、CERT_NOT_YET_VALID、证书时间相关错误。",
+          "commands": [
+            "sudo bash ./scripts/setup/update_system_time.sh",
+            "bash ./scripts/doctor/check_system_time.sh",
+            "bash ./scripts/doctor/check_docker_host_readiness.sh"
+          ],
+          "notes": [
+            "服务器快照恢复后本机时钟可能落后真实时间；系统时间未闭合时，镜像拉取、npm / TLS 下载、证书有效期校验与运行日志排序都会继续失败。",
+            "在线模式下 update_system_time.sh 会先启用 NTP / chronyd，再按多源 HTTPS HTTP Date 基准校正超过阈值的漂移；直接校正受可信时间窗口与最大跳变阈值约束，离线模式只做本机可信时间窗口校验。"
+          ],
+          "references": [
+            "docs/getting-started/environment-setup.md",
+            "docs/operations/troubleshooting.md"
+          ]
+        },
+        "docker_or_compose_failed": {
+          "title": "Docker / Compose 安装或 daemon 配置失败",
+          "when": "prepare_docker_host.sh 在 Docker Engine、Docker Compose、daemon.json 或 firewall 配置阶段失败。",
+          "commands": [
+            "sudo bash ./scripts/setup/prepare_docker_host.sh --install-docker --install-compose --configure-daemon",
+            "sudo bash ./scripts/setup/prepare_docker_host.sh --install-docker --install-compose --network-profile cn --configure-daemon",
+            "sudo bash ./scripts/setup/prepare_docker_host.sh --install-docker --install-compose --docker-repo-source aliyun_cn --configure-daemon",
+            "sudo bash ./scripts/setup/prepare_docker_host.sh --open-firewall",
+            "bash ./scripts/doctor/check_docker_host_readiness.sh"
+          ],
+          "notes": [
+            "Docker Engine Yum repo 默认按 official、aliyun_cn、tuna_cn 顺序尝试；若官方源在中国国内网络不可达，优先使用 `--network-profile cn` 复跑，单独修复 Docker repo 时也可指定 `--docker-repo-source aliyun_cn`。内网制品源使用 `OPENCLAW_DOCKER_CENTOS_REPO_URL` 覆盖。",
+            "Docker daemon registry-mirrors 默认来自 docker_host 真源；企业内网或特定地区可用 `OPENCLAW_DOCKER_REGISTRY_MIRRORS` 覆盖后复跑 `--configure-daemon`。",
+            "`--open-firewall` 会同时收口 firewalld permanent docker zone；若 Docker bridge / NAT 报 `INVALID_ZONE: docker`，以 root 复跑该入口后再回到 readiness。",
+            "修复顺序为：优先通过 `docker-compose-plugin-2.27.1-1.el7` 完成或修复 Compose；脚本会自动清理会遮蔽 RPM 插件的 `/usr/local/lib/docker/cli-plugins/docker-compose` 本地覆盖件。",
+            "若目标机到 GitHub Releases 过慢，仅在 RPM 无法提供建议版本时才允许回退二进制下载；此时应先设置 `OPENCLAW_COMPOSE_DOWNLOAD_URL` 指向内网制品源或镜像地址，再重新执行 `--install-compose`。",
+            "宿主机准备修复完成后，必须回到 check_docker_host_readiness.sh 重新判定准入，不得直接跳过 readiness 进入 one_click 主链。"
+          ],
+          "references": [
+            "docs/getting-started/environment-setup.md",
+            "docs/getting-started/quickstart.md",
+            "docs/operations/troubleshooting.md"
+          ]
+        },
+        "offline_install_blocked": {
+          "title": "离线新机缺少本地 RPM / YUM 源",
+          "when": "在 --offline 或离线安装场景下，目标机尚未提供本地 RPM / YUM 源，导致 Docker / Compose 无法安装。",
+          "commands": [
+            "挂载本地 RPM 或配置本地 YUM 源",
+            "sudo bash ./scripts/setup/prepare_docker_host.sh --install-base-tools --configure-kernel",
+            "sudo bash ./scripts/setup/prepare_docker_host.sh --install-docker --install-compose --configure-daemon --open-firewall"
+          ],
+          "notes": [
+            "--offline 只用于跳过外网探测或执行本地配置类步骤；离线新机安装 Docker / Compose 依赖本地 RPM / YUM 源。"
+          ],
+          "references": [
+            "docs/getting-started/environment-setup.md",
+            "docs/getting-started/quickstart.md"
+          ]
+        }
+      }
+    },
+    "check_docker_host_readiness": {
+      "title": "check_docker_host_readiness.sh",
+      "command": "bash ./scripts/doctor/check_docker_host_readiness.sh [--offline]",
+      "scenarios": {
+        "system_time_failed": {
+          "title": "系统时间未闭合",
+          "when": "check_docker_host_readiness.sh 在进入 Docker / Compose 检查前失败，日志包含 check_system_time、系统时间漂移、HTTP Date、NTP、chronyd、CERT_NOT_YET_VALID 或证书时间相关错误。",
+          "commands": [
+            "sudo bash ./scripts/setup/update_system_time.sh",
+            "bash ./scripts/doctor/check_system_time.sh",
+            "bash ./scripts/doctor/check_docker_host_readiness.sh"
+          ],
+          "notes": [
+            "readiness 是只读准入，不会修改系统时间；修复必须回到 root 侧 update_system_time.sh 或 prepare_docker_host.sh --update-system-time。",
+            "离线机可以对 check_system_time.sh / check_docker_host_readiness.sh 追加 --offline，但本机时间必须位于可信时间窗口内。"
+          ],
+          "references": [
+            "docs/getting-started/environment-setup.md",
+            "docs/operations/troubleshooting.md"
+          ]
+        },
+        "docker_or_daemon_missing": {
+          "title": "Docker / daemon 不可用",
+          "when": "check_docker_host_readiness.sh 因 docker CLI 缺失、daemon 未启动或 docker.sock 权限不足而失败。",
+          "commands": [
+            "sudo bash ./scripts/setup/prepare_docker_host.sh --install-docker --install-compose --configure-daemon",
+            "sudo bash ./scripts/setup/prepare_docker_host.sh --install-docker --install-compose --network-profile cn --configure-daemon",
+            "bash ./scripts/doctor/check_docker_host_readiness.sh"
+          ],
+          "notes": [
+            "如果报错指向 docker.sock 权限，请先修复当前用户对 Docker daemon 的访问权限，再回到 readiness。"
+          ],
+          "references": [
+            "docs/getting-started/environment-setup.md",
+            "docs/operations/troubleshooting.md"
+          ]
+        },
+        "supported_baseline_failed": {
+          "title": "CentOS 7 宿主机支持策略未闭合",
+          "when": "check_docker_host_readiness.sh 因 runc / containerd / iptables / storage driver / Docker 版本 / Compose 版本不满足 CentOS 7 宿主机支持策略而失败。",
+          "commands": [
+            "sudo bash ./scripts/setup/prepare_docker_host.sh --all",
+            "sudo bash ./scripts/setup/prepare_docker_host.sh --all --network-profile cn",
+            "bash ./scripts/doctor/check_docker_host_readiness.sh"
+          ],
+          "notes": [
+            "CentOS 7 属于受支持系统路径，但前提是宿主机支持策略必须闭合；未通过时不得继续进入 one_click_config.sh。",
+            "中国国内网络首轮部署优先使用 `--network-profile cn` 复跑宿主机准备；该 profile 同时收口 CentOS 7 vault repo、Docker Yum repo 与 daemon registry-mirrors。"
+          ],
+          "references": [
+            "docs/getting-started/environment-setup.md",
+            "docs/getting-started/quickstart.md",
+            "docs/operations/troubleshooting.md"
+          ]
+        },
+        "runtime_source_probe_failed": {
+          "title": "运行来源探测失败",
+          "when": "在线模式下 Gateway / runtime image 等镜像来源，或当前 active profile 启用的 provider/API endpoint DNS/HTTPS 探测失败。",
+          "commands": [
+            "bash ./scripts/doctor/check_docker_host_readiness.sh",
+            "bash ./scripts/images/check_openclaw_supply_chain.sh",
+            "bash ./scripts/images/show_deployment_image_status.sh"
+          ],
+          "notes": [
+            "先确认 registry-mirrors、网络出口与 selected runtime source 可达性，再继续进入 one_click 主链。",
+            "中国国内网络首轮部署先执行 `sudo bash ./scripts/setup/prepare_docker_host.sh --all --network-profile cn`；仅 Gateway GHCR 不通时，`pull_images.sh` 默认用 `PULL_GATEWAY_CANDIDATE_MODE=auto-switch` 只改当前 `deploy/.env` 并记录 source selection；受限网络使用离线镜像归档。"
+          ],
+          "references": [
+            "docs/getting-started/image-preparation.md",
+            "docs/operations/runtime-service-reference.md",
+            "docs/operations/troubleshooting.md"
+          ]
+        }
+      }
+    },
+    "one_click_config": {
+      "title": "one_click_config.sh",
+      "command": "bash ./scripts/setup/one_click_config.sh",
+      "scenarios": {
+        "preflight_failed": {
+          "title": "config 静态 preflight / 本地权限前置失败",
+          "when": "在进入 setup env render 之前，`one_click_config.sh` 因控制面执行介质、Docker / daemon / docker.sock 权限、本地 deploy 路径权限或 config_summary 固定路径不可写而提前失败。",
+          "commands": [
+            "bash ./scripts/setup/prepare_control_plane_medium.sh",
+            "bash ./scripts/doctor/check_docker_host_readiness.sh",
+            "bash ./scripts/setup/one_click_config.sh"
+          ],
+          "notes": [
+            "这类失败会写出应急 `config_summary.json`；该摘要只用于说明失败原因与下一步动作，不代表 deploy/.env 已生成成功。",
+            "若当前用户无权访问 Docker daemon，先修正 `docker.sock` 访问权限或切换到具备权限的执行用户；若 deploy/ 或 `<current-host-state-root>/control_plane/setup` 不可写，先回收本地管理权限。"
+          ],
+          "references": [
+            "docs/getting-started/environment-setup.md",
+            "docs/operations/troubleshooting.md"
+          ]
+        },
+        "effective_compose_render_failed": {
+          "title": "config effective compose 生成失败",
+          "when": "`one_click_config.sh` 已完成 deploy env 渲染，但 `runtime mounts sync-compose --output <current-host-state-root>/control_plane/setup/docker-compose.effective.yml` 未能生成当前 active profile 的有效 compose。",
+          "commands": [
+            "bash ./scripts/setup/one_click_config.sh",
+            "bash ./scripts/runtime/show_runtime_compose_config.sh --env-file deploy/.env"
+          ],
+          "notes": [
+            "先修正 active profile、扩展 service fragment、runtime mounts 真源或 host state root 写权限，再重新执行 one_click_config。",
+            "不要修改 `deploy/docker-compose.yml` 绕过 effective compose；部署、状态查询、full test 与升级链都应读取同一份 effective compose。"
+          ],
+          "references": [
+            "docs/architecture/control-plane-baseline.md",
+            "docs/getting-started/quickstart.md",
+            "docs/operations/troubleshooting.md"
+          ]
+        },
+        "render_failed": {
+          "title": "config render 或输入真源失败",
+          "when": "已经通过最早期 preflight，但 `setup env render` 因 `deploy/site.env` / 启用扩展内部 `agent/extensions/<extension-id>/deploy/extension.env` / `deploy/targets.d/*.env` 输入不合法、镜像 pin 真源冲突或控制面 render 失败而终止。",
+          "commands": [
+            "bash ./scripts/setup/one_click_config.sh --explain",
+            "bash ./scripts/setup/check_extension_env_values.sh --profile <profile_id>",
+            "bash ./scripts/setup/one_click_config.sh"
+          ],
+          "notes": [
+            "优先根据终端报错或应急 `config_summary.json` 回到 `deploy/site.env`、启用扩展内部 `agent/extensions/<extension-id>/deploy/extension.env`、`deploy/targets.d/*.env` 与镜像 pin 真源修正输入，再重新执行 one_click_config。",
+            "启用业务扩展 profile 时先执行 `check_extension_env_values.sh --profile <profile_id>`；按输出的 group、字段名和 `apply_extension_env_values.sh` 修复命令补齐 required/manual_required/secret 字段。",
+            "若失败信息指出不允许覆盖镜像 pin 真源，应删除 `deploy/site.env` / 启用扩展内部 `agent/extensions/<extension-id>/deploy/extension.env` / `deploy/targets.d/*.env` 中对应键，而不是继续在运行态 env 中保留额外 pin。"
+          ],
+          "references": [
+            "docs/getting-started/deployment-inputs.md",
+            "docs/getting-started/image-preparation.md",
+            "docs/operations/troubleshooting.md"
+          ]
+        }
+      }
+    },
+    "one_click_test_basic": {
+      "title": "one_click_test_basic.sh",
+      "command": "bash ./scripts/setup/one_click_test_basic.sh",
+      "scenarios": {
+        "preflight_failed": {
+          "title": "basic gate 静态 preflight / 控制面默认值失败",
+          "when": "在进入 deploy env / host / release 检查前，`one_click_test_basic.sh` 因 Docker、Docker daemon、docker.sock 权限、控制面镜像介质或静态前置缺失而提前失败。",
+          "commands": [
+            "bash ./scripts/setup/prepare_control_plane_medium.sh",
+            "bash ./scripts/doctor/check_docker_host_readiness.sh",
+            "bash ./scripts/setup/one_click_test_basic.sh"
+          ],
+          "notes": [
+            "这类失败发生在正式检查组执行前；应先恢复 Docker / daemon / 控制面介质可用性，再回到 basic gate。",
+            "若当前用户无权访问 Docker daemon，先修正 `docker.sock` 访问权限或切换到具备权限的执行用户。"
+          ],
+          "references": [
+            "docs/getting-started/environment-setup.md",
+            "docs/operations/troubleshooting.md"
+          ]
+        },
+        "config_failed": {
+          "title": "basic gate 配置面失败",
+          "when": "`deploy/.env` 缺失、含 `__REQUIRED__`、`setup env validate` 未通过，或 `check_ingress_boundary_evidence.sh --env-file deploy/.env` 未通过。",
+          "commands": [
+            "bash ./scripts/setup/one_click_config.sh",
+            "bash ./scripts/setup/check_extension_env_values.sh --profile <profile_id>",
+            "sudo bash ./scripts/setup/apply_ingress_boundary_rules.sh --env-file deploy/.env",
+            "bash ./scripts/setup/one_click_test_basic.sh"
+          ],
+          "notes": [
+            "先修正 `deploy/site.env`、启用扩展内部 `agent/extensions/<extension-id>/deploy/extension.env` 与 `deploy/targets.d/*.env`，再重新生成 `deploy/.env`；不要在配置面失败时直接进入 `one_click_deploy.sh`。",
+            "扩展 env 缺项时，用 `check_extension_env_values.sh` 按 group 查看 required/manual_required/secret 字段，再用 `apply_extension_env_values.sh --profile <profile_id> --init-from-example --set KEY=<value>` 或 `--set-secret-from-env KEY` 写入；secret 不应出现在日志和 summary 明文中。",
+            "若失败点落在 ingress 来源限制，优先核对 `OPENCLAW_INGRESS_ALLOWED_SOURCE_CIDRS` 是否等于目标机最终看到的源地址网段；host_firewall 模式下重新执行 `apply_ingress_boundary_rules.sh --env-file deploy/.env`，external_acl 模式下同步修正证据文件。",
+            "若当前是离线目标机，补跑 basic gate 时继续沿用同一份 `deployment_images_*.tar`。"
+          ],
+          "references": [
+            "docs/getting-started/quickstart.md",
+            "docs/operations/troubleshooting.md"
+          ]
+        },
+        "filesystem_or_bind_user_failed": {
+          "title": "basic gate 宿主机目录或 bind user 合同失败",
+          "when": "`local_runtime_fs_contract` 或 `runtime_bind_user_contract` 失败。",
+          "commands": [
+            "bash ./scripts/doctor/check_local_runtime_fs_contract.sh --env-file deploy/.env --require-current-runtime-user --reject-root-runtime-user",
+            "bash ./scripts/setup/fix_permissions.sh || sudo bash ./scripts/setup/fix_permissions.sh",
+            "bash ./scripts/setup/one_click_test_basic.sh"
+          ],
+          "notes": [
+            "默认应修正宿主机 owner / UID / GID 与预创建目录权限，不应长期放宽 owner-only 边界。",
+            "若 root 执行 bootstrap / fix_permissions 后留下 `deploy/nginx/certs` owner 漂移，固定修复入口仍是 root 侧 `fix_permissions.sh`；该入口会按 `OPENCLAW_RUNTIME_UID/GID` 收口 repo-local 证书目录。",
+            "若输出指向 CRLF / 回车字符，先把 `deploy/.env`、`deploy/site.env`、启用扩展内部 `agent/extensions/<extension-id>/deploy/extension.env`、`deploy/targets.d/*.env` 或仓库可执行脚本文本恢复为 LF，再重跑 basic gate。",
+            "若手工调整过 `OPENCLAW_RUNTIME_UID` / `OPENCLAW_RUNTIME_GID`，必须先回收 bind mount 所有权，再重跑 basic gate。"
+          ],
+          "references": [
+            "docs/getting-started/deployment-inputs.md",
+            "docs/getting-started/quickstart.md",
+            "docs/operations/troubleshooting.md"
+          ]
+        },
+        "host_readiness_failed": {
+          "title": "basic gate Docker 宿主机 readiness 失败",
+          "when": "`check_docker_host_readiness` 失败，说明 Docker / Compose / daemon 权限 / CentOS 7 宿主机支持前提未闭合。",
+          "commands": [
+            "bash ./scripts/doctor/check_docker_host_readiness.sh",
+            "sudo bash ./scripts/setup/prepare_docker_host.sh --all",
+            "sudo bash ./scripts/setup/prepare_docker_host.sh --all --network-profile cn",
+            "bash ./scripts/setup/one_click_test_basic.sh"
+          ],
+          "notes": [
+            "CentOS 7 初始机若仓库不可用，先执行 --repair-centos7-vault-repos；中国国内网络首轮部署直接使用 `--all --network-profile cn`；宿主机 readiness 未通过前，不要继续进入部署主链。",
+            "readiness 只做宿主机、Docker、Compose、网络和镜像来源只读检查；它不准备 host 控制面执行介质，进入 one_click_config 或 host 控制面命令前必须执行 `prepare_control_plane_medium.sh`。",
+            "readiness 会只读检查 firewalld permanent docker zone；若失败信息指向 `docker` zone，先执行 `sudo bash ./scripts/setup/prepare_docker_host.sh --open-firewall`，再重跑 readiness。",
+            "若当前用户无权访问 Docker daemon，先修正 `docker.sock` 访问权限或切换到具备权限的执行用户。"
+          ],
+          "references": [
+            "docs/getting-started/environment-setup.md",
+            "docs/getting-started/quickstart.md",
+            "docs/operations/troubleshooting.md"
+          ]
+        },
+        "image_or_compose_contract_failed": {
+          "title": "basic gate 镜像就绪性或 compose 合同失败",
+          "when": "`deployment_image_readiness`、`deploy_image_coverage` 或 `runtime_compose_contract` 失败。",
+          "commands": [
+            "bash ./scripts/doctor/check_deployment_image_readiness.sh",
+            "bash ./scripts/images/check_deployment_image_contract.sh --env-file deploy/.env --compose-file state/openclaw/control_plane/setup/docker-compose.effective.yml --require-local",
+            "bash ./scripts/doctor/check_runtime_compose_contract.sh",
+            "bash ./scripts/setup/one_click_test_basic.sh"
+          ],
+          "notes": [
+            "在线场景先运行 `check_docker_host_readiness.sh` 判定 registry-mirrors、selected runtime source 与候选链路；中国国内网络首轮部署先确认 `--network-profile cn` 已完成，再用 `pull_images.sh` 补齐本机缺失镜像。",
+            "离线场景继续沿用并核对同一份 `deployment_images_*.tar`；受限网络不要反复硬拉，改用 `export_deployment_images.sh` -> `load_deployment_images.sh`。",
+            "若 compose 渲染合同失败，先修正 `deploy/site.env`、运行镜像 pin、private ingress 能力声明或挂载合同，再重跑 basic gate。",
+            "若 Gateway candidate 已拉取但 effective compose 仍指 canonical，重新加载镜像 env 并重渲染 effective compose；若 final compose image ref 本地不存在，先补拉 selected ref 或导入离线归档，不要等到 docker_compose_up 才失败。"
+          ],
+          "references": [
+            "docs/getting-started/image-preparation.md",
+            "docs/getting-started/quickstart.md",
+            "docs/operations/troubleshooting.md"
+          ]
+        },
+        "release_alignment_blocked": {
+          "title": "basic gate OpenClaw release 对齐阻断",
+          "when": "`openclaw_release_alignment` 失败，需要先处理版本漂移、latest tag / digest 不可达，或当前 pin 与 selected runtime source 不一致。",
+          "commands": [
+            "bash ./scripts/images/check_openclaw_release.sh",
+            "bash ./scripts/setup/one_click_test_basic.sh"
+          ],
+          "notes": [
+            "默认首装策略 `relaxed_install` 下，当前 pin digest 可验证但 upstream latest 更高只记 WARN；发布门禁、升级验证或 candidate 提升验证才使用 `--strict-release-check` 并因此阻断。",
+            "release 对齐阻断不修改 pin；先完成镜像来源与 candidate 验证，再按发布流程推进 pin 变更。",
+            "GitHub API 可用时也会用受超时保护的 git tags 复核同一 release 下的 correction tag；GitHub API 不可达时，脚本会按 git tags 后备路径与本地 cache 继续发现 latest。若目标网络同时阻断 GitHub 与镜像源，可使用 OPENCLAW_LATEST_TAG_OVERRIDE / OPENCLAW_LATEST_REMOTE_DIGEST_OVERRIDE 做离线比对。",
+            "离线环境若依赖覆盖变量，应保持 override 与当前 delivery 包一致。"
+          ],
+          "references": [
+            "docs/getting-started/image-preparation.md",
+            "docs/operations/troubleshooting.md"
+          ]
+        }
+      }
+    },
+    "one_click_deploy": {
+      "title": "one_click_deploy.sh",
+      "command": "bash ./scripts/setup/one_click_deploy.sh",
+      "scenarios": {
+        "preflight_failed": {
+          "title": "deploy preflight、本地权限或扩展环境前置失败",
+          "when": "`repo_exec_permission_repair`、`basic_gate_proof_preflight`、`check_local_runtime_fs_contract`、`setup flow one-click-deploy preflight`、控制面依赖文件检查或 active profile 扩展 venv 校验未闭合，导致部署主链尚未进入正式阶段就终止。",
+          "commands": [
+            "bash ./scripts/setup/one_click_test_basic.sh",
+            "bash ./scripts/setup/check_extension_env_values.sh --profile <profile_id>",
+            "source <(bash ./scripts/runtime/run_openclaw_python_tool.sh setup env query-env OPENCLAW_CONTROL_PLANE_SERVICE_CONFIG_PATH --env-file deploy/.env --format shell)",
+            "bash ./scripts/runtime/run_openclaw_python_tool.sh control-plane runtime --config-path \"$OPENCLAW_CONTROL_PLANE_SERVICE_CONFIG_PATH\" extension-env ensure --enabled --offline --json",
+            "bash ./scripts/setup/one_click_deploy.sh --help"
+          ],
+          "notes": [
+            "该类失败固定写出 `one_click_deploy.latest.summary.*`；即使 Docker / daemon / docker.sock 权限导致 `setup flow deploy-failure` 控制面不可用，也会生成 shell 摘要。先从 latest 摘要确认失败标签，再决定回到 basic gate、宿主机权限或控制面文件完整性。",
+            "若失败标签是 `repo_exec_permission_repair`，先执行 `bash ./scripts/setup/fix_permissions.sh` 恢复仓库脚本执行位，再重新执行部署入口；该修复覆盖 zip、scp、tar 或 Windows 同步后的执行位漂移。",
+            "若失败标签是 `extension_env_preflight`，先看 `extension-env ensure` 的结构化输出；若是 extension.env required/manual_required 缺项，先用 `check_extension_env_values.sh --profile <profile_id>` 和 `apply_extension_env_values.sh` 修复输入；部署链会自动同步 scheduler 视角 wheelhouse 与 venv，仍失败时再按终端命令定向补齐离线依赖或 lock。",
+            "不要在 preflight 未闭合时直接尝试 `--resume-from`；只有正式阶段已经开始且失败阶段明确时，才进入 resume 修复。",
+            "覆盖范围：repo_exec_permission_repair、basic_gate_proof_preflight、local_permission_preflight、control_plane_preflight、control_plane_defaults、extension_env_preflight。"
+          ],
+          "references": [
+            "docs/getting-started/quickstart.md",
+            "docs/getting-started/environment-setup.md",
+            "docs/architecture/explicit-extension-packages.md",
+            "docs/operations/troubleshooting.md"
+          ],
+          "stages": [
+            "repo_exec_permission_repair",
+            "basic_gate_proof_preflight",
+            "local_permission_preflight",
+            "control_plane_preflight",
+            "control_plane_defaults",
+            "extension_env_preflight"
+          ]
+        },
+        "host_prepare_failed": {
+          "title": "deploy 宿主机准备、bootstrap 或 ingress 边界失败",
+          "when": "`runtime_bind_user_contract_preflight`、`fix_permissions`、`bootstrap`、`gen_cert`、`render_gateway_ingress_conf`、`check_ingress_boundary_evidence` 或 `check_ingress_boundary_evidence_resume_guard` 阶段失败。",
+          "commands": [
+            "bash ./scripts/setup/fix_permissions.sh",
+            "bash ./scripts/setup/bootstrap.sh",
+            "bash ./scripts/runtime/run_openclaw_python_tool.sh setup ingress render-nginx --env-file deploy/.env",
+            "sudo bash ./scripts/setup/apply_ingress_boundary_rules.sh --env-file deploy/.env",
+            "sudo bash ./scripts/doctor/check_ingress_boundary_evidence.sh --env-file deploy/.env --require-nginx-policy",
+            "bash ./scripts/setup/one_click_deploy.sh --resume-from bootstrap"
+          ],
+          "notes": [
+            "先看 latest 摘要中的失败阶段，再按 docs/getting-started/quickstart.md 的阶段矩阵决定是从 bootstrap 继续，还是单独补做 fix_permissions / gen_cert / render-nginx / ingress evidence。",
+            "若失败根因其实来自 deploy/.env、private ingress 输入或 bind mount 合同，应先回到 one_click_config / basic gate，不要在错误输入上反复 resume。",
+            "覆盖范围：runtime_bind_user_contract_preflight、fix_permissions、bootstrap、gen_cert、render_gateway_ingress_conf、check_ingress_boundary_evidence、check_ingress_boundary_evidence_resume_guard。"
+          ],
+          "references": [
+            "docs/getting-started/quickstart.md",
+            "docs/operations/security-boundary.md",
+            "docs/operations/troubleshooting.md"
+          ],
+          "stages": [
+            "runtime_bind_user_contract_preflight",
+            "fix_permissions",
+            "bootstrap",
+            "gen_cert",
+            "render_gateway_ingress_conf",
+            "check_ingress_boundary_evidence",
+            "check_ingress_boundary_evidence_resume_guard"
+          ]
+        },
+        "image_prepare_failed": {
+          "title": "deploy 镜像准备或 gateway 浏览器校验失败",
+          "when": "`deployment_image_readiness_preflight`、`check_openclaw_release`、`pull_images`、`load_deployment_images` 或 `verify_gateway_browser` 阶段失败。",
+          "commands": [
+            "bash ./scripts/doctor/check_docker_host_readiness.sh",
+            "bash ./scripts/images/show_deployment_image_status.sh",
+            "bash ./scripts/images/check_openclaw_release.sh",
+            "bash ./scripts/images/pull_images.sh",
+            "bash ./scripts/images/check_deployment_image_contract.sh --env-file deploy/.env --compose-file state/openclaw/control_plane/setup/docker-compose.effective.yml --require-local",
+            "bash ./scripts/setup/one_click_deploy.sh --resume-from pull_images"
+          ],
+          "notes": [
+            "在线模式先核对 selected runtime source、candidate source 与部署镜像合同；中国国内网络首轮部署先确认 `sudo bash ./scripts/setup/prepare_docker_host.sh --all --network-profile cn` 已完成。",
+            "离线模式先核对当前 `deployment_images_*.tar` 是否与当前 pin 完全一致；selected/candidate 都不可达时直接切换离线归档路线。",
+            "若 `pull_images.sh` 写出 `gateway_source_selection.json` 且 `envRewritten=true`，部署入口会重新加载镜像 env、重渲染 effective compose 并刷新 proof；手工分步执行时必须先重渲染 effective compose，再执行 `check_deployment_image_contract.sh --compose-file ... --require-local`。",
+            "只有在归档、镜像 pin、release 对齐与浏览器能力都闭合后，再继续 resume；不要在镜像合同未闭合时直接推进 compose 阶段。",
+            "覆盖范围：deployment_image_readiness_preflight、check_openclaw_release、pull_images、load_deployment_images、verify_gateway_browser。"
+          ],
+          "references": [
+            "docs/getting-started/image-preparation.md",
+            "docs/getting-started/quickstart.md",
+            "docs/operations/troubleshooting.md"
+          ],
+          "stages": [
+            "deployment_image_readiness_preflight",
+            "check_openclaw_release",
+            "pull_images",
+            "load_deployment_images",
+            "verify_gateway_browser"
+          ]
+        },
+        "compose_or_runtime_failed": {
+          "title": "deploy compose 合同、服务启动或运行态检查失败",
+          "when": "`effective_compose_render`、`check_deployment_image_contract`、`check_runtime_compose_contract`、`docker_compose_config`、`docker_compose_up` 或 `docker_compose_ps` 阶段失败。",
+          "commands": [
+            "sudo bash ./scripts/setup/prepare_docker_host.sh --open-firewall",
+            "sudo bash ./scripts/setup/apply_ingress_boundary_rules.sh --env-file deploy/.env",
+            "bash ./scripts/images/check_deployment_image_contract.sh --env-file deploy/.env --compose-file state/openclaw/control_plane/setup/docker-compose.effective.yml --require-local",
+            "bash ./scripts/runtime/show_runtime_service_status.sh",
+            "bash ./scripts/runtime/show_runtime_container_logs.sh --target gateway",
+            "bash ./scripts/runtime/show_runtime_compose_config.sh",
+            "bash ./scripts/setup/one_click_deploy.sh --resume-from docker_compose_up"
+          ],
+          "notes": [
+            "先确认 latest 摘要中的失败阶段、compose 渲染结果与容器日志，再判断是镜像、端口、证书、挂载还是服务健康问题。",
+            "若失败发生在 `effective_compose_render`，先修正 active profile、扩展 service fragment、mount registry 或 host state root 写权限；不要修改 `deploy/docker-compose.yml` 绕过 effective compose。",
+            "若失败发生在 `check_deployment_image_contract`，优先看是否为 candidate 已拉取但 compose 仍指 canonical、selected ref 未拉取或 digest 不一致；先修正最终 effective compose 与本地镜像合同，再 resume。",
+            "若 compose up 日志包含 `INVALID_ZONE: docker`，先以 root 复跑 `prepare_docker_host.sh --open-firewall` 修复 firewalld docker zone；该步骤可能重启 Docker，之后必须重新执行 `apply_ingress_boundary_rules.sh --env-file deploy/.env` 物化 host_firewall 证据，再从 `docker_compose_up` resume。",
+            "若失败发生在 `docker_compose_config` 或更早阶段，resume 起点应按 docs/getting-started/quickstart.md 的阶段矩阵前移，不能固定从 `docker_compose_up` 开始。",
+            "覆盖范围：effective_compose_render、check_deployment_image_contract、check_runtime_compose_contract、docker_compose_config、docker_compose_up、docker_compose_ps。"
+          ],
+          "references": [
+            "docs/getting-started/quickstart.md",
+            "docs/operations/runtime-service-reference.md",
+            "docs/operations/troubleshooting.md"
+          ],
+          "stages": [
+            "effective_compose_render",
+            "check_deployment_image_contract",
+            "check_runtime_compose_contract",
+            "docker_compose_config",
+            "docker_compose_up",
+            "docker_compose_ps"
+          ]
+        },
+        "post_deploy_acceptance_failed": {
+          "title": "deploy 后置 required jobs / full test / runtime evidence 导出失败",
+          "when": "`post_deploy_acceptance`、`control_plane_run_all_once`、`post_deploy_full_acceptance` 或 `export_runtime_acceptance_evidence` 失败；服务可能已经启动，但 deployment acceptance 尚未闭合。",
+          "commands": [
+            "bash ./scripts/setup/one_click_deploy.sh --resume-from post_deploy_acceptance",
+            "bash ./scripts/setup/one_click_deploy.sh --resume-from post_deploy_full_acceptance"
+          ],
+          "notes": [
+            "服务健康不等于完整部署成功；后置验收失败时必须先看 full summary 中的 failing required run ledger jobs 或 blocking checks。",
+            "required run ledger jobs 缺失或失败时使用 `--resume-from post_deploy_acceptance` 执行 required jobs、full test 与 runtime evidence；发送动作按当前 target 配置执行。",
+            "required run ledger jobs 已 accepted、仅 full test 或 runtime evidence 未闭合时，使用 `--resume-from post_deploy_full_acceptance` 执行 full test 与 runtime evidence，且跳过镜像拉取、compose 阶段与 run_all_once。"
+          ],
+          "references": [
+            "docs/getting-started/quickstart.md",
+            "docs/operations/runtime-service-reference.md",
+            "docs/operations/troubleshooting.md"
+          ],
+          "stages": [
+            "post_deploy_acceptance",
+            "control_plane_run_all_once",
+            "post_deploy_full_acceptance",
+            "export_runtime_acceptance_evidence"
+          ]
+        },
+        "success_summary_failed": {
+          "title": "deploy 成功摘要写出或终端摘要输出失败",
+          "when": "`deploy_success_summary` 或 `deploy_success_terminal_summary` 失败；runtime 服务与 acceptance 可能已经完成，但固定 latest 摘要写出或终端回显未闭合。",
+          "commands": [
+            "bash ./scripts/setup/fix_permissions.sh",
+            "bash ./scripts/runtime/run_openclaw_python_tool.sh setup flow one-click-deploy deploy-latest-summary-json-path",
+            "bash ./scripts/runtime/run_openclaw_python_tool.sh setup flow one-click-deploy deploy-latest-summary-markdown-path"
+          ],
+          "notes": [
+            "先确认 `<current-host-state-root>/control_plane/setup` 与日志目录可由当前部署用户写入；不要用递归 chmod 777 修复摘要路径。",
+            "若 latest 摘要已经写出但终端输出失败，先读取 latest 摘要确认最终状态；不要为了补终端回显而重复执行 post-deploy 验收。"
+          ],
+          "references": [
+            "docs/getting-started/quickstart.md",
+            "docs/operations/runtime-service-reference.md",
+            "docs/operations/troubleshooting.md"
+          ],
+          "stages": [
+            "deploy_success_summary",
+            "deploy_success_terminal_summary"
+          ]
+        }
+      }
+    },
+    "one_click_test_full": {
+      "title": "one_click_test_full.sh",
+      "command": "bash ./scripts/setup/one_click_test_full.sh",
+      "scenarios": {
+        "preflight_failed": {
+          "title": "full test 静态 preflight / 默认值 / prerequisites 失败",
+          "when": "在进入 full test 检查组前，`one_click_test_full.sh` 因 Docker、Docker daemon、docker.sock 权限、控制面镜像介质、latest summary 固定路径不可写、deployment acceptance 状态路径不可写，或 deploy env 未闭合而提前失败。",
+          "commands": [
+            "bash ./scripts/setup/prepare_control_plane_medium.sh",
+            "bash ./scripts/setup/one_click_test_basic.sh",
+            "bash ./scripts/setup/one_click_test_full.sh"
+          ],
+          "notes": [
+            "这类失败发生在正式检查组执行前；应先恢复控制面介质、latest summary 写出路径与 deploy env 前提，再回到 full test。",
+            "若 latest summary 固定路径不可写，应先修正当前部署用户对 `<current-host-state-root>/control_plane/setup` 与 `<current-host-state-root>/logs` 的管理权限。"
+          ],
+          "references": [
+            "docs/getting-started/environment-setup.md",
+            "docs/operations/runtime-service-reference.md",
+            "docs/operations/troubleshooting.md"
+          ]
+        },
+        "service_failed": {
+          "title": "full test service 组失败",
+          "when": "gateway / ingress / internal-api / scheduler 等默认服务面、official CLI 或 ingress 边界证据检查失败。",
+          "commands": [
+            "bash ./scripts/runtime/show_runtime_service_status.sh",
+            "bash ./scripts/runtime/show_runtime_container_logs.sh --target gateway",
+            "bash ./scripts/runtime/show_runtime_container_logs.sh --target ingress",
+            "bash ./scripts/setup/one_click_test_full.sh --group service"
+          ],
+          "notes": [
+            "先确认服务状态、日志与 `/healthz` / `/readyz`，再回看 ingress 证据与 official CLI 结果。",
+            "若是 `--prepare-only` 场景，必须先真正启动默认 runtime 服务，再重跑 full test。"
+          ],
+          "references": [
+            "docs/operations/runtime-service-reference.md",
+            "docs/operations/troubleshooting.md"
+          ]
+        },
+        "dispatch_failed": {
+          "title": "full test dispatch 组失败",
+          "when": "当前 profile 或 extension 追加的 dispatch 运行态检查失败，通常表示 scheduler 不可用、delivery adapter 探针失败，或 dispatch target 运行态未闭合。",
+          "commands": [
+            "bash ./scripts/doctor/check_dispatch_runtime.sh --json",
+            "bash ./scripts/runtime/show_runtime_service_status.sh",
+            "bash ./scripts/runtime/show_runtime_container_logs.sh --target scheduler",
+            "bash ./scripts/setup/one_click_test_full.sh --group dispatch"
+          ],
+          "notes": [
+            "先确认 scheduler 处于 running healthy，再看 dispatch runtime 检查输出中的 adapter preflight / status 结果。",
+            "若 active profile 追加了 dispatch 检查组，应以该 profile 的 registry 与 deploy env 为准，不要回退到默认平台面判断。"
+          ],
+          "references": [
+            "docs/operations/runtime-service-reference.md",
+            "docs/operations/troubleshooting.md"
+          ]
+        },
+        "dispatch_targets_failed": {
+          "title": "full test dispatch_targets 组失败",
+          "when": "当前 profile 或 extension 声明了 dispatch target，但 deploy env 未生成可用 target，或 target registry 与运行态摘要不一致。",
+          "commands": [
+            "bash ./scripts/setup/one_click_config.sh",
+            "bash ./scripts/doctor/check_dispatch_runtime.sh --json",
+            "bash ./scripts/setup/one_click_test_full.sh --group dispatch_targets"
+          ],
+          "notes": [
+            "先重新渲染 deploy env 和 dispatch runtime 摘要，再复查 target registry 是否来自当前 active profile。",
+            "如果当前部署没有启用 dispatch target，此组应为 SKIP；出现 FAIL 时优先检查 profile 与 deploy env 是否混用。"
+          ],
+          "references": [
+            "docs/getting-started/deployment-inputs.md",
+            "docs/operations/runtime-service-reference.md",
+            "docs/operations/troubleshooting.md"
+          ]
+        },
+        "external_failed": {
+          "title": "full test external 组失败",
+          "when": "当前 profile 或 extension 追加的外部依赖检查失败，例如模型 endpoint、模型引用、网络出口或凭据覆盖未闭合。",
+          "commands": [
+            "bash ./scripts/setup/one_click_config.sh",
+            "bash ./scripts/setup/one_click_test_full.sh --group external"
+          ],
+          "notes": [
+            "先确认 deploy env 中的外部依赖覆盖项与当前 profile 匹配，再重跑对应检查组。",
+            "外部依赖失败不应通过修改 full test required checks 绕过；应修正实际 endpoint、网络或凭据输入。"
+          ],
+          "references": [
+            "docs/getting-started/deployment-inputs.md",
+            "docs/operations/runtime-service-reference.md",
+            "docs/operations/troubleshooting.md"
+          ]
+        },
+        "pipeline_failed": {
+          "title": "full test pipeline 组失败",
+          "when": "当前 profile 或 extension 追加的 pipeline 契约检查失败，例如作业顺序、required run ledger jobs、acceptance binding 或 artifact 约束未闭合。",
+          "commands": [
+            "bash ./scripts/setup/one_click_deploy.sh --resume-from post_deploy_acceptance",
+            "bash ./scripts/setup/one_click_test_full.sh --group pipeline",
+            "bash ./scripts/setup/one_click_test_full.sh"
+          ],
+          "notes": [
+            "required run ledger jobs 缺失或失败时先使用 post_deploy_acceptance 闭合 required jobs，确保 run ledger 来自当前机器真实运行结果。",
+            "pipeline 契约失败时应按最近一次 full summary 中的 blocking_checks 定位，不要直接导出 runtime evidence。"
+          ],
+          "references": [
+            "docs/operations/runtime-service-reference.md",
+            "docs/operations/troubleshooting.md"
+          ]
+        },
+        "acceptance_contract_failed": {
+          "title": "deployment acceptance 派生契约失败",
+          "when": "默认全量 full test 已执行，但 `deployment_acceptance_contract` 未通过。",
+          "commands": [
+            "cat <current-host-state-root>/control_plane/setup/one_click_test_full.latest.summary.md",
+            "cat <current-host-state-root>/control_plane/setup/one_click_test_full.latest.summary.json",
+            "bash ./agent/extensions/<extension-id>/agent/modules/<module-id>/bin/<module-bin> manual-verify-results --limit 10",
+            "bash ./scripts/setup/one_click_test_full.sh"
+          ],
+          "notes": [
+            "acceptance 派生契约失败说明 required checks 中至少有一项未闭合；应先按最近一次摘要定位阻断组，而不是直接导出 runtime evidence。",
+            "若失败链路显示 `source_health_high`、`pending_high_manual_verify` 或 `manual_verify_blocking`，先核对 source health 与人工核验任务。确认外部源真实可用后，用 `agent/extensions/<extension-id>/agent/modules/<module-id>/bin/<module-bin> record-manual-verify --input -` 写回核验结果，再使用 `--resume-from post_deploy_acceptance` 闭合 required jobs、full test 与 runtime evidence。",
+            "只有默认全量 full test 才会评估 deployment acceptance_contract。"
+          ],
+          "references": [
+            "docs/operations/runtime-service-reference.md",
+            "docs/operations/troubleshooting.md"
+          ]
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,97 @@
+{
+  "schema_version": 1,
+  "title": "部署后 full test 摘要参考",
+  "generated_artifacts": {
+    "full_test_doc": "docs/operations/runtime-service-reference.md"
+  },
+  "intro": [
+    "本文档只负责统一说明 `one_click_test_full.sh` 的摘要产物、最近一次摘要固定路径、默认查看入口，以及 full test 检查组 / 检查项目录。",
+    "full test 检查组、检查项、latest summary 固定路径与 deployment acceptance 派生契约分别由 `config/runtime/testing_manifest.json` 与本文件定义。",
+    "full test 最近一次 latest summary 固定路径统一由 `config/governance/release/summary_manifest.json` 管理；摘要标题与下一步分节统一来自 `config/governance/docs/summary_output_surface.json`。"
+  ],
+  "fixed_paths": [
+    {
+      "key": "log_dir",
+      "label": "日志目录"
+    },
+    {
+      "key": "latest_json",
+      "label": "最近一次机器摘要"
+    },
+    {
+      "key": "latest_markdown",
+      "label": "最近一次人工摘要"
+    }
+  ],
+  "acceptance_contract_notes": [
+    "仅当 `--group all` 且未使用 `--only/--skip` 时才会评估。"
+  ],
+  "usage_boundary": [
+    "deployment acceptance required checks 的固定口径见 `docs/operations/runtime-service-reference.md`。",
+    "`--group` 只接受 `all` 或可选检查组；`acceptance` 与 `process` 仅用于结果摘要中的派生契约/进程级失败，不支持直接选择。",
+    "`--only/--skip` 的检查项 id 也以本页列出的检查项目录为准。",
+    "默认部署顺序以 `docs/getting-started/` 为准。"
+  ],
+  "control_plane_commands": [
+    "bash ./scripts/runtime/run_openclaw_python_tool.sh full-test-surface doc",
+    "bash ./scripts/runtime/run_openclaw_python_tool.sh full-test-surface json",
+    "bash ./scripts/runtime/run_openclaw_python_tool.sh full-test-surface groups [--format lines|csv|json]",
+    "bash ./scripts/runtime/run_openclaw_python_tool.sh full-test-surface group-order [--group-name <name>] [--format lines|csv|json]",
+    "bash ./scripts/runtime/run_openclaw_python_tool.sh full-test-surface check-ids [--format lines|csv|json]",
+    "bash ./scripts/runtime/run_openclaw_python_tool.sh full-test-surface normalize-check-csv --csv a,b,c [--flag --only]",
+    "bash ./scripts/runtime/run_openclaw_python_tool.sh full-test-surface validate-group --group-name <name>",
+    "bash ./scripts/runtime/run_openclaw_python_tool.sh full-test-surface acceptance-status --group <name> --only <csv> --skip <csv> --result-lines-file <path> [--format text|json|shell|kv-lines]",
+    "bash ./scripts/runtime/run_openclaw_python_tool.sh full-test-surface write-acceptance-state --out-json <path> --generated-at <iso> --env-file <path> --group <name> --only <csv> --skip <csv> --result-lines-file <path>",
+    "bash ./scripts/runtime/run_openclaw_python_tool.sh full-test-surface write-summary --out-json <path> --out-md <path> --generated-at <iso> --env-file <path> --group <name> --strict <true|false> --quiet <true|false> --json-stdout <true|false> --return-code <n> --result-lines-file <path> --next-actions-file <path> --acceptance-state <path>",
+    "bash ./scripts/runtime/run_openclaw_python_tool.sh full-test-surface print-summary --summary-json <path> [--format text|json]"
+  ],
+  "common_examples": [
+    {
+      "title": "执行默认全量 full test",
+      "steps": [
+        "bash ./scripts/setup/one_click_test_full.sh"
+      ],
+      "notes": [
+        "默认会按 config/runtime/testing_manifest.json 的 execution_order 执行；当前默认执行顺序只包含 service 组。",
+        "只有默认全量运行才会派生 deployment_acceptance_contract；若 full test 进程非 0 退出但未记录 FAIL 行，摘要会派生 full_test_process_exit_code。"
+      ]
+    },
+    {
+      "title": "只跑 service 检查组",
+      "steps": [
+        "bash ./scripts/setup/one_click_test_full.sh --group service"
+      ],
+      "notes": [
+        "适合部署刚完成时先核对 gateway / ingress / internal-api / scheduler 服务面。"
+      ]
+    },
+    {
+      "title": "只运行指定检查项",
+      "steps": [
+        "bash ./scripts/setup/one_click_test_full.sh --group service --only compose_ps,gateway_https_root,gateway_healthz"
+      ],
+      "notes": [
+        "--only / --skip 使用的检查项 id 统一以本页“检查项目录”为准。"
+      ]
+    },
+    {
+      "title": "先看执行顺序，不真正运行",
+      "steps": [
+        "bash ./scripts/setup/one_click_test_full.sh --explain"
+      ]
+    },
+    {
+      "title": "查看最近一次机器摘要",
+      "steps": [
+        "cat <current-host-state-root>/control_plane/setup/one_click_test_full.latest.summary.json"
+      ]
+    },
+    {
+      "title": "查看最近一次人工摘要",
+      "steps": [
+        "cat <current-host-state-root>/control_plane/setup/one_click_test_full.latest.summary.md"
+      ]
+    }
+  ],
+  "preflight_failure_detail": "full test 在正式检查组执行前提前失败；请先修复 Docker / 控制面介质 / latest summary 写出路径或 deploy env prerequisites。"
+}

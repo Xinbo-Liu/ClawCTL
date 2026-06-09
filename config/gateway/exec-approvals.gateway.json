@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "defaults": {
+    "security": "allowlist",
+    "ask": "on-miss",
+    "askFallback": "deny",
+    "autoAllowSkills": false
+  },
+  "agents": {}
+}

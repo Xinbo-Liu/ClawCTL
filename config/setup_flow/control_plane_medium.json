@@ -1,0 +1,61 @@
+{
+  "title": "host 控制面执行介质真源",
+  "generated_artifacts": {
+    "control_plane_medium_doc": "docs/getting-started/environment-setup.md"
+  },
+  "entrypoint": {
+    "title": "prepare_control_plane_medium.sh",
+    "command": "bash ./scripts/setup/prepare_control_plane_medium.sh",
+    "offline_command": "bash ./scripts/setup/prepare_control_plane_medium.sh --offline --image-archive <local-path>",
+    "purpose": "显式准备 host 控制面执行 openclaw Python CLI 所需的唯一 OPENCLAW_CONTROL_PLANE_IMAGE；该步骤是进入 one_click_config.sh 与任意 run_openclaw_python_tool.sh 子命令前的统一前置条件。",
+    "boundaries": [
+      "只准备 host 控制面执行介质，不渲染 deploy/.env，不执行 bootstrap，不启动 compose。",
+      "在线模式允许复用本地镜像、部署镜像归档或网络拉取；离线模式只允许复用本地镜像或显式/自动发现的部署镜像归档。"
+    ],
+    "consumers": [
+      "bash ./scripts/setup/one_click_config.sh",
+      "bash ./scripts/runtime/run_openclaw_python_tool.sh <cli-subcommand>",
+      "bash ./scripts/runtime/run_python_container.sh -- ..."
+    ],
+    "references": [
+      "docs/getting-started/quickstart.md",
+      "docs/getting-started/environment-setup.md",
+      "docs/getting-started/image-preparation.md",
+      "docs/operations/troubleshooting.md"
+    ]
+  },
+  "online": {
+    "title": "在线目标机",
+    "command": "bash ./scripts/setup/prepare_control_plane_medium.sh",
+    "steps": [
+      "优先复用本地已存在的 OPENCLAW_CONTROL_PLANE_IMAGE。",
+      "本地缺失时，先尝试导入显式指定或自动发现的 deployment_images_*.tar。",
+      "归档未命中时，允许执行 docker pull OPENCLAW_CONTROL_PLANE_IMAGE。"
+    ]
+  },
+  "offline": {
+    "title": "离线目标机",
+    "command": "bash ./scripts/setup/prepare_control_plane_medium.sh --offline --image-archive <local-path>",
+    "steps": [
+      "优先复用本地已存在的 OPENCLAW_CONTROL_PLANE_IMAGE。",
+      "本地缺失时，只允许导入显式指定或自动发现的 deployment_images_*.tar。",
+      "离线模式下禁止网络拉取；部署镜像归档必须来自当前 release 并与当前 pin 一致。"
+    ]
+  },
+  "failure_guidance": {
+    "title": "未准备时的统一失败提示",
+    "lines": [
+      "run_openclaw_python_tool.sh 与 run_python_container.sh 都要求 OPENCLAW_CONTROL_PLANE_IMAGE 已经预先准备完成。",
+      "一旦本地缺少 OPENCLAW_CONTROL_PLANE_IMAGE，必须先执行 prepare_control_plane_medium.sh，再进入 one_click_config 或其它 host 控制面命令。",
+      "排障时优先检查 Docker daemon 可访问性、部署镜像归档可读性与归档合同一致性。"
+    ]
+  },
+  "help_surface": {
+    "title": "帮助面与执行面边界",
+    "lines": [
+      "--help / --explain / 未知参数 只输出 host 控制面执行介质入口说明，不依赖 Docker、Docker daemon 或镜像状态。",
+      "真正执行 prepare 时，才允许进入 Docker daemon、本地归档发现与控制面镜像合同校验。",
+      "该帮助面只解释 control plane medium 的职责边界；默认主路径说明以 quickstart.md 为准。"
+    ]
+  }
+}

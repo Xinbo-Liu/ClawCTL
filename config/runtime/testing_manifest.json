@@ -1,0 +1,278 @@
+{
+  "title": "部署后 full test 摘要参考",
+  "paths": {
+    "log_dir": "<current-host-state-root>/logs",
+    "latest_json": "<current-host-state-root>/control_plane/setup/one_click_test_full.latest.summary.json",
+    "latest_markdown": "<current-host-state-root>/control_plane/setup/one_click_test_full.latest.summary.md"
+  },
+  "valid_groups": [
+    "all",
+    "service"
+  ],
+  "groups": [
+    {
+      "id": "service",
+      "title": "服务入口与健康检查",
+      "selectable": true,
+      "summary": "覆盖 compose 状态、官方 gateway 健康检查与 ingress 健康。"
+    },
+    {
+      "id": "acceptance",
+      "title": "deployment acceptance 派生检查",
+      "selectable": false,
+      "summary": "只在默认全量 full 运行后派生 deployment_acceptance_contract，不支持通过 --group 直接选择。"
+    },
+    {
+      "id": "process",
+      "title": "full test 进程状态",
+      "selectable": false,
+      "summary": "记录 full test 进程级失败，避免进程非 0 退出但检查行没有 FAIL 时摘要显示为成功。"
+    }
+  ],
+  "checks": [
+    {
+      "id": "compose_ps",
+      "group": "service",
+      "title": "统一服务状态",
+      "summary": "检查 compose 服务状态总览。"
+    },
+    {
+      "id": "gateway_https_root",
+      "group": "service",
+      "title": "private HTTPS 根路径",
+      "summary": "检查私有 HTTPS 根路径是否可达。"
+    },
+    {
+      "id": "gateway_healthz",
+      "group": "service",
+      "title": "official gateway healthz/readyz",
+      "summary": "检查官方 gateway 的 /healthz 与 /readyz。"
+    },
+    {
+      "id": "gateway_proxy_health",
+      "group": "service",
+      "title": "private HTTPS ingress 健康",
+      "summary": "检查 ingress 容器是否进入 running healthy。"
+    },
+    {
+      "id": "ingress_boundary_evidence",
+      "group": "service",
+      "title": "private ingress 边界证据",
+      "summary": "检查 private ingress 只发布 80/443、内部服务不发布宿主机端口、Nginx 来源 allowlist 渲染结果，并对宿主机防火墙或外部 ACL 的来源限制规则做语义校验。"
+    },
+    {
+      "id": "internal_api_runtime",
+      "group": "service",
+      "title": "internal-api 运行态",
+      "summary": "检查 internal-api 的 readyz，以及 control-plane summary / jobs 只读 API。"
+    },
+    {
+      "id": "control_plane_registry",
+      "group": "service",
+      "title": "控制平面 registry 契约",
+      "summary": "校验 config/control_plane 的 jobs / agents / models / targets 引用关系。"
+    },
+    {
+      "id": "control_plane_runtime",
+      "group": "service",
+      "title": "控制平面运行态",
+      "summary": "检查 scheduler heartbeat、状态文件与 internal-api 控制平面摘要是否一致。"
+    },
+    {
+      "id": "official_openclaw_cli",
+      "group": "service",
+      "title": "official OpenClaw CLI",
+      "summary": "执行官方 CLI 统一检查。"
+    },
+    {
+      "id": "deployment_acceptance_contract",
+      "group": "acceptance",
+      "title": "deployment acceptance",
+      "summary": "默认全量 full 运行后派生 deployment_acceptance_contract。"
+    },
+    {
+      "id": "full_test_process_exit_code",
+      "group": "process",
+      "title": "full test 进程退出码",
+      "summary": "当 full test 进程返回非 0 但结果行没有 FAIL 检查项时，由摘要写出阶段合成为阻断检查。"
+    }
+  ],
+  "entrypoints": [
+    {
+      "title": "默认 full 验证",
+      "command": "bash ./scripts/setup/one_click_test_full.sh",
+      "when": "部署完成后的默认统一验证入口；执行后会同时写出机器摘要与人工摘要。"
+    },
+    {
+      "title": "最近一次机器摘要",
+      "command": "cat <current-host-state-root>/control_plane/setup/one_click_test_full.latest.summary.json",
+      "when": "需要脚本化读取最近一次 full test 的检查结果、统计与下一步动作时使用。"
+    },
+    {
+      "title": "最近一次人工摘要",
+      "command": "cat <current-host-state-root>/control_plane/setup/one_click_test_full.latest.summary.md",
+      "when": "需要快速查看最近一次 full test 的 PASS / FAIL / WARN / SKIP 汇总与下一步动作时使用。"
+    }
+  ],
+  "summary_topics": [
+    "检查项状态明细",
+    "PASS / FAIL / WARN / SKIP 统计",
+    "blocking_checks / warning_checks / skipped_checks",
+    "deployment acceptance state 与 runtime acceptance evidence 的分层关系",
+    "下一步动作"
+  ],
+  "execution_order": [
+    "service"
+  ],
+  "acceptance_contract": {
+    "check_id": "deployment_acceptance_contract",
+    "group": "acceptance",
+    "eligible_when": {
+      "group": "all",
+      "only_empty": true,
+      "skip_empty": true
+    },
+    "pass_detail": "deployment acceptance 已满足",
+    "fail_detail": "deployment acceptance 未满足；默认全量 required checks 必须全部通过，required run ledger jobs 的 execution 与 artifact evidence 必须同时闭合",
+    "skip_detail": "当前不是默认全量 full 运行，跳过 deployment acceptance 评估",
+    "fail_action": "补齐 blocking FAIL、缺失/失败的 required run ledger jobs 或 artifact evidence 失败项后重新执行默认 full 全量验证；artifact root 必须解析为目录，声明输出必须命中 latest alias、artifact root recent file 或 scheduler structured stdout evidence"
+  },
+  "schema_version": 1,
+  "acceptance_reference": {
+    "title": "部署后验收与证据参考",
+    "generated_doc": "docs/operations/runtime-service-reference.md",
+    "entrypoints": [
+      {
+        "title": "部署后统一验证",
+        "command": "bash ./scripts/setup/one_click_test_full.sh",
+        "when": "服务启动后，作为独立执行或结构化输出的部署后统一验证入口；one_click_deploy 默认自动执行。",
+        "notes": [
+          "默认覆盖 service 组验证；启用 extension 后，extension 会追加自己的 full-test 分组与 required checks。",
+          "若当前 profile / extension 声明 required_run_ledger_jobs，独立执行 full test 前先执行 `bash ./scripts/control_plane/run_control_plane_run_all_once.sh` 生成当前机器真实 run ledger；该入口只在 scheduler cycle lock busy 时有限重试，其他失败立即保留。run ledger execution 层和 artifact evidence 层同时闭合才允许通过；artifact root 必须解析为目录，声明输出必须命中 latest alias、artifact root recent file 或 scheduler structured stdout evidence。",
+          "单独执行 full test 只写出 deployment acceptance state；runtime evidence 由 export_runtime_acceptance_evidence.sh 导出。"
+        ]
+      },
+      {
+        "title": "候选实例影子验证",
+        "command": "bash ./scripts/gateway/run_shadow_upgrade_verify.sh --require-candidate-runtime",
+        "when": "需要对最新 pin 候选 Gateway 做最小回归链核对，并验证候选隔离实例与活动运行面没有共享状态目录、容器名或网络时使用。",
+        "notes": [
+          "默认顺序包含 release/digest 对齐、official runtime contract、internal-api runtime、gateway status --deep 与 gateway probe。",
+          "其产物会先写入 <current-host-state-root>/control_plane/setup/shadow_verify/，再由 export_runtime_acceptance_evidence.sh 同步到 <current-host-state-root>/control_plane/release/evidence/。"
+        ]
+      },
+      {
+        "title": "运行验收证据导出",
+        "command": "bash ./scripts/runtime/export_runtime_acceptance_evidence.sh",
+        "when": "需要独立执行 runtime acceptance evidence 导出时使用；one_click_deploy 默认会在 full test 通过后自动执行。若 shadow verify 产物已存在，会一并同步。",
+        "notes": [
+          "该入口在 deployment acceptance 已闭合后导出 runtime evidence；部署后 full test 使用 one_click_test_full。",
+          "它默认从 deploy/.env 继承 active control-plane profile，避免 run ledger 与当前部署 profile 脱节。",
+          "当前脚本会把 deployment_acceptance.accepted=true、ingress_boundary_evidence.accepted=true 与 runtime_acceptance.accepted=true 作为 runtime evidence 导出硬门禁；ingress_boundary_evidence 必须包含 Nginx allowlist 与基础设施边界证据闭环，任一不满足都会直接失败。",
+          "导出后会生成 runtime-acceptance、control-plane run ledger、control-plane job artifact policy、官方 CLI 摘要，以及已存在的 shadow verify 摘要。",
+          "runtime acceptance 以最新有效运行事实为准：scheduler run ledger 同时使用 executionAccepted / effectiveExecutionAccepted 与 artifactAccepted / artifactEffectiveAccepted 判断 required job 闭合；artifact manifest 固定记录 artifactRoot、evidenceSources、observedEntries 与 schedulerEntries；人工说明只可作为辅助解释。"
+        ]
+      },
+      {
+        "title": "部署后验收统一摘要",
+        "command": "bash ./scripts/runtime/run_openclaw_python_tool.sh runtime acceptance acceptance-summary",
+        "when": "需要统一查看 deployment acceptance、runtime acceptance 与官方 Gateway CLI 摘要状态时使用。",
+        "notes": "只聚合部署后验收事实；部署主链使用 one_click_deploy.sh。"
+      }
+    ],
+    "artifacts": [
+      {
+        "path": "<current-host-state-root>/control_plane/setup/deployment_acceptance.json",
+        "owner": "one_click_test_full.sh",
+        "meaning": "默认全量 full 验证完成后写出的 deployment acceptance state，只表达 eligible / accepted 与 required_checks，不内嵌 runtime evidence。"
+      },
+      {
+        "path": "<current-host-state-root>/control_plane/setup/ingress_boundary_evidence.json",
+        "owner": "check_ingress_boundary_evidence.sh",
+        "meaning": "private ingress 边界证据摘要；记录 compose/runtime 端口暴露事实、Nginx allowlist，以及宿主机防火墙或外部 ACL 证据文件的检查结果。"
+      },
+      {
+        "path": "<current-host-state-root>/control_plane/release/evidence/runtime-acceptance.json",
+        "owner": "export_runtime_acceptance_evidence.sh",
+        "meaning": "把 deployment acceptance state、control-plane scheduler runtime、run ledger 与官方 CLI 摘要聚合后的运行验收证明。"
+      },
+      {
+        "path": "<current-host-state-root>/control_plane/release/evidence/control-plane-run-ledger.json",
+        "owner": "export_runtime_acceptance_evidence.sh",
+        "meaning": "控制平面 run ledger 验收摘要；逐 job 回收 run / result / artifacts manifest，并以 artifactRoot、evidenceSources、observedEntries 与 schedulerEntries 判断 artifact evidence。"
+      },
+      {
+        "path": "<current-host-state-root>/control_plane/release/evidence/control-plane-job-artifact-policies.json",
+        "owner": "export_runtime_acceptance_evidence.sh",
+        "meaning": "控制平面 job artifact policy 摘要；逐 job 固定记录 runArtifactRoot、latestAlias、retentionDays 与 scheduler run manifest 模式。"
+      },
+      {
+        "path": "<current-host-state-root>/control_plane/release/evidence/official-cli-summary.control-plane.json",
+        "owner": "export_runtime_acceptance_evidence.sh",
+        "meaning": "官方 Gateway 容器内 openclaw doctor / security audit / models probe 的聚合摘要。"
+      },
+      {
+        "path": "<current-host-state-root>/control_plane/release/evidence/shadow-verify-summary.json",
+        "owner": "export_runtime_acceptance_evidence.sh",
+        "meaning": "候选 Gateway 隔离实例的影子验证摘要；在 shadow verify 产物存在时由导出脚本同步写入。"
+      },
+      {
+        "path": "<current-host-state-root>/control_plane/release/evidence/shadow-verify-summary.md",
+        "owner": "export_runtime_acceptance_evidence.sh",
+        "meaning": "shadow-verify-summary.json 的人工阅读版摘要。"
+      },
+      {
+        "path": "<current-host-state-root>/control_plane/release/evidence/shadow-verify-compare.json",
+        "owner": "export_runtime_acceptance_evidence.sh",
+        "meaning": "影子验证候选控制面的隔离实例计划与 active/candidate 差异摘要；用于证明候选实例与正式运行面没有共用状态目录、容器名或网络。"
+      },
+      {
+        "path": "<current-host-state-root>/control_plane/release/evidence/shadow-verify-compare.md",
+        "owner": "export_runtime_acceptance_evidence.sh",
+        "meaning": "shadow-verify-compare.json 的人工阅读版摘要。"
+      }
+    ],
+    "required_checks": [
+      "compose_ps",
+      "gateway_https_root",
+      "gateway_healthz",
+      "ingress_boundary_evidence",
+      "internal_api_runtime",
+      "control_plane_registry",
+      "control_plane_runtime",
+      "official_openclaw_cli"
+    ],
+    "scenarios": [
+      {
+        "title": "最短查看顺序",
+        "steps": [
+          "若 profile / extension 声明 required_run_ledger_jobs：bash ./scripts/control_plane/run_control_plane_run_all_once.sh",
+          "bash ./scripts/setup/one_click_test_full.sh",
+          "sudo bash ./scripts/doctor/check_ingress_boundary_evidence.sh --env-file deploy/.env --require-nginx-policy",
+          "bash ./scripts/runtime/export_runtime_acceptance_evidence.sh",
+          "bash ./scripts/runtime/run_openclaw_python_tool.sh runtime acceptance acceptance-summary"
+        ]
+      },
+      {
+        "title": "带候选实例对照的交付链",
+        "steps": [
+          "若 profile / extension 声明 required_run_ledger_jobs：bash ./scripts/control_plane/run_control_plane_run_all_once.sh",
+          "bash ./scripts/setup/one_click_test_full.sh",
+          "sudo bash ./scripts/doctor/check_ingress_boundary_evidence.sh --env-file deploy/.env --require-nginx-policy",
+          "bash ./scripts/gateway/run_shadow_upgrade_verify.sh --require-candidate-runtime",
+          "bash ./scripts/runtime/export_runtime_acceptance_evidence.sh",
+          "bash ./scripts/runtime/run_openclaw_python_tool.sh runtime acceptance acceptance-summary"
+        ]
+      },
+      {
+        "title": "确认 full 是否已经形成 deployment acceptance state",
+        "steps": [
+          "若 profile / extension 声明 required_run_ledger_jobs：bash ./scripts/control_plane/run_control_plane_run_all_once.sh",
+          "bash ./scripts/setup/one_click_test_full.sh --json",
+          "bash ./scripts/runtime/run_openclaw_python_tool.sh runtime acceptance acceptance-summary --format json"
+        ]
+      }
+    ],
+    "required_run_ledger_jobs": []
+  }
+}

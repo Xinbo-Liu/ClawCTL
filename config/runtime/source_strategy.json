@@ -1,0 +1,228 @@
+{
+  "schema_version": 1,
+  "title": "runtime source strategy",
+  "purpose": "把供应链规范来源、中国网络加速来源与当前选用运行来源拆层表达，避免把可访问性优化误写成默认配置；Gateway 仓库层级事实统一回指 runtime contract，Python / Nginx 的宿主机预检与镜像 artifact 就绪性也按单一职责拆开。",
+  "governance_rules": [
+    "canonical source 表示默认规范来源/官方来源；不得因为镜像代理、区域可访问性或缓存站而改写。",
+    "acceleration source 只表示网络适配或区域加速入口；可按环境选用，但不能单独宣称为官方供应链真源。",
+    "selected runtime source 表示当前仓库默认 pin 或部署输入默认值实际选中的来源；运行事实以它为准，但治理说明必须同时回指 canonical / acceleration 分层。",
+    "Gateway 官方镜像的 canonical repo、默认 promote repo 与候选仓库集合统一以 runtime contract 为真源；source strategy 负责分层说明、profile 与切换顺序，并直接引用这套 repo 判定。",
+    "模型/API provider 入口、模型名与扩展业务变量由 profile、model registry 与 deploy env schema 治理，不纳入 runtime image source strategy；本策略只描述 Gateway、Python 与 Nginx 等运行镜像来源。",
+    "control plane Python / runtime Python / Nginx 中国网络默认 pin 固定为 Daocloud tag@digest；canonical source 使用 docker.io 表达供应链规范，Docker daemon registry-mirrors 仅作为补充传输加速。",
+    "control plane Python / runtime Python / Nginx 宿主机预检只验证本地缓存与 Docker 传输链路；精确 tag@digest artifact 可用性统一在 check_deployment_image_readiness.sh、pull_images.sh 与部署镜像归档链路闭合。",
+    "宿主机静态预检、Gateway 供应链事实与 registry manifest 探针固定走 bash + jq + curl 静态链路；这些入口不准备 host 控制面执行介质，进入 host 控制面命令前必须显式执行 prepare_control_plane_medium.sh。",
+    "Gateway 宿主机预检必须复用统一供应链事实，明确区分 selected source 不可达、selected source digest 与 pin 不一致、以及候选链路可用三种状态。",
+    "pull_images.sh 默认按 PULL_GATEWAY_CANDIDATE_MODE=auto-switch 在 CN profile 下选择等值 Gateway candidate；该选择只写当前 deploy/.env 与 state/image_pull/gateway_source_selection.json，不改写 config/image_pins/openclaw.env。"
+  ],
+  "images": {
+    "official_gateway": {
+      "summary": "OpenClaw 官方 Gateway 运行镜像来源分层。",
+      "canonical_source": {
+        "kind": "official_release_registry",
+        "notes": [
+          "官方发布仓库；供应链规范来源。",
+          "上游 release 发现与 canonical 对照统一回指该仓库。"
+        ]
+      },
+      "acceleration_sources": [
+        {
+          "id": "ghcr_nju_cn",
+          "region": "cn",
+          "purpose": "中国网络环境下的可选候选验证镜像来源。"
+        }
+      ],
+      "selected_runtime_source": {
+        "ref_env": "OPENCLAW_OFFICIAL_GATEWAY_IMAGE",
+        "pin_file": "config/image_pins/openclaw.env",
+        "selection_rule": "当前运行来源由 pin 中完整 image ref 的 repository 决定。"
+      },
+      "deployment_contract": {
+        "role": "official_gateway",
+        "label": "official gateway runtime",
+        "scope": "runtime",
+        "managed_tag_role": "official_gateway",
+        "enabled": true
+      },
+      "compose_runtime": {
+        "enabled": true,
+        "target_selector": "gateway",
+        "reason": "official Gateway 是 compose 运行服务镜像。"
+      }
+    },
+    "control_plane_python": {
+      "summary": "Host 控制面 Python 镜像来源分层。",
+      "canonical_source": {
+        "repo": "docker.io/library/python",
+        "kind": "official_library_registry",
+        "notes": [
+          "官方 Python Library 仓库；用于表达规范来源。",
+          "中国网络默认 profile 使用 Daocloud selected pin；canonical source 为 docker.io，Docker daemon registry-mirrors 只作补充加速。"
+        ]
+      },
+      "acceleration_sources": [
+        {
+          "id": "daocloud_python_cn",
+          "repo": "docker.m.daocloud.io/library/python",
+          "region": "cn",
+          "purpose": "中国网络环境下的镜像代理/加速来源。"
+        }
+      ],
+      "selected_runtime_source": {
+        "ref_env": "OPENCLAW_CONTROL_PLANE_IMAGE",
+        "pin_file": "config/image_pins/runtime.env",
+        "selection_rule": "当前控制面来源固定由 runtime pin 真源决定；不得由 deploy/.env 运行时覆盖。中国网络默认 pin 由 config/image_pins/runtime.env 中的 Daocloud repository 决定。"
+      },
+      "deployment_contract": {
+        "role": "control_plane_python",
+        "label": "host control plane Python",
+        "scope": "control_plane",
+        "managed_tag_role": "control_plane_python",
+        "enabled": true
+      },
+      "compose_runtime": {
+        "enabled": false,
+        "reason": "控制面 Python 是 host 执行介质，不进入 compose 运行服务集合。"
+      }
+    },
+    "runtime_python": {
+      "summary": "Runtime Python 镜像来源分层。",
+      "canonical_source": {
+        "repo": "docker.io/library/python",
+        "kind": "official_library_registry",
+        "notes": [
+          "官方 Python Library 仓库；用于表达规范来源。",
+          "中国网络默认 profile 使用 Daocloud selected pin；canonical source 为 docker.io，Docker daemon registry-mirrors 只作补充加速。"
+        ]
+      },
+      "acceleration_sources": [
+        {
+          "id": "daocloud_python_cn",
+          "repo": "docker.m.daocloud.io/library/python",
+          "region": "cn",
+          "purpose": "中国网络环境下的镜像代理/加速来源。"
+        }
+      ],
+      "selected_runtime_source": {
+        "ref_env": "OPENCLAW_RUNTIME_PYTHON_IMAGE",
+        "pin_file": "config/image_pins/runtime.env",
+        "selection_rule": "当前运行来源由 pin 中完整 image ref 的 repository 决定；中国网络默认 pin 由 config/image_pins/runtime.env 中的 Daocloud repository 决定。"
+      },
+      "deployment_contract": {
+        "role": "runtime_python",
+        "label": "runtime Python services",
+        "scope": "runtime",
+        "managed_tag_role": "runtime_python",
+        "enabled": true
+      },
+      "compose_runtime": {
+        "enabled": true,
+        "target_selector": "default",
+        "reason": "internal-api / scheduler 等 runtime Python 服务统一复用该镜像。"
+      }
+    },
+    "nginx_runtime": {
+      "summary": "private ingress Nginx 运行镜像来源分层。",
+      "canonical_source": {
+        "repo": "docker.io/library/nginx",
+        "kind": "official_library_registry",
+        "notes": [
+          "官方 Nginx Library 仓库；用于表达规范来源。",
+          "中国网络默认 profile 使用 Daocloud selected pin；canonical source 为 docker.io，Docker daemon registry-mirrors 只作补充加速。"
+        ]
+      },
+      "acceleration_sources": [
+        {
+          "id": "daocloud_nginx_cn",
+          "repo": "docker.m.daocloud.io/library/nginx",
+          "region": "cn",
+          "purpose": "中国网络环境下的镜像代理/加速来源。"
+        }
+      ],
+      "selected_runtime_source": {
+        "ref_env": "NGINX_IMAGE",
+        "pin_file": "config/image_pins/runtime.env",
+        "selection_rule": "当前运行来源由 pin 中完整 image ref 的 repository 决定；中国网络默认 pin 由 config/image_pins/runtime.env 中的 Daocloud repository 决定。"
+      },
+      "deployment_contract": {
+        "role": "nginx",
+        "label": "private ingress runtime",
+        "scope": "runtime",
+        "managed_tag_role": "nginx",
+        "enabled": true
+      },
+      "compose_runtime": {
+        "enabled": true,
+        "target_selector": "ingress",
+        "reason": "private ingress 固定使用 Nginx 运行镜像。"
+      }
+    }
+  },
+  "generated_artifacts": {
+    "runtime_source_strategy_doc": "docs/operations/runtime-service-reference.md"
+  },
+  "policy_truth_chain": [
+    {
+      "object": "Control plane / runtime Python / Nginx images",
+      "policy_source": "config/runtime/source_strategy.json",
+      "selected_default_source": "config/image_pins/runtime.env",
+      "deploy_input": "deploy/.env",
+      "runtime_artifacts": [
+        "scripts/runtime/show_runtime_compose_config.sh 脱敏输出",
+        "<current-host-state-root>/control_plane/compose.rendered.yaml",
+        "scripts/runtime/run_python_container.sh"
+      ]
+    },
+    {
+      "object": "Official Gateway image",
+      "policy_source": "config/runtime/openclaw.runtime_contract.json",
+      "selected_default_source": "config/image_pins/openclaw.env",
+      "deploy_input": "deploy/.env",
+      "runtime_artifacts": [
+        "scripts/runtime/show_runtime_compose_config.sh 脱敏输出",
+        "<current-host-state-root>/control_plane/compose.rendered.yaml"
+      ]
+    }
+  ],
+  "profiles": {
+    "cn_acceleration": {
+      "summary": "中国网络环境默认 profile。",
+      "applies_to": [
+        "official_gateway",
+        "control_plane_python",
+        "runtime_python",
+        "nginx_runtime"
+      ],
+      "selected_defaults": [
+        "OPENCLAW_OFFICIAL_GATEWAY_IMAGE 默认保持 config/image_pins/openclaw.env 中的 official GHCR pin；CN profile 下在线拉取由 pull_images.sh 自动选择等值 candidate 并只改写当前 deploy/.env。",
+        "OPENCLAW_CONTROL_PLANE_IMAGE / OPENCLAW_RUNTIME_PYTHON_IMAGE 默认固定为 docker.m.daocloud.io/library/python tag@digest pin；Docker daemon registry-mirrors 仅作为补充传输加速",
+        "NGINX_IMAGE 默认固定为 docker.m.daocloud.io/library/nginx tag@digest pin；Docker daemon registry-mirrors 仅作为补充传输加速"
+      ],
+      "switch_notes": [
+        "适用于部署机优先访问中国境内 API、Docker registry mirror，且必要时通过候选镜像站补做 Gateway candidate 验证的场景。",
+        "切换离开该 profile 时，必须先更新本文件与 deploy env / image pins 真源，再重渲染文档并重跑宿主机连通性检查。"
+      ]
+    },
+    "global_canonical": {
+      "summary": "面向国际网络出口的 canonical profile。",
+      "applies_to": [
+        "official_gateway",
+        "control_plane_python",
+        "runtime_python",
+        "nginx_runtime"
+      ],
+      "selected_defaults": [
+        "OPENCLAW_OFFICIAL_GATEWAY_IMAGE 默认保持 config/image_pins/openclaw.env 中的 official GHCR pin"
+      ],
+      "switch_notes": [
+        "仅在目标环境应直接访问 global 官方入口时选用。",
+        "切换后必须同步检查外网解析、HTTPS 连通性、部署输入默认值与对外说明。"
+      ]
+    }
+  },
+  "switch_procedure": [
+    "先修改 config/runtime/openclaw.runtime_contract.json 中 Gateway 仓库真源或 candidate 仓库集合；如仅调整 profile / 说明，再修改 config/runtime/source_strategy.json。",
+    "同步更新受影响的 image pin 真源、镜像合同与部署文档说明。",
+    "随后重渲染 docs/operations/runtime-service-reference.md、docs/getting-started/deployment-inputs.md 与 deploy/site.env.example。",
+    "最后重新执行 check_docker_host_readiness.sh 与相关部署步骤，确认目标环境可以访问新的 selected runtime source；若 Gateway 预检报告 digest 不一致，则按 pin / 镜像站同步问题处理，不得误判为网络不可达。"
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "generated_artifacts": {
+    "artifact_policy_doc": "agent/README.md"
+  },
+  "title": "控制平面作业工件策略参考",
+  "intro": [
+    "本文档只负责收口 **job artifactPolicy、latestAlias、run ledger 对应清单与 scheduler run 目录模式**。",
+    "job 的 artifactPolicy 真相统一来自扩展包内的 `agent/control_plane/jobs/*.json`；kernel / base 基线固定来自 `config/control_plane/service.json`，正式默认运行 profile 固定来自 `config/control_plane/profiles/agent_platform.service.json`；仓内 extension 只能通过正式 profile、有效自动发现 profile 或仓内合同 service 的显式 `--config-path` 装配额外 runtime paths 片段。"
+  ],
+  "references": [
+    "agent/README.md",
+    "docs/operations/runtime-service-reference.md#deployment-acceptance-artifacts",
+    "agent/README.md"
+  ],
+  "boundary": [
+    "本页不重新解释 job 的调度时刻、dependsOn 或 failureClassPolicy。",
+    "本页不替代 run ledger 摘要；它只定义每个 job 的工件根目录、latest alias 与 scheduler run manifest 模式。",
+    "job 的 artifactPolicy 以 jobs 真源为准；本文档由真源渲染，活动文档统一引用本文档。"
+  ]
+}

@@ -1,0 +1,189 @@
+{
+  "generated_artifacts": {
+    "setup_entrypoint_doc": "docs/getting-started/quickstart.md"
+  },
+  "title": "setup 一键入口参考",
+  "entrypoints": {
+    "prepare_docker_host": {
+      "title": "prepare_docker_host.sh",
+      "command": "sudo bash ./scripts/setup/prepare_docker_host.sh [选项]",
+      "purpose": "CentOS 7 存量老系统路径的宿主机准备入口；统一处理 repo 修复、预工具安装、Docker / Compose 安装、daemon 基线、防火墙 80/443 预开放与 firewalld docker zone 合同。",
+      "when_to_use": [
+        "首次把 CentOS 7 目标机纳入正式部署前。",
+        "Docker / Compose / daemon / 防火墙或 firewalld docker zone 前提未闭合，需要统一回到唯一宿主机准备入口时。"
+      ],
+      "boundaries": [
+        "只负责宿主机准备，不渲染 deploy/.env，不准备 host 控制面执行介质，不执行 one_click 主链。",
+        "执行完成后必须进入 check_docker_host_readiness.sh；未通过 readiness 前不得继续进入 one_click_config.sh。",
+        "离线新机必须先具备本地 RPM / YUM 源，才能在 --offline 场景完成 Docker / Compose 安装。"
+      ],
+      "references": [
+        "docs/getting-started/environment-setup.md",
+        "docs/getting-started/quickstart.md",
+        "docs/operations/troubleshooting.md"
+      ]
+    },
+    "check_docker_host_readiness": {
+      "title": "check_docker_host_readiness.sh",
+      "command": "bash ./scripts/doctor/check_docker_host_readiness.sh [--offline] [--env-file <path>]",
+      "purpose": "CentOS 7 宿主机支持策略下的宿主机准入入口；统一检查 Docker / Compose、运行来源连通性、daemon / docker.sock / storage driver 与 firewalld docker zone 前提。",
+      "when_to_use": [
+        "prepare_docker_host.sh 完成后，准备进入 one_click 主链前。",
+        "需要拆分定位宿主机层问题，确认当前目标机是否具备继续进入 one_click_config.sh 的资格时。"
+      ],
+      "boundaries": [
+        "只做只读准入判断；宿主机修复动作使用 prepare_docker_host.sh。",
+        "readiness 通过后按 quickstart 填写 deploy/site.env 与启用扩展内部 agent/extensions/<extension-id>/deploy/extension.env，并执行 prepare_control_plane_medium.sh 与 one_click_config.sh；部署前门禁使用 one_click_test_basic。"
+      ],
+      "references": [
+        "docs/getting-started/environment-setup.md",
+        "docs/getting-started/quickstart.md",
+        "docs/operations/troubleshooting.md"
+      ]
+    },
+    "init_private_ingress": {
+      "title": "init_private_ingress.sh",
+      "command": "bash ./scripts/setup/init_private_ingress.sh [--platform <windows|linux|macos|all>] [-- <listen_ip> <tls_cn>]",
+      "purpose": "统一选择或显式覆盖 private ingress bind IP 与访问主机名，直接回填 deploy/site.env 中的 OPENCLAW_INGRESS_LISTEN_IP / OPENCLAW_TLS_CN，默认打印 Windows PowerShell 访问端 DNS / hosts 操作命令，并可通过 --platform 切换到 Linux、macOS 或 all。",
+      "when_to_use": [
+        "宿主机 readiness 通过后，首次填写 deploy/site.env 前。",
+        "需要切换 OPENCLAW_INGRESS_LISTEN_IP 或 OPENCLAW_TLS_CN，并要求目标机与访问端步骤保持同一口径时。"
+      ],
+      "boundaries": [
+        "只处理 private ingress 的两个核心输入并打印访问端命令；其余 deploy/site.env 字段填写、deploy/.env 生成与 one_click 主链由后续入口执行。",
+        "默认只自动选择 hostname -I 中的首个 RFC1918 私网 IPv4；若实际部署网卡不是该地址，必须通过 -- <listen_ip> <tls_cn> 显式覆盖。",
+        "访问端 hosts 写入动作必须在浏览器所在机器执行；Linux / macOS 使用 `/etc/hosts`，Windows 使用 `C:\\Windows\\System32\\drivers\\etc\\hosts`，脚本不会远程修改访问端 hosts。"
+      ],
+      "references": [
+        "docs/getting-started/quickstart.md",
+        "docs/getting-started/environment-setup.md",
+        "docs/getting-started/deployment-inputs.md",
+        "docs/operations/troubleshooting.md"
+      ]
+    },
+    "one_click_config": {
+      "title": "one_click_config.sh",
+      "command": "bash ./scripts/setup/one_click_config.sh",
+      "purpose": "渲染 deploy/.env、生成 active profile effective compose、同步 dispatch target 运行态 env、预创建 config_summary 所需的最小 control_plane/setup 目录，并对 deploy/.env / deploy/site.env / 启用扩展内部 agent/extensions/<extension-id>/deploy/extension.env / deploy/targets.d/*.env 统一应用 owner-only 权限；若最早期 preflight / effective compose 生成 / render 前失败，也会写出应急 config_summary.json。",
+      "when_to_use": [
+        "首次填写或修改 deploy/site.env 后。",
+        "首次填写或修改启用扩展内部 agent/extensions/<extension-id>/deploy/extension.env 后。",
+        "新增、删除或调整 deploy/targets.d/*.env 后。",
+        "宿主机准备与 readiness 通过，并完成 host 控制面执行介质准备后。"
+      ],
+      "boundaries": [
+        "只生成与校验运行态部署输入，并自举 config_summary 所需的最小 control_plane/setup 目录；不负责宿主机准备、readiness、镜像准备或 runtime 启动。",
+        "应急 config_summary.json 只用于说明失败原因与下一步动作，不代表 deploy/.env 已生成成功。",
+        "若 host 控制面执行介质尚未准备完成，必须先执行 scripts/setup/prepare_control_plane_medium.sh。"
+      ],
+      "references": [
+        "docs/getting-started/environment-setup.md",
+        "docs/getting-started/deployment-inputs.md",
+        "docs/getting-started/quickstart.md",
+        "docs/operations/troubleshooting.md"
+      ]
+    },
+    "apply_ingress_boundary_rules": {
+      "title": "apply_ingress_boundary_rules.sh",
+      "command": "sudo bash ./scripts/setup/apply_ingress_boundary_rules.sh --env-file deploy/.env [--dry-run]",
+      "purpose": "把 OPENCLAW_INGRESS_ALLOWED_SOURCE_CIDRS 物化为宿主机 DOCKER-USER ingress 规则，并在 host_firewall 模式下按当前 deploy/.env 固定 80/443 的允许来源与默认拒绝。",
+      "when_to_use": [
+        "one_click_config.sh 成功生成 deploy/.env 后、fix_permissions.sh 与 one_click_test_basic.sh 前。",
+        "修改 OPENCLAW_INGRESS_ALLOWED_SOURCE_CIDRS、OPENCLAW_INGRESS_LISTEN_IP 或从 external_acl 切回 host_firewall 后。"
+      ],
+      "boundaries": [
+        "只处理 ingress 来源限制的宿主机物化；setup env validate、Docker readiness、镜像准备与 runtime 启动由各自入口执行。",
+        "OPENCLAW_INGRESS_BOUNDARY_MODE=external_acl 时不会改宿主机规则；此时必须提供结构化证据文件并通过后续 doctor 语义复核。",
+        "host_firewall 模式下若未先执行本入口，不得继续声称 ingress 来源限制已经按 deploy/.env 落地。"
+      ],
+      "references": [
+        "docs/getting-started/quickstart.md",
+        "docs/getting-started/deployment-inputs.md",
+        "docs/operations/security-boundary.md"
+      ]
+    },
+    "one_click_test_basic": {
+      "title": "one_click_test_basic.sh",
+      "command": "bash ./scripts/setup/one_click_test_basic.sh",
+      "purpose": "作为唯一部署前门禁，检查 deploy env、已物化的 ingress 边界证据与来源限制语义、宿主机 readiness、运行镜像就绪性、部署镜像覆盖合同、compose 合同与 runtime bind user 合同；若最早期 preflight / 控制面默认值失败，也会输出统一 basic summary。",
+      "when_to_use": [
+        "fix_permissions.sh 已完成后，正式进入 one_click_deploy 前。",
+        "修改 deploy/site.env / 启用扩展内部 agent/extensions/<extension-id>/deploy/extension.env / deploy/targets.d/*.env 并重新生成 deploy/.env 后，或宿主机 Docker 环境、运行镜像准备策略变化后。"
+      ],
+      "boundaries": [
+        "不会执行 bootstrap、compose up、dispatch doctor 或 full test；ingress 边界检查只验证配置与证据语义，不验证运行态服务健康。",
+        "只判断是否具备进入部署主链的基础条件；宿主机 readiness 准入使用 check_docker_host_readiness.sh。"
+      ],
+      "references": [
+        "docs/getting-started/environment-setup.md",
+        "docs/getting-started/image-preparation.md",
+        "docs/getting-started/quickstart.md",
+        "docs/operations/troubleshooting.md"
+      ]
+    },
+    "one_click_deploy": {
+      "title": "one_click_deploy.sh",
+      "command": "bash ./scripts/setup/one_click_deploy.sh [--env-file deploy/.env]",
+      "purpose": "执行修复权限、bootstrap、证书、镜像准备、compose 渲染与 runtime 启动，并把最近一次部署摘要镜像到固定 latest 路径；默认只承接 latest basic gate proof 已通过且与当前 env/mode 匹配的场景。",
+      "when_to_use": [
+        "latest basic gate proof 与当前 env/mode 匹配后执行正式部署。",
+        "需要通过 --resume-from 从指定阶段恢复部署时。"
+      ],
+      "boundaries": [
+        "默认执行链从 latest basic gate proof 校验通过开始。",
+        "不负责补做宿主机准备或 readiness；这两项必须在 one_click 主链外单独完成。",
+        "deployment acceptance 默认顺序与证据产物统一查看 runtime-service-reference。"
+      ],
+      "references": [
+        "docs/getting-started/quickstart.md",
+        "docs/operations/runtime-service-reference.md",
+        "docs/operations/troubleshooting.md"
+      ]
+    },
+    "one_click_test_full": {
+      "title": "one_click_test_full.sh",
+      "command": "bash ./scripts/setup/one_click_test_full.sh",
+      "purpose": "执行部署后 full test，并写出 deployment acceptance 状态、full test summary 与最近一次 latest summary。",
+      "when_to_use": [
+        "one_click_deploy 成功后作为默认下一步。",
+        "需要重新确认 compose、dispatch、dispatch target、external 或 pipeline 健康时。"
+      ],
+      "boundaries": [
+        "只负责部署后验证，不负责重新部署、宿主机准备或镜像准备。",
+        "external 组失败按 full test 失败处理，不提供降级开关。"
+      ],
+      "references": [
+        "docs/operations/runtime-service-reference.md",
+        "docs/getting-started/quickstart.md",
+        "docs/operations/troubleshooting.md"
+      ]
+    }
+  },
+  "help_surface_contract": {
+    "title": "帮助面与执行面边界",
+    "guarantees": [
+      "--help / --explain / 未知参数 必须优先输出可阅读帮助，不得因为 Docker、Docker daemon 或控制面镜像未就绪而阻塞帮助面。",
+      "动态帮助面可用时，只允许展示由控制面真源派生的阶段映射、固定路径与默认入口；动态帮助面不可用时，必须使用静态说明。",
+      "帮助面只用于确认职责边界、阶段映射、常用变体与固定参考页；默认顺序以治理真源和正式文档为准。"
+    ],
+    "command_examples": [
+      "sudo bash ./scripts/setup/prepare_docker_host.sh --help",
+      "bash ./scripts/doctor/check_docker_host_readiness.sh --help",
+      "bash ./scripts/setup/prepare_control_plane_medium.sh --help",
+      "bash ./scripts/setup/init_private_ingress.sh --help",
+      "bash ./scripts/setup/one_click_config.sh --explain",
+      "sudo bash ./scripts/setup/apply_ingress_boundary_rules.sh --help",
+      "bash ./scripts/setup/one_click_test_basic.sh --help",
+      "bash ./scripts/setup/one_click_deploy.sh --explain",
+      "bash ./scripts/setup/one_click_test_full.sh --explain"
+    ],
+    "notes": [
+      "真正执行动作时，以 config/governance/flows/default_deployment_flow.json、deploy_flow 控制面与对应生成文档为唯一顺序真源。",
+      "帮助面用于提前说明边界与固定入口；完整步骤以 environment-setup.md、quickstart.md、runtime-service-reference.md 与 troubleshooting.md 为准。"
+    ],
+    "references": [
+      "docs/getting-started/quickstart.md",
+      "docs/operations/troubleshooting.md"
+    ]
+  }
+}

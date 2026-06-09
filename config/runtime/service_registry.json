@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "title": "runtime service registry",
+  "description": "统一维护 runtime target 到 compose service / docker container 的唯一映射；所有 runtime 脚本、文档与 smoke 应由本文件派生或校验。",
+  "targets": [
+    {
+      "target": "gateway",
+      "service": "openclaw-official-gateway",
+      "container": "openclaw-official-gateway",
+      "purpose": "official gateway，唯一外部认证、Control UI 与 OpenClaw runtime 接入面"
+    },
+    {
+      "target": "ingress",
+      "service": "openclaw-private-ingress",
+      "container": "openclaw-private-ingress",
+      "purpose": "private HTTPS ingress"
+    },
+    {
+      "target": "internal-api",
+      "service": "openclaw-internal-api",
+      "container": "openclaw-internal-api",
+      "purpose": "平台控制平面 API、状态汇总与 run ledger 入口"
+    },
+    {
+      "target": "scheduler",
+      "service": "openclaw-control-plane-scheduler",
+      "container": "openclaw-control-plane-scheduler",
+      "purpose": "统一控制平面调度器，唯一业务调度真源"
+    }
+  ]
+}

@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 1,
+  "surfaces": [
+    {
+      "id": "control_plane_references_dir",
+      "reason": "控制面正式配置只登记 profile、extension fragment、schema 与对象真源。",
+      "paths": ["config/control_plane/references"]
+    },
+    {
+      "id": "control_plane_samples_dir",
+      "reason": "控制面正式配置只登记 profile、extension fragment、schema 与对象真源。",
+      "paths": ["config/control_plane/samples"]
+    },
+    {
+      "id": "root_business_dispatch_targets_registry",
+      "reason": "业务 dispatch target registry 固定由显式扩展包内部提供，共享 agent/control_plane 只保留平台 registry。",
+      "paths": ["agent/control_plane/registries/dispatch_targets.json"]
+    },
+    {
+      "id": "root_business_object_dirs",
+      "reason": "业务 job、group、model、target 真源固定由显式扩展包内部提供，共享 agent/control_plane 不承载业务对象集合。",
+      "paths": [
+        "agent/control_plane/jobs",
+        "agent/control_plane/groups",
+        "agent/control_plane/models",
+        "agent/control_plane/targets"
+      ]
+    },
+    {
+      "id": "extension_pipeline_doctor_in_root_scripts",
+      "reason": "扩展专属链路检查固定由扩展包对象、诊断面和测试清单承载。",
+      "paths": ["scripts/doctor/doctor_pipeline_chain.sh"]
+    },
+    {
+      "id": "control_plane_cli_support_parser",
+      "reason": "control-plane grouped CLI 只保留统一装配入口。",
+      "paths": ["python/openclaw/control_plane/cli_support/parser.py"]
+    },
+    {
+      "id": "control_plane_cli_support_parser_specs",
+      "reason": "control-plane grouped CLI 只保留统一装配入口。",
+      "paths": ["python/openclaw/control_plane/cli_support/parser_specs.py"]
+    },
+    {
+      "id": "doctor_platform_config_selection",
+      "reason": "config selection 真源统一收口到 openclaw.lib.repo.layout。",
+      "paths": ["python/openclaw/doctor/platform/config_selection.py"]
+    }
+  ]
+}

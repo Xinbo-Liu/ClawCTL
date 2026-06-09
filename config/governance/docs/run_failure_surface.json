@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "generated_artifacts": {
+    "run_failure_doc": "docs/operations/troubleshooting.md"
+  },
+  "intro": [
+    "本页只负责统一说明 `setup flow deploy-failure` 控制面的人工入口、失败摘要结构与输出边界。",
+    "`summary_hint` 与阶段级 `next_steps` 由 `deploy_flow_control_plane` 基于失败阶段动态生成；setup 主链失败分流总览统一回到 `docs/operations/troubleshooting.md`。",
+    "run_failure 的 fixed latest mirror 读取 `config/governance/release/summary_manifest.json`；失败摘要标题与固定分节统一来自 `config/governance/docs/summary_output_surface.json`。",
+    "`write-failure-summary` 写出 run-specific 摘要的同时，也会把最近一次 one_click_deploy 失败摘要镜像到 `<current-host-state-root>/control_plane/setup/one_click_deploy.latest.summary.*`。",
+    "当失败与镜像准备相关时，失败摘要中的 `image_archive_path` 只记录实际使用的 deployment_images_*.tar；部署镜像合同与统一状态命令统一查看 `docs/getting-started/image-preparation.md`。"
+  ],
+  "usage_commands": [
+    "bash ./scripts/runtime/run_openclaw_python_tool.sh setup flow deploy-failure failure-summary --flow deploy --stage <stage> --timestamp <iso> --log-path <path> [--summary-json-path <path>] [--summary-md-path <path>] [--exit-code <n>] [--mode online|offline] [--resume-from <stage>] [--image-archive-path <path>] [--format text|json]",
+    "bash ./scripts/runtime/run_openclaw_python_tool.sh setup flow deploy-failure write-failure-summary --flow deploy --stage <stage> --timestamp <iso> --log-path <path> --out-json <path> --out-md <path> [--summary-json-path <path>] [--summary-md-path <path>] [--exit-code <n>] [--mode online|offline] [--resume-from <stage>] [--image-archive-path <path>]"
+  ],
+  "markdown_labels": {
+    "title": "one_click_deploy 失败摘要",
+    "diagnosis_heading": "排障结论",
+    "next_steps_heading": "下一步命令"
+  },
+  "text_labels": {
+    "diagnosis_heading": "[run_failure] 排障结论：",
+    "next_steps_heading": "[run_failure] 下一步动作："
+  },
+  "boundary": [
+    "失败阶段标签、summary_hint 与动态 next steps 统一来自 deploy flow 真源；本页只引用同一套阶段顺序与 resume-from 规则。",
+    "setup 主链分流、basic gate / deploy / full test 的默认第一跳入口统一查看 docs/operations/troubleshooting.md；本页只负责失败摘要结构与控制面入口。",
+    "one_click_deploy 的正式阶段说明与恢复执行入口以 `docs/getting-started/quickstart.md` 为准。",
+    "部署镜像合同、统一镜像状态命令与离线归档命名以 `docs/getting-started/image-preparation.md` 为准。"
+  ]
+}

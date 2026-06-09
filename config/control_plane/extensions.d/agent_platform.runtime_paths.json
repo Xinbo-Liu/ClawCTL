@@ -1,0 +1,211 @@
+{
+  "schema_version": 1,
+  "roots": {
+    "host_control_plane_dispatch_root": "{host_control_plane_root}/dispatch",
+    "scheduler_dispatch_root": "{scheduler_control_plane_root}/dispatch"
+  },
+  "logical_groups": {
+    "control_plane_artifacts": {
+      "label": "控制平面产物",
+      "description": "host 与 scheduler 共享的控制平面产物、队列与运行输出目录。"
+    },
+    "control_plane_dispatch": {
+      "label": "Dispatch 治理与配置",
+      "description": "平台中性的 dispatch registry、治理审计与配置对象。"
+    },
+    "control_plane_health": {
+      "label": "控制平面健康",
+      "description": "平台中性的健康、审计与治理日志对象。"
+    }
+  },
+  "entries": {
+    "dispatch_out_dir": {
+      "kind": "runtime_dir",
+      "category": "artifact",
+      "owner": [
+        "host",
+        "scheduler"
+      ],
+      "create_on_bootstrap": true,
+      "env_names": {
+        "host": "HOST_DISPATCH_OUT_DIR",
+        "scheduler": "DISPATCH_OUT_DIR"
+      },
+      "paths": {
+        "host": "{host_control_plane_root}/dispatch_out",
+        "scheduler": "{scheduler_control_plane_root}/dispatch_out"
+      },
+      "logical_group": "control_plane_artifacts"
+    },
+    "dispatch_runs_dir": {
+      "kind": "runtime_dir",
+      "category": "artifact",
+      "owner": [
+        "host",
+        "scheduler"
+      ],
+      "create_on_bootstrap": true,
+      "paths": {
+        "host": "{host_control_plane_root}/dispatch_out/runs",
+        "scheduler": "{scheduler_control_plane_root}/dispatch_out/runs"
+      },
+      "env_names": {},
+      "logical_group": "control_plane_artifacts"
+    },
+    "dispatch_queue_dir": {
+      "kind": "runtime_dir",
+      "category": "artifact",
+      "owner": [
+        "host",
+        "scheduler"
+      ],
+      "create_on_bootstrap": true,
+      "paths": {
+        "host": "{host_control_plane_root}/dispatch_out/queue",
+        "scheduler": "{scheduler_control_plane_root}/dispatch_out/queue"
+      },
+      "env_names": {},
+      "logical_group": "control_plane_artifacts"
+    },
+    "dispatch_queue_done_dir": {
+      "kind": "runtime_dir",
+      "category": "artifact",
+      "owner": [
+        "host",
+        "scheduler"
+      ],
+      "create_on_bootstrap": true,
+      "paths": {
+        "host": "{host_control_plane_root}/dispatch_out/queue_done",
+        "scheduler": "{scheduler_control_plane_root}/dispatch_out/queue_done"
+      },
+      "env_names": {},
+      "logical_group": "control_plane_artifacts"
+    },
+    "dispatch_target_acceptance_audit_dir": {
+      "kind": "runtime_dir",
+      "category": "artifact",
+      "owner": [
+        "host",
+        "scheduler"
+      ],
+      "create_on_bootstrap": true,
+      "paths": {
+        "host": "{host_control_plane_root}/dispatch_out/audit/target_acceptance",
+        "scheduler": "{scheduler_control_plane_root}/dispatch_out/audit/target_acceptance"
+      },
+      "env_names": {},
+      "logical_group": "control_plane_dispatch"
+    },
+    "dispatch_target_batch_acceptance_audit_dir": {
+      "kind": "runtime_dir",
+      "category": "artifact",
+      "owner": [
+        "host",
+        "scheduler"
+      ],
+      "create_on_bootstrap": true,
+      "paths": {
+        "host": "{host_control_plane_root}/dispatch_out/audit/dispatch_target_batch_acceptance",
+        "scheduler": "{scheduler_control_plane_root}/dispatch_out/audit/dispatch_target_batch_acceptance"
+      },
+      "env_names": {},
+      "logical_group": "control_plane_dispatch"
+    },
+    "dispatch_target_rotation_sequence_audit_dir": {
+      "kind": "runtime_dir",
+      "category": "artifact",
+      "owner": [
+        "host",
+        "scheduler"
+      ],
+      "create_on_bootstrap": true,
+      "paths": {
+        "host": "{host_control_plane_root}/dispatch_out/audit/target_rotation_sequence",
+        "scheduler": "{scheduler_control_plane_root}/dispatch_out/audit/target_rotation_sequence"
+      },
+      "env_names": {},
+      "logical_group": "control_plane_dispatch"
+    },
+    "dispatch_governance_audit_dir": {
+      "kind": "runtime_dir",
+      "category": "log",
+      "owner": [
+        "host",
+        "scheduler"
+      ],
+      "create_on_bootstrap": true,
+      "paths": {
+        "host": "{host_control_plane_root}/logs/dispatch-governance-audit",
+        "scheduler": "{scheduler_logs_root}/dispatch-governance-audit"
+      },
+      "env_names": {},
+      "logical_group": "control_plane_health"
+    },
+    "dispatch_target_lifecycle_audit_dir": {
+      "kind": "runtime_dir",
+      "category": "artifact",
+      "owner": "host",
+      "create_on_bootstrap": true,
+      "paths": {
+        "host": "{host_control_plane_setup_root}/audit/dispatch_target_lifecycle",
+        "scheduler": null,
+        "gateway": null
+      },
+      "env_names": {},
+      "logical_group": "control_plane_setup"
+    },
+    "dispatch_config_dir": {
+      "kind": "config_dir",
+      "category": "config",
+      "owner": [
+        "host",
+        "scheduler"
+      ],
+      "create_on_bootstrap": true,
+      "env_names": {
+        "host": "HOST_DISPATCH_CONFIG_DIR",
+        "scheduler": "DISPATCH_CONFIG_DIR"
+      },
+      "paths": {
+        "host": "{host_control_plane_dispatch_root}",
+        "scheduler": "{scheduler_dispatch_root}"
+      },
+      "logical_group": "control_plane_dispatch"
+    },
+    "dispatch_runtime_summary_json": {
+      "kind": "runtime_file",
+      "category": "config",
+      "owner": "host",
+      "create_parent_on_bootstrap": true,
+      "paths": {
+        "host": "{host_control_plane_setup_root}/dispatch_runtime_summary.json",
+        "scheduler": null,
+        "gateway": null
+      },
+      "env_names": {
+        "host": "HOST_DISPATCH_RUNTIME_SUMMARY_JSON"
+      },
+      "logical_group": "control_plane_setup"
+    },
+    "dispatch_targets_json": {
+      "kind": "runtime_file",
+      "category": "config",
+      "owner": [
+        "host",
+        "scheduler"
+      ],
+      "create_parent_on_bootstrap": true,
+      "paths": {
+        "host": "{host_control_plane_dispatch_root}/targets.json",
+        "scheduler": "{scheduler_dispatch_root}/targets.json",
+        "gateway": null
+      },
+      "env_names": {
+        "host": "HOST_DISPATCH_TARGETS_JSON",
+        "scheduler": "DISPATCH_TARGETS_JSON"
+      },
+      "logical_group": "control_plane_dispatch"
+    }
+  }
+}

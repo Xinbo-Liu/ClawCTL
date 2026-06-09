@@ -1,0 +1,550 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://openclaw.local/control-plane/agent_module.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "id",
+    "agentRef",
+    "title",
+    "version",
+    "activation",
+    "ownerDomain",
+    "moduleKind",
+    "runtime",
+    "logic",
+    "operations",
+    "contract",
+    "assets",
+    "governance",
+    "assembly",
+    "controlPlane"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "type": "integer",
+      "const": 1
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9_]+$",
+      "minLength": 3
+    },
+    "agentRef": {
+      "type": "string",
+      "pattern": "^[a-z0-9_]+$",
+      "minLength": 3
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^v[0-9]+$"
+    },
+    "activation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "enabledExtensionIds"
+      ],
+      "properties": {
+        "enabledExtensionIds": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "ownerDomain": {
+      "type": "string",
+      "minLength": 1
+    },
+    "moduleKind": {
+      "type": "string",
+      "enum": [
+        "worker",
+        "control_check"
+      ]
+    },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "entrypointKinds",
+        "runtimeAdapterRefs"
+      ],
+      "properties": {
+        "entrypointKinds": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "runtimeAdapterRefs": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "logic": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "implementationRef",
+        "sourcePaths"
+      ],
+      "properties": {
+        "implementationRef": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sourcePaths": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "assets": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "readmePath",
+        "binPath",
+        "skillsPath",
+        "permissionsPath",
+        "toolsPath"
+      ],
+      "properties": {
+        "readmePath": {
+          "type": "string",
+          "minLength": 1
+        },
+        "agentsMdPath": {
+          "type": "string",
+          "minLength": 1
+        },
+        "binPath": {
+          "type": "string",
+          "minLength": 1
+        },
+        "skillsPath": {
+          "type": "string",
+          "minLength": 1
+        },
+        "permissionsPath": {
+          "type": "string",
+          "minLength": 1
+        },
+        "toolsPath": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "governance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "changeControlDocPaths"
+      ],
+      "properties": {
+        "changeControlDocPaths": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "assembly": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "skillSetRef",
+        "permissionPolicyRef",
+        "toolsetRef"
+      ],
+      "properties": {
+        "skillSetRef": {
+          "type": "string",
+          "pattern": "^[a-z0-9_]+$",
+          "minLength": 3
+        },
+        "permissionPolicyRef": {
+          "type": "string",
+          "pattern": "^[a-z0-9_]+$",
+          "minLength": 3
+        },
+        "toolsetRef": {
+          "type": "string",
+          "pattern": "^[a-z0-9_]+$",
+          "minLength": 3
+        }
+      }
+    },
+    "operations": {
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": {
+        "pattern": "^[a-z0-9_]+$",
+        "minLength": 3
+      },
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "summary",
+          "executor",
+          "jobBindings"
+        ],
+        "properties": {
+          "summary": {
+            "type": "string",
+            "minLength": 1
+          },
+          "jobRefs": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z0-9_]+$",
+              "minLength": 3
+            }
+          },
+          "executor": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "python_cli",
+                  "shell",
+                  "openclaw_runtime",
+                  "delivery_adapter"
+                ]
+              },
+              "operation": {
+                "type": "string",
+                "minLength": 1
+              },
+              "argv": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            },
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "kind": {
+                      "const": "delivery_adapter"
+                    }
+                  }
+                },
+                "then": {
+                  "required": [
+                    "operation"
+                  ]
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "kind": {
+                      "enum": [
+                        "python_cli",
+                        "shell",
+                        "openclaw_runtime"
+                      ]
+                    }
+                  }
+                },
+                "then": {
+                  "required": [
+                    "argv"
+                  ]
+                }
+              }
+            ]
+          },
+          "jobBindings": {
+            "type": "object",
+            "minProperties": 0,
+            "propertyNames": {
+              "pattern": "^[a-z0-9_]+$",
+              "minLength": 3
+            },
+            "additionalProperties": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "dependsOn": {
+                  "type": "array",
+                  "items": {
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "jobId",
+                          "requiredStatuses",
+                          "maxAgeMinutes"
+                        ],
+                        "properties": {
+                          "jobId": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "requiredStatuses": {
+                            "type": "array",
+                            "minItems": 1,
+                            "uniqueItems": true,
+                            "items": {
+                              "type": "string",
+                              "minLength": 1
+                            }
+                          },
+                          "maxAgeMinutes": {
+                            "type": "integer",
+                            "minimum": 1
+                          }
+                        }
+                      }
+                    ]
+                  }
+                },
+                "targetBindingRef": {
+                  "type": "string",
+                  "pattern": "^[a-z0-9_]+$",
+                  "minLength": 3
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "inputs",
+        "outputs"
+      ],
+      "properties": {
+        "inputs": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "artifacts",
+            "runtimeInputs"
+          ],
+          "properties": {
+            "artifacts": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "runtimeInputs": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "notes": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        },
+        "outputs": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "artifacts",
+            "statusSignals"
+          ],
+          "properties": {
+            "artifacts": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "statusSignals": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "notes": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        }
+      }
+    },
+    "controlPlane": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "agent",
+        "implementation"
+      ],
+      "properties": {
+        "agent": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "title",
+            "entrypointKind",
+            "description",
+            "capabilities"
+          ],
+          "properties": {
+            "title": {
+              "type": "string",
+              "minLength": 1
+            },
+            "entrypointKind": {
+              "type": "string",
+              "enum": [
+                "python_cli",
+                "shell",
+                "openclaw_runtime",
+                "delivery_adapter"
+              ]
+            },
+            "description": {
+              "type": "string",
+              "minLength": 1
+            },
+            "capabilities": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "network",
+                "filesystemWrite",
+                "modelRequired",
+                "externalDispatch"
+              ],
+              "properties": {
+                "network": {
+                  "type": "boolean"
+                },
+                "filesystemWrite": {
+                  "type": "array",
+                  "uniqueItems": true,
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "modelRequired": {
+                  "type": "boolean"
+                },
+                "externalDispatch": {
+                  "type": "boolean"
+                }
+              }
+            },
+            "defaultModelProfileRef": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "implementation": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "title",
+            "runtime"
+          ],
+          "properties": {
+            "title": {
+              "type": "string",
+              "minLength": 1
+            },
+            "runtime": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "adapterRef",
+                "config"
+              ],
+              "properties": {
+                "adapterRef": {
+                  "type": "string",
+                  "pattern": "^[a-z0-9_]+$",
+                  "minLength": 3
+                },
+                "config": {
+                  "type": "object"
+                },
+                "defaultArgs": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,457 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://openclaw.local/control-plane/agent_group.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "id",
+    "title",
+    "activation",
+    "mission",
+    "ownerDomain",
+    "dependencyPolicy",
+    "artifactContract",
+    "schedulePolicy",
+    "failurePolicy",
+    "observabilityContract",
+    "releasePolicy"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "type": "integer",
+      "const": 1
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9_]+$",
+      "minLength": 3
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "activation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "enabledExtensionIds"
+      ],
+      "properties": {
+        "enabledExtensionIds": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "mission": {
+      "type": "string",
+      "minLength": 1
+    },
+    "ownerDomain": {
+      "type": "string",
+      "minLength": 1
+    },
+    "dependencyPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "haltOnMemberFailure",
+        "retryMode",
+        "orderedJobRefs"
+      ],
+      "properties": {
+        "haltOnMemberFailure": {
+          "type": "boolean"
+        },
+        "retryMode": {
+          "type": "string",
+          "enum": [
+            "stage_owned",
+            "group_owned"
+          ]
+        },
+        "notes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "orderedJobRefs": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "artifactContract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "inputs",
+        "outputs"
+      ],
+      "properties": {
+        "inputs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        },
+        "outputs": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        },
+        "summaryArtifact": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "schedulePolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "timezone",
+        "windowRef",
+        "orderBase",
+        "orderStep",
+        "jobRefs"
+      ],
+      "properties": {
+        "jobRefs": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "timezone": {
+          "type": "string",
+          "minLength": 1
+        },
+        "windowRef": {
+          "type": "string",
+          "minLength": 1
+        },
+        "orderBase": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "orderStep": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "failurePolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "manualInterventionSignals"
+      ],
+      "properties": {
+        "manualInterventionSignals": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        },
+        "degradePolicy": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "observabilityContract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "summaryObject",
+        "runLedgerRequired"
+      ],
+      "properties": {
+        "summaryObject": {
+          "type": "string",
+          "minLength": 1
+        },
+        "runLedgerRequired": {
+          "type": "boolean"
+        },
+        "notes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "releasePolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "changeControl",
+        "singleSourceDocs",
+        "requiredEvidence",
+        "releaseGate",
+        "acceptanceBinding",
+        "rollbackContract"
+      ],
+      "properties": {
+        "changeControl": {
+          "type": "string",
+          "minLength": 1
+        },
+        "singleSourceDocs": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "requiredEvidence": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "releaseGate": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "requiredCheckIds",
+            "requireHealthyMembers",
+            "requireRecentAccess",
+            "requireRunLedgerCoverage",
+            "freezeOnStatuses"
+          ],
+          "properties": {
+            "requiredCheckIds": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "requireHealthyMembers": {
+              "type": "boolean"
+            },
+            "requireRecentAccess": {
+              "type": "boolean"
+            },
+            "requireRunLedgerCoverage": {
+              "type": "boolean"
+            },
+            "freezeOnStatuses": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        },
+        "rollbackContract": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "strategy",
+            "triggerSignals",
+            "requiredEvidenceRefs",
+            "operatorSteps",
+            "maxRecoveryMinutes"
+          ],
+          "properties": {
+            "strategy": {
+              "type": "string",
+              "minLength": 1
+            },
+            "triggerSignals": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "requiredEvidenceRefs": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "operatorSteps": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "maxRecoveryMinutes": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        },
+        "acceptanceBinding": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "deploymentAcceptanceCheckIds",
+            "runtimeEvidenceEntryIds",
+            "requiredRunLedgerJobRefs"
+          ],
+          "properties": {
+            "deploymentAcceptanceCheckIds": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "runtimeEvidenceEntryIds": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "requiredRunLedgerJobRefs": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "notes": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        }
+      }
+    },
+    "recoveryPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mode",
+        "triggerStatusSignals"
+      ],
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": [
+            "scheduled_job_sequence"
+          ]
+        },
+        "triggerStatusSignals": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "haltMainlineOnRecoveryPending": {
+          "type": "boolean"
+        },
+        "steps": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "jobRef",
+              "actionKind",
+              "afterMinutes"
+            ],
+            "properties": {
+              "jobRef": {
+                "type": "string",
+                "minLength": 1
+              },
+              "actionKind": {
+                "type": "string",
+                "enum": [
+                  "retry",
+                  "compensate",
+                  "replay"
+                ]
+              },
+              "afterMinutes": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "operationRef": {
+                "type": "string",
+                "minLength": 1
+              },
+              "notes": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            }
+          }
+        },
+        "notes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    }
+  }
+}

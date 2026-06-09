@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "openclaw"
+version = "0.1.0"
+description = "ClawCTL base control-plane repository package"
+requires-python = ">=3.11"
+dependencies = [
+  "jsonschema>=4.0",
+]
+
+[project.scripts]
+openclaw = "openclaw.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "python"}
+
+[tool.setuptools.packages.find]
+where = ["python"]
+exclude = ["openclaw.tests", "openclaw.tests.*"]

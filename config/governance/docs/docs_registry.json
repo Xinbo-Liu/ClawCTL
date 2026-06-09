@@ -1,0 +1,1093 @@
+{
+  "checker": {
+    "shell_entrypoint": "scripts/docs/check_docs_registry_sync.sh",
+    "python_module": "python/openclaw/docs/support/docs_registry.py"
+  },
+  "pages": [
+    {
+      "path": "README.md",
+      "role": "navigation",
+      "entryLevel": "root",
+      "ownerDomain": "repo",
+      "sourceMode": "manual",
+      "formalEntry": false,
+      "localOnly": false,
+      "entrypointContract": {
+        "requiredRefs": [
+          {
+            "kind": "doc_page",
+            "path": "docs/architecture/control-plane-baseline.md"
+          },
+          {
+            "kind": "doc_page",
+            "path": "docs/architecture/platform-main-path.md"
+          },
+          {
+            "kind": "doc_page",
+            "path": "docs/architecture/supported-deployment-boundary.md"
+          },
+          {
+            "kind": "doc_page",
+            "path": "docs/getting-started/quickstart.md"
+          },
+          {
+            "kind": "doc_page",
+            "path": "docs/operations/runtime-service-reference.md"
+          },
+          {
+            "kind": "doc_page",
+            "path": "docs/operations/maintenance-map.md"
+          },
+          {
+            "kind": "doc_page",
+            "path": "docs/operations/security-boundary.md"
+          }
+        ]
+      },
+      "boundaryContract": {
+        "forbiddenRefs": [
+          {
+            "kind": "literal",
+            "id": "one_click_deploy.sh",
+            "value": "one_click_deploy.sh",
+            "reason": "forbidden documentation surface"
+          },
+          {
+            "kind": "literal",
+            "id": "one_click_test_full.sh",
+            "value": "one_click_test_full.sh",
+            "reason": "forbidden documentation surface"
+          },
+          {
+            "kind": "literal",
+            "id": "curl_-k",
+            "value": "curl -k",
+            "reason": "forbidden documentation surface"
+          },
+          {
+            "kind": "literal",
+            "id": "devices_approve",
+            "value": "devices approve",
+            "reason": "forbidden documentation surface"
+          },
+          {
+            "kind": "literal",
+            "id": "deployment_acceptance",
+            "value": "deployment acceptance 默认顺序",
+            "reason": "forbidden documentation surface"
+          }
+        ]
+      },
+      "navigationContract": {
+        "requiredTokens": [
+          "## 项目定位",
+          "## 默认运行面",
+          "## 分层模型",
+          "## 阅读路径",
+          "## 交付与合规入口",
+          "## 维护边界"
+        ],
+        "minLinks": 5
+      }
+    },
+    {
+      "path": "config/workspace_templates/router_local_ro/AGENTS.md",
+      "role": "local",
+      "entryLevel": "local",
+      "ownerDomain": "workspace_templates",
+      "sourceMode": "manual",
+      "formalEntry": false,
+      "localOnly": true,
+      "localIdentity": {
+        "requiredTokens": [
+          "局部文档声明",
+          "不是项目正式入口",
+          "docs/README.md"
+        ]
+      }
+    },
+    {
+      "path": "config/workspace_templates/router_local_ro/BOOTSTRAP.md",
+      "role": "local",
+      "entryLevel": "local",
+      "ownerDomain": "workspace_templates",
+      "sourceMode": "manual",
+      "formalEntry": false,
+      "localOnly": true,
+      "localIdentity": {
+        "requiredTokens": [
+          "局部文档声明",
+          "不是项目正式入口",
+          "docs/README.md"
+        ]
+      }
+    },
+    {
+      "path": "config/workspace_templates/router_local_ro/HEARTBEAT.md",
+      "role": "local",
+      "entryLevel": "local",
+      "ownerDomain": "workspace_templates",
+      "sourceMode": "manual",
+      "formalEntry": false,
+      "localOnly": true,
+      "localIdentity": {
+        "requiredTokens": [
+          "局部文档声明",
+          "不是项目正式入口",
+          "docs/README.md"
+        ]
+      }
+    },
+    {
+      "path": "config/workspace_templates/router_local_ro/IDENTITY.md",
+      "role": "local",
+      "entryLevel": "local",
+      "ownerDomain": "workspace_templates",
+      "sourceMode": "manual",
+      "formalEntry": false,
+      "localOnly": true,
+      "localIdentity": {
+        "requiredTokens": [
+          "局部文档声明",
+          "不是项目正式入口",
+          "docs/README.md"
+        ]
+      }
+    },
+    {
+      "path": "config/workspace_templates/router_local_ro/MEMORY.md",
+      "role": "local",
+      "entryLevel": "local",
+      "ownerDomain": "workspace_templates",
+      "sourceMode": "manual",
+      "formalEntry": false,
+      "localOnly": true,
+      "localIdentity": {
+        "requiredTokens": [
+          "局部文档声明",
+          "不是项目正式入口",
+          "docs/README.md"
+        ]
+      }
+    },
+    {
+      "path": "config/workspace_templates/router_local_ro/SOUL.md",
+      "role": "local",
+      "entryLevel": "local",
+      "ownerDomain": "workspace_templates",
+      "sourceMode": "manual",
+      "formalEntry": false,
+      "localOnly": true,
+      "localIdentity": {
+        "requiredTokens": [
+          "局部文档声明",
+          "不是项目正式入口",
+          "docs/README.md"
+        ]
+      }
+    },
+    {
+      "path": "config/workspace_templates/router_local_ro/TOOLS.md",
+      "role": "local",
+      "entryLevel": "local",
+      "ownerDomain": "workspace_templates",
+      "sourceMode": "manual",
+      "formalEntry": false,
+      "localOnly": true,
+      "localIdentity": {
+        "requiredTokens": [
+          "局部文档声明",
+          "不是项目正式入口",
+          "docs/README.md"
+        ]
+      }
+    },
+    {
+      "path": "config/workspace_templates/router_local_ro/USER.md",
+      "role": "local",
+      "entryLevel": "local",
+      "ownerDomain": "workspace_templates",
+      "sourceMode": "manual",
+      "formalEntry": false,
+      "localOnly": true,
+      "localIdentity": {
+        "requiredTokens": [
+          "局部文档声明",
+          "不是项目正式入口",
+          "docs/README.md"
+        ]
+      }
+    },
+    {
+      "path": "docs/README.md",
+      "role": "navigation",
+      "entryLevel": "L0",
+      "ownerDomain": "docs",
+      "sourceMode": "manual",
+      "formalEntry": false,
+      "localOnly": false,
+      "entrypointContract": {
+        "requiredRefs": [
+          {
+            "kind": "doc_page",
+            "path": "architecture/control-plane-baseline.md"
+          },
+          {
+            "kind": "doc_page",
+            "path": "architecture/platform-main-path.md"
+          },
+          {
+            "kind": "doc_page",
+            "path": "architecture/supported-deployment-boundary.md"
+          },
+          {
+            "kind": "doc_page",
+            "path": "getting-started/quickstart.md"
+          },
+          {
+            "kind": "doc_page",
+            "path": "operations/runtime-service-reference.md"
+          },
+          {
+            "kind": "doc_page",
+            "path": "operations/maintenance-map.md"
+          },
+          {
+            "kind": "doc_page",
+            "path": "operations/security-boundary.md"
+          }
+        ]
+      },
+      "boundaryContract": {
+        "forbiddenRefs": [
+          {
+            "kind": "literal",
+            "id": "one_click_deploy.sh",
+            "value": "one_click_deploy.sh",
+            "reason": "forbidden documentation surface"
+          },
+          {
+            "kind": "literal",
+            "id": "one_click_test_full.sh",
+            "value": "one_click_test_full.sh",
+            "reason": "forbidden documentation surface"
+          },
+          {
+            "kind": "literal",
+            "id": "curl_-k",
+            "value": "curl -k",
+            "reason": "forbidden documentation surface"
+          },
+          {
+            "kind": "literal",
+            "id": "devices_approve",
+            "value": "devices approve",
+            "reason": "forbidden documentation surface"
+          },
+          {
+            "kind": "literal",
+            "id": "deployment_acceptance",
+            "value": "deployment acceptance 默认顺序",
+            "reason": "forbidden documentation surface"
+          }
+        ]
+      },
+      "navigationContract": {
+        "requiredTokens": [
+          "## 项目级阅读入口",
+          "## 目录职责",
+          "## 维护边界"
+        ],
+        "minLinks": 6
+      }
+    },
+    {
+      "path": "docs/architecture/README.md",
+      "role": "navigation",
+      "entryLevel": "L1",
+      "ownerDomain": "architecture",
+      "sourceMode": "manual",
+      "formalEntry": false,
+      "localOnly": false,
+      "entrypointContract": {
+        "requiredRefs": [
+          {
+            "kind": "doc_page",
+            "path": "control-plane-baseline.md"
+          },
+          {
+            "kind": "doc_page",
+            "path": "platform-main-path.md"
+          },
+          {
+            "kind": "doc_page",
+            "path": "supported-deployment-boundary.md"
+          },
+          {
+            "kind": "doc_page",
+            "path": "control-plane-baseline.md"
+          },
+          {
+            "kind": "doc_page",
+            "path": "agents-and-permissions.md"
+          },
+          {
+            "kind": "doc_page",
+            "path": "path-governance.md"
+          },
+          {
+            "kind": "doc_page",
+            "path": "agent-governance.md"
+          },
+          {
+            "kind": "doc_page",
+            "path": "agent-group-governance.md"
+          },
+          {
+            "kind": "doc_page",
+            "path": "agent-module-governance.md"
+          },
+          {
+            "kind": "doc_page",
+            "path": "agent-lifecycle-governance.md"
+          },
+          {
+            "kind": "doc_page",
+            "path": "python-package-layout.md"
+          }
+        ]
+      },
+      "boundaryContract": {
+        "forbiddenRefs": [
+          {
+            "kind": "literal",
+            "id": "one_click_deploy.sh",
+            "value": "one_click_deploy.sh",
+            "reason": "forbidden documentation surface"
+          },
+          {
+            "kind": "literal",
+            "id": "one_click_test_full.sh",
+            "value": "one_click_test_full.sh",
+            "reason": "forbidden documentation surface"
+          },
+          {
+            "kind": "literal",
+            "id": "curl_-k",
+            "value": "curl -k",
+            "reason": "forbidden documentation surface"
+          },
+          {
+            "kind": "literal",
+            "id": "devices_approve",
+            "value": "devices approve",
+            "reason": "forbidden documentation surface"
+          }
+        ]
+      },
+      "navigationContract": {
+        "requiredTokens": [
+          "## 本页解决什么问题",
+          "## 合同页入口",
+          "## 二级专题页",
+          "## 下一步"
+        ],
+        "minLinks": 6
+      }
+    },
+    {
+      "path": "docs/architecture/agent-governance.md",
+      "role": "contract",
+      "entryLevel": "L2",
+      "ownerDomain": "architecture",
+      "sourceMode": "manual",
+      "formalEntry": false,
+      "localOnly": false
+    },
+    {
+      "path": "docs/architecture/agent-group-governance.md",
+      "role": "contract",
+      "entryLevel": "L2",
+      "ownerDomain": "architecture",
+      "sourceMode": "manual",
+      "formalEntry": false,
+      "localOnly": false
+    },
+    {
+      "path": "docs/architecture/explicit-extension-packages.md",
+      "role": "contract",
+      "entryLevel": "L2",
+      "ownerDomain": "architecture",
+      "sourceMode": "manual",
+      "formalEntry": false,
+      "localOnly": false
+    },
+    {
+      "path": "docs/architecture/agent-lifecycle-governance.md",
+      "role": "contract",
+      "entryLevel": "L2",
+      "ownerDomain": "architecture",
+      "sourceMode": "manual",
+      "formalEntry": false,
+      "localOnly": false
+    },
+    {
+      "path": "docs/architecture/agent-module-governance.md",
+      "role": "contract",
+      "entryLevel": "L2",
+      "ownerDomain": "architecture",
+      "sourceMode": "manual",
+      "formalEntry": false,
+      "localOnly": false
+    },
+    {
+      "path": "docs/architecture/agents-and-permissions.md",
+      "role": "contract",
+      "entryLevel": "L2",
+      "ownerDomain": "architecture",
+      "sourceMode": "manual",
+      "formalEntry": false,
+      "localOnly": false
+    },
+    {
+      "path": "docs/architecture/control-plane-baseline.md",
+      "role": "contract",
+      "entryLevel": "L1",
+      "ownerDomain": "architecture",
+      "sourceMode": "manual",
+      "formalEntry": true,
+      "localOnly": false,
+      "entrypointContract": {
+        "requiredRefs": [
+          {
+            "kind": "literal",
+            "id": "literal",
+            "value": "控制平面基线",
+            "reason": "entrypoint text contract"
+          }
+        ]
+      },
+      "implementationContract": {
+        "stringRefs": [
+          {
+            "config_rel_path": "config/control_plane/extensions.d/agent_platform.json",
+            "key_path": [
+              "registry",
+              "dispatchProviderRegistryPaths",
+              "0"
+            ],
+            "label": "registry.dispatchProviderRegistryPaths[0]",
+            "render": "registry.dispatchProviderRegistryPaths[0] -> {value}"
+          }
+        ]
+      }
+    },
+    {
+      "path": "docs/architecture/platform-main-path.md",
+      "role": "contract",
+      "entryLevel": "L1",
+      "ownerDomain": "architecture",
+      "sourceMode": "manual",
+      "formalEntry": true,
+      "localOnly": false,
+      "entrypointContract": {
+        "requiredRefs": [
+          {
+            "kind": "literal",
+            "id": "literal",
+            "value": "OpenClaw 平台主路径架构",
+            "reason": "entrypoint text contract"
+          },
+          {
+            "kind": "literal",
+            "id": "literal",
+            "value": "远程首装时序",
+            "reason": "entrypoint text contract"
+          }
+        ]
+      }
+    },
+    {
+      "path": "docs/architecture/path-governance.md",
+      "role": "contract",
+      "entryLevel": "L2",
+      "ownerDomain": "architecture",
+      "sourceMode": "manual",
+      "formalEntry": false,
+      "localOnly": false
+    },
+    {
+      "path": "docs/architecture/python-package-layout.md",
+      "role": "contract",
+      "entryLevel": "L2",
+      "ownerDomain": "architecture",
+      "sourceMode": "manual",
+      "formalEntry": false,
+      "localOnly": false
+    },
+    {
+      "path": "docs/architecture/supported-deployment-boundary.md",
+      "role": "contract",
+      "entryLevel": "L1",
+      "ownerDomain": "architecture",
+      "sourceMode": "manual",
+      "formalEntry": true,
+      "localOnly": false,
+      "entrypointContract": {
+        "requiredRefs": [
+          {
+            "kind": "literal",
+            "id": "literal",
+            "value": "支持边界说明",
+            "reason": "entrypoint text contract"
+          }
+        ]
+      },
+      "boundaryContract": {
+        "requiredRefs": [
+          {
+            "kind": "literal",
+            "id": "literal",
+            "value": "支持边界说明",
+            "reason": "entrypoint text contract"
+          }
+        ],
+        "forbiddenRefs": [
+          {
+            "kind": "literal",
+            "id": "one_click_deploy.sh",
+            "value": "one_click_deploy.sh",
+            "reason": "forbidden documentation surface"
+          },
+          {
+            "kind": "literal",
+            "id": "one_click_test_full.sh",
+            "value": "one_click_test_full.sh",
+            "reason": "forbidden documentation surface"
+          },
+          {
+            "kind": "literal",
+            "id": "curl_-k",
+            "value": "curl -k",
+            "reason": "forbidden documentation surface"
+          },
+          {
+            "kind": "literal",
+            "id": "devices_approve",
+            "value": "devices approve",
+            "reason": "forbidden documentation surface"
+          },
+          {
+            "kind": "literal",
+            "id": "deployment_acceptance",
+            "value": "deployment acceptance 默认顺序",
+            "reason": "forbidden documentation surface"
+          }
+        ]
+      }
+    },
+    {
+      "path": "docs/getting-started/README.md",
+      "role": "navigation",
+      "entryLevel": "L1",
+      "ownerDomain": "getting-started",
+      "sourceMode": "manual",
+      "formalEntry": false,
+      "localOnly": false,
+      "entrypointContract": {
+        "requiredRefs": [
+          {
+            "kind": "doc_page",
+            "path": "quickstart.md"
+          },
+          {
+            "kind": "doc_page",
+            "path": "../operations/runtime-service-reference.md"
+          }
+        ]
+      },
+      "boundaryContract": {
+        "forbiddenRefs": [
+          {
+            "kind": "literal",
+            "id": "deployment_acceptance",
+            "value": "deployment acceptance 默认顺序",
+            "reason": "forbidden documentation surface"
+          },
+          {
+            "kind": "literal",
+            "id": "devices_approve",
+            "value": "devices approve",
+            "reason": "forbidden documentation surface"
+          },
+          {
+            "kind": "literal",
+            "id": "curl_-k",
+            "value": "curl -k",
+            "reason": "forbidden documentation surface"
+          }
+        ]
+      },
+      "navigationContract": {
+        "requiredTokens": [
+          "## 本页解决什么问题",
+          "## 任务入口",
+          "## 执行位置总览",
+          "## 常用跳转",
+          "## 下一步"
+        ],
+        "minLinks": 10
+      }
+    },
+    {
+      "path": "docs/getting-started/deployment-inputs.md",
+      "role": "contract",
+      "entryLevel": "L2",
+      "ownerDomain": "getting-started",
+      "sourceMode": "generated",
+      "formalEntry": false,
+      "localOnly": false
+    },
+    {
+      "path": "docs/getting-started/environment-setup.md",
+      "role": "contract",
+      "entryLevel": "L2",
+      "ownerDomain": "getting-started",
+      "sourceMode": "generated",
+      "formalEntry": false,
+      "localOnly": false
+    },
+    {
+      "path": "docs/getting-started/image-preparation.md",
+      "role": "contract",
+      "entryLevel": "L2",
+      "ownerDomain": "getting-started",
+      "sourceMode": "manual",
+      "formalEntry": false,
+      "localOnly": false
+    },
+    {
+      "path": "docs/getting-started/quickstart.md",
+      "role": "task",
+      "entryLevel": "L1",
+      "ownerDomain": "getting-started",
+      "sourceMode": "generated",
+      "formalEntry": true,
+      "localOnly": false,
+      "entrypointContract": {
+        "requiredRefs": [
+          {
+            "kind": "literal",
+            "id": "literal",
+            "value": "正式部署路径",
+            "reason": "entrypoint text contract"
+          },
+          {
+            "kind": "doc_page",
+            "path": "runtime-service-reference.md#deployment-acceptance-default-flow"
+          }
+        ]
+      },
+      "taskContract": {
+        "requiredTokens": [
+          "## 本页解决什么问题",
+          "## 适用范围",
+          "## 最短路径",
+          "## 正式步骤",
+          "## 通过判据",
+          "## 失败分流",
+          "## 下一步"
+        ]
+      },
+      "pageBudget": {
+        "maxLines": 600
+      }
+    },
+    {
+      "path": "docs/operations/README.md",
+      "role": "navigation",
+      "entryLevel": "L1",
+      "ownerDomain": "operations",
+      "sourceMode": "manual",
+      "formalEntry": false,
+      "localOnly": false,
+      "entrypointContract": {
+        "requiredRefs": [
+          {
+            "kind": "doc_page",
+            "path": "runtime-service-reference.md"
+          },
+          {
+            "kind": "doc_page",
+            "path": "maintenance-map.md"
+          },
+          {
+            "kind": "doc_page",
+            "path": "stack-upgrade-runbook.md"
+          },
+          {
+            "kind": "doc_page",
+            "path": "troubleshooting.md"
+          },
+          {
+            "kind": "doc_page",
+            "path": "dispatch-targets.md"
+          },
+          {
+            "kind": "doc_page",
+            "path": "security-boundary.md"
+          }
+        ],
+        "forbiddenRefs": [
+          {
+            "kind": "literal",
+            "id": "one_click_deploy.sh",
+            "value": "one_click_deploy.sh",
+            "reason": "forbidden documentation surface"
+          },
+          {
+            "kind": "literal",
+            "id": "curl_-k",
+            "value": "curl -k",
+            "reason": "forbidden documentation surface"
+          },
+          {
+            "kind": "literal",
+            "id": "devices_approve",
+            "value": "devices approve",
+            "reason": "forbidden documentation surface"
+          }
+        ]
+      },
+      "boundaryContract": {
+        "requiredRefs": [
+          {
+            "kind": "doc_page",
+            "path": "runtime-service-reference.md"
+          },
+          {
+            "kind": "doc_page",
+            "path": "maintenance-map.md"
+          },
+          {
+            "kind": "doc_page",
+            "path": "stack-upgrade-runbook.md"
+          },
+          {
+            "kind": "doc_page",
+            "path": "troubleshooting.md"
+          },
+          {
+            "kind": "doc_page",
+            "path": "dispatch-targets.md"
+          },
+          {
+            "kind": "doc_page",
+            "path": "security-boundary.md"
+          }
+        ],
+        "forbiddenRefs": [
+          {
+            "kind": "literal",
+            "id": "one_click_deploy.sh",
+            "value": "one_click_deploy.sh",
+            "reason": "forbidden documentation surface"
+          },
+          {
+            "kind": "literal",
+            "id": "dispatch-observability",
+            "value": "dispatch-observability",
+            "reason": "forbidden documentation surface"
+          },
+          {
+            "kind": "literal",
+            "id": "curl_-k",
+            "value": "curl -k",
+            "reason": "forbidden documentation surface"
+          },
+          {
+            "kind": "literal",
+            "id": "devices_approve",
+            "value": "devices approve",
+            "reason": "forbidden documentation surface"
+          }
+        ]
+      },
+      "navigationContract": {
+        "requiredTokens": [
+          "## 本页解决什么问题",
+          "## 任务入口",
+          "## 常用跳转",
+          "## 常见场景跳转",
+          "## 下一步"
+        ],
+        "minLinks": 10
+      }
+    },
+    {
+      "path": "docs/operations/maintenance-map.md",
+      "role": "reference",
+      "entryLevel": "L1",
+      "ownerDomain": "operations",
+      "sourceMode": "generated",
+      "formalEntry": false,
+      "localOnly": false,
+      "entrypointContract": {
+        "requiredRefs": [
+          {
+            "kind": "literal",
+            "id": "maintenance_facts_overview",
+            "value": "OpenClaw 维护事实总览",
+            "reason": "entrypoint text contract"
+          },
+          {
+            "kind": "literal",
+            "id": "facts_overview_command",
+            "value": "control-plane facts overview",
+            "reason": "entrypoint text contract"
+          }
+        ]
+      },
+      "pageBudget": {
+        "maxLines": 260
+      }
+    },
+    {
+      "path": "docs/operations/runtime-service-reference.md",
+      "role": "task",
+      "entryLevel": "L1",
+      "ownerDomain": "operations",
+      "sourceMode": "generated",
+      "formalEntry": true,
+      "localOnly": false,
+      "entrypointContract": {
+        "requiredRefs": [
+          {
+            "kind": "literal",
+            "id": "deployment_acceptance",
+            "value": "deployment acceptance 默认顺序",
+            "reason": "entrypoint text contract"
+          },
+          {
+            "kind": "literal",
+            "id": "manual-post-deploy-checks",
+            "value": "manual-post-deploy-checks",
+            "reason": "entrypoint text contract"
+          }
+        ]
+      },
+      "taskContract": {
+        "requiredTokens": [
+          "## 本页解决什么问题",
+          "## 适用范围",
+          "## 最短路径",
+          "## 常用动作",
+          "## deployment acceptance 与 runtime acceptance",
+          "## 失败分流",
+          "## 下一步"
+        ]
+      },
+      "boundaryContract": {
+        "forbiddenRefs": [
+          {
+            "kind": "literal",
+            "id": "literal",
+            "value": "并列区域策略",
+            "reason": "forbidden documentation surface"
+          },
+          {
+            "kind": "literal",
+            "id": "literal",
+            "value": "散写完整策略",
+            "reason": "forbidden documentation surface"
+          }
+        ]
+      },
+      "pageBudget": {
+        "maxLines": 245
+      }
+    },
+    {
+      "path": "docs/operations/security-boundary.md",
+      "role": "contract",
+      "entryLevel": "L1",
+      "ownerDomain": "operations",
+      "sourceMode": "manual",
+      "formalEntry": true,
+      "localOnly": false,
+      "entrypointContract": {
+        "requiredRefs": [
+          {
+            "kind": "literal",
+            "id": "literal",
+            "value": "安全边界说明",
+            "reason": "entrypoint text contract"
+          }
+        ]
+      },
+      "boundaryContract": {
+        "forbiddenRefs": [
+          {
+            "kind": "literal",
+            "id": "one_click_deploy.sh",
+            "value": "one_click_deploy.sh",
+            "reason": "forbidden documentation surface"
+          },
+          {
+            "kind": "literal",
+            "id": "one_click_test_full.sh",
+            "value": "one_click_test_full.sh",
+            "reason": "forbidden documentation surface"
+          },
+          {
+            "kind": "literal",
+            "id": "curl_-k",
+            "value": "curl -k",
+            "reason": "forbidden documentation surface"
+          },
+          {
+            "kind": "literal",
+            "id": "devices_approve",
+            "value": "devices approve",
+            "reason": "forbidden documentation surface"
+          }
+        ]
+      }
+    },
+    {
+      "path": "docs/operations/stack-upgrade-runbook.md",
+      "role": "task",
+      "entryLevel": "L2",
+      "ownerDomain": "operations",
+      "sourceMode": "manual",
+      "formalEntry": false,
+      "localOnly": false,
+      "entrypointContract": {
+        "requiredRefs": [
+          {
+            "kind": "literal",
+            "id": "stack_release_upgrade",
+            "value": "Stack Release 升级手册",
+            "reason": "entrypoint text contract"
+          },
+          {
+            "kind": "literal",
+            "id": "stack_lock",
+            "value": "openclaw-stack.lock.json",
+            "reason": "entrypoint text contract"
+          }
+        ]
+      },
+      "taskContract": {
+        "requiredTokens": [
+          "## 本页解决什么问题",
+          "## 版本真源",
+          "## 候选组合生成",
+          "## 候选组合门禁",
+          "## 部署升级顺序",
+          "## 升级类型",
+          "## 故障分流",
+          "## 下一步"
+        ]
+      },
+      "pageBudget": {
+        "maxLines": 180
+      }
+    },
+    {
+      "path": "docs/operations/troubleshooting.md",
+      "role": "task",
+      "entryLevel": "L2",
+      "ownerDomain": "operations",
+      "sourceMode": "manual",
+      "formalEntry": false,
+      "localOnly": false,
+      "entrypointContract": {
+        "requiredRefs": [
+          {
+            "kind": "literal",
+            "id": "literal",
+            "value": "排障总入口",
+            "reason": "entrypoint text contract"
+          },
+          {
+            "kind": "literal",
+            "id": "control-ui-first-pairing",
+            "value": "control-ui-first-pairing",
+            "reason": "entrypoint text contract"
+          },
+          {
+            "kind": "literal",
+            "id": "control-ui-certificate-warning",
+            "value": "control-ui-certificate-warning",
+            "reason": "entrypoint text contract"
+          },
+          {
+            "kind": "literal",
+            "id": "control-ui-localhost-url",
+            "value": "control-ui-localhost-url",
+            "reason": "entrypoint text contract"
+          },
+          {
+            "kind": "literal",
+            "id": "control-ui-token-recovery",
+            "value": "control-ui-token-recovery",
+            "reason": "entrypoint text contract"
+          }
+        ]
+      },
+      "taskContract": {
+        "requiredTokens": [
+          "## 本页解决什么问题",
+          "## 适用范围",
+          "## 先收集当前现场信息",
+          "## 先判断故障落在哪一段",
+          "## 宿主机准备问题",
+          "## 配置生成与输入问题",
+          "## 部署主链问题",
+          "## runtime 与 ingress 问题",
+          "## full test 与 deployment acceptance 问题",
+          "## dispatch 问题",
+          "## 下一步"
+        ]
+      },
+      "pageBudget": {
+        "maxLines": 370
+      },
+      "implementationContract": {
+        "runtimePathRefs": [
+          {
+            "entry_id": "one_click_deploy_latest_summary_json",
+            "view": "host"
+          },
+          {
+            "entry_id": "one_click_test_full_latest_summary_json",
+            "view": "host"
+          }
+        ],
+        "requiredRefs": [
+          {
+            "kind": "literal",
+            "id": "openclaw_ingress_boundary_mode",
+            "value": "OPENCLAW_INGRESS_BOUNDARY_MODE",
+            "reason": "entrypoint text contract"
+          },
+          {
+            "kind": "literal",
+            "id": "one_click_deploy_latest_summary_json",
+            "value": "one_click_deploy_latest_summary_json",
+            "reason": "entrypoint text contract"
+          }
+        ],
+        "forbiddenRefs": [
+          {
+            "kind": "literal",
+            "id": "openclaw_ingress_boundary_evidence_mode",
+            "value": "OPENCLAW_INGRESS_BOUNDARY_EVIDENCE_MODE",
+            "reason": "forbidden documentation surface"
+          }
+        ]
+      }
+    }
+  ]
+}

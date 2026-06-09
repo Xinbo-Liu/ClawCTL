@@ -1,0 +1,308 @@
+# scripts 目录索引
+
+本页只做 `scripts/` 目录内脚本定位：先按项目概览、`docs/getting-started/` 或 `docs/operations/` 确定场景，再回这里找默认入口、补充入口或内部复用。
+
+> 运行、诊断与 dispatch 运维入口统一回对应的 generic command surface 与专题文档定位。
+
+## 分组去向
+
+- `setup/`：用于初始化仓库运行态与宿主机准备动作。
+- `images/`：用于镜像治理与浏览器运行能力校验。
+- `runtime/`：用于运行时入口与控制面一致性治理。
+- `agent_runtime/`：用于受管显式扩展包 agent 模块启动入口与正式运行入口。
+- `control_plane/`：用于控制平面的受控触发入口。
+- `gateway/`：承载 official gateway 的专属治理脚本与影子验证入口。
+- `doctor/`：用于运行态治理与体检。
+- `testing/`：用于仓库级测试运行器、本地回归与局部实现校验；不属于生产值守或发布门禁默认入口。
+- `docs/`：用于 docs_registry、文档入口、职责边界、导航结构、任务页模板、页面预算、实现对齐、局部文档身份与对象闭环检查。
+- `lib/`：供其他脚本复用的公共库；不作为人工入口；控制面命令统一经 scripts/runtime/run_openclaw_python_tool.sh 暴露。
+
+## setup/
+
+- 目录职责：用于初始化仓库运行态与宿主机准备动作。
+- 维护说明：
+  - 首次部署主路径与 `one_click_*` 四个入口的职责边界，统一以 `docs/getting-started/quickstart.md` 为准。
+  - setup 目录只负责初始化与部署前后验证，不承担日常值守。
+  - 正式交付覆盖部署、验收与干净导出所需脚本。
+
+### 默认入口
+
+- `setup/init_private_ingress.sh`：默认选择 hostname -I 的首个 RFC1918 私网 IPv4，并以 openclaw.internal.example 为默认访问主机名；统一回填 deploy/site.env 中的 private ingress 输入，默认打印带 hosts 备份 / 回滚提示的 Windows PowerShell 访问端 DNS / hosts 命令，并可通过 --platform 切换到 Linux、macOS 或 all。
+- `setup/apply_ingress_boundary_rules.sh`：按 deploy/.env 中的 OPENCLAW_INGRESS_ALLOWED_SOURCE_CIDRS 物化 host_firewall DOCKER-USER 规则；可用 --dry-run 先验证前提与规则语义。
+- `setup/prepare_control_plane_medium.sh`：显式准备 host 控制面执行介质；这是进入 one_click_config.sh 与任意 run_openclaw_python_tool.sh 子命令前的统一前置步骤。
+- `setup/one_click_upgrade.sh`：服务器部署升级主入口；统一执行源码对齐、备份、scheduler maintenance、执行位修复、effective compose、扩展离线依赖 ensure、服务健康等待、run_all_once/full test/evidence 与升级报告导出；源码同步会写出 source_sync_metadata.json，并用 strict stack verify 校验目标 commit、releaseBundleHash、provenance 内容与 stack lock 一致性；显式 `--refresh-stack-lock` 会先刷新 agent/extensions/lock.json，再同步刷新 provenance 与生产 stack lock。
+- `setup/one_click_config.sh`：默认 one_click 入口；职责边界、执行位置与默认主路径统一见 `docs/getting-started/quickstart.md`。
+- `setup/one_click_deploy.sh`：默认 one_click 入口；阶段顺序、`--resume-from`、basic gate proof 自动刷新、部署后验收自动闭环与服务启动后的验收入口统一见 `docs/getting-started/quickstart.md`。
+- `setup/one_click_test_basic.sh`：默认 one_click 入口；职责边界、通过标准与默认主路径统一见 `docs/getting-started/quickstart.md`。
+- `setup/one_click_test_full.sh`：默认 one_click 入口；验收顺序、通过标准与证据导出统一见 `docs/operations/runtime-service-reference.md`。
+
+### 补充入口
+
+- `setup/bootstrap.sh`：生成运行态目录、dispatch 运行配置与 Gateway 最小 /local_ro 镜像目录。
+- `setup/apply_site_env_values.sh`：按 KEY=VALUE 或当前 shell 环境变量批量回填 deploy/site.env；已存在键原位替换，缺失键自动追加，且 --file / --example-file 只允许仓库内标准路径。
+- `setup/apply_extension_env_values.sh`：按 extension id 或 profile 批量初始化和回填 agent/extensions/<id>/deploy/extension.env；支持 --init-from-example、--set、--from-env 与 --set-secret-from-env，固定写出 LF、chmod 600，并在日志中脱敏 secret。
+- `setup/apply_target_env_values.sh`：按 KEY=VALUE 或当前 shell 环境变量批量回填 deploy/targets.d/<target_id>.env；已存在键原位替换，缺失键自动追加，并固定写出 LF 与 owner-only 权限，避免远程多行编辑污染 target env。
+- `setup/check_extension_env_values.sh`：按 extension id 或 profile 读取 *.deploy_env_schema.json，检查 extension.env 中 required/manual_required/secret 字段是否闭合；text 输出按 group 分组并给出 apply_extension_env_values.sh 修复命令，json 输出只记录字段存在性不输出值。
+- `setup/check_client_access_acceptance.sh`：独立检查访问端闭环：读取 deploy/.env 中 TLS CN、listen IP、证书路径与来源 CIDR，拒绝空项、非法格式、公网、非私网或过宽 client CIDR，输出 DNS/hosts、证书信任和不跳过 TLS 校验的 curl 验证命令，并区分目标机 deployment_acceptance 与访问端 client_access_acceptance。
+- `setup/export_clean_delivery_bundle.sh`：按统一本地残留策略扫描默认可清理目标与派生物；`--check-only` 只因默认可清理目标或派生物失败，`state/openclaw` 与 `state/image_artifacts` 本身不阻断；`--clean` 只清默认可清理项后再校验并导出 runtime-core / ops-toolkit / full-source-governance 交付包，同时写出 size-manifest 与 BOM。
+- `setup/cleanup_local_workspace.sh`：按统一本地残留策略清理目标；零参数默认只覆盖 `.idea`、`artifacts`、`tmp`、`state/image_pull`、`state/remote_first_install` 与 `release/history`，显式点名时才允许删除 `state/openclaw` 与 `state/image_artifacts`；默认 dry-run，仅 `--apply` 才实际删除，并拒绝仓库外路径与粗粒度 `state`。
+- `setup/cleanup_remote_openclaw.sh`：远程 OpenClaw 历史痕迹清理计划器；默认 dry-run，只读列出 OpenClaw 容器、网络、卷、项目容器关联镜像、目录、部署用户与 ingress 边界规则；非默认 SSH 端口使用 --ssh-port，其他 SSH 选项继续使用 --ssh-option；显式 --apply 后才删除带项目证据的对象，仓库目录、部署用户和同名用户组都需通过 OpenClaw 证据门禁；不执行全局 Docker 清理命令，不按通用镜像名扫删。
+- `setup/fix_permissions.sh`：统一修复运行态目录、脚本执行位与预创建输出目录的 mode bit；以 root 执行时必须能解析 OPENCLAW_RUNTIME_UID/GID，解析失败会中止，不自动 sudo。
+- `setup/recover_runtime_generated_state.sh`：从已部署容器事实恢复缺失的 deploy/.env、运行态 dispatch env、证书与 Nginx ingress 配置；可用 --restart 在渲染完成后自动启动或重启运行容器。
+- `setup/gen_cert.sh`：按 `OPENCLAW_TLS_MODE` 准备 HTTPS 证书资产：`self_signed` 生成 365 天自签 DNS SAN 证书；`provided_files` 严格校验未过期 PEM 证书、精确 dNSName SAN、未加密 PEM 私钥与非输出目录源路径后复制到 Nginx cert 目录。
+- `setup/prepare_docker_host.sh`：CentOS 7 存量老系统路径的宿主机准备入口；统一处理部署网络 profile、CentOS vault / Docker Yum repo 国内候选回退、预工具安装、系统时间校验 / 更新、Docker 安装、Compose 的 RPM 优先安装与带 SHA256 校验的二进制回退、daemon 基线、防火墙 80/443 预开放与 firewalld docker zone 合同。host_firewall 的来源限制由 apply_ingress_boundary_rules.sh 物化。
+- `setup/update_system_time.sh`：root 侧系统时间修复入口；设置时区、启用 NTP / chronyd，并在漂移超过阈值时按多源 HTTPS HTTP Date 基准直接校正系统时间。
+- `setup/prepare_deploy_user.sh`：root 侧部署用户交接入口；创建固定部署用户、写入 `.openclaw/deploy-user.marker` 并记录用户是否由 OpenClaw 创建、加入 docker 组、校验 OpenClaw 仓库路径并把仓库目录交接给部署用户，但不自动切换当前 shell。
+- `setup/remote_first_install.sh`：远程首装向导；默认 dry-run，通过 SSH 执行 preflight、stage-bundle、prepare-repo、configure-base 与 deploy 阶段，--plan-json 只输出阶段计划且不写本地 state 或远端；非默认 SSH/scp 端口使用 --ssh-port，其他 SSH/scp 选项继续使用 --ssh-option；deploy 阶段固定在 basic gate 前执行 fix_permissions，并支持逗号分隔多个 --client-cidr 来源段；固定输出 log、summary、status.env 与 resume 命令；preflight 在无 sudo、Docker/Compose 缺失、80/443 端口占用、repo 已存在或已有 openclaw-* 容器时明确阻断，并拒绝命令行明文 secret。
+- `setup/render_local_ro_mirror.sh`：根据指定 manifest 生成或校验官方 Gateway 的最小 /local_ro 镜像目录；输出目录必须位于当前 gateway state root 的子目录。
+- `setup/update_dispatch_target_lifecycle.sh`：按统一生命周期规则更新 dispatch target 注册表中的 lifecycleState，并对 disable / decommission 动作写出审计记录。
+
+### 内部复用
+
+- `setup/lib/deploy_flow_control_plane_shell.sh`：统一装配 one_click_deploy 的控制面默认值、日志路径与 helper 入口。
+- `setup/lib/deploy_flow_summary_shell.sh`：写出 one_click_deploy 的成功态/失败态摘要并在终端汇总，并优先从 config/governance/release/summary_manifest.json / run_failure_surface.json 读取固定 latest 路径与摘要标签。
+- `setup/lib/deploy_runtime_context_shell.sh`：统一处理部署阶段对 env 文件、日志目录与运行态上下文的装配。
+- `setup/lib/deploy_env_shell.sh`：通过 deploy env 控制面安全读取 env key，避免脚本直接 source 用户可编辑的 deploy/.env。
+- `setup/lib/extension_env_gate.sh`：部署、full test 与扩展环境准备阶段校验 managed extension lifecycle lock，并由部署/升级主链按 active profile 自动同步离线 wheelhouse、准备 venv 和 verify；失败时提示先更新 extension lock，然后再次执行唯一扩展环境入口 `extension-env ensure`。
+- `setup/lib/deploy_stage_registry.sh`：从 config/governance/flows/deploy_stage_flow.json 读取 one_click_deploy 各 stage 的执行映射，供部署入口与帮助面使用。
+- `setup/lib/deploy_stage_runner.sh`：提供 one_click_deploy 的阶段执行映射、构建/加载动作与日志执行器接线。
+- `setup/lib/full_test_acceptance_shell.sh`：处理 one_click_test_full 的 acceptance 状态评估、状态文件写出与分组调度前流程。
+- `setup/lib/full_test_env_shell.sh`：集中装配 one_click_test_full 所需 env、日志目录与摘要路径。
+- `setup/lib/full_test_group_registry.sh`：读取 `governance.full_test_group_registry` 合约对应的按 extension 合并检查组真源，统一驱动 one_click_test_full 的脚本检查、入口存在性检查与失败后的下一步动作。
+- `setup/lib/full_test_group_runner.sh`：提供 one_click_test_full 各检查组的脚本检查与执行映射。
+- `setup/lib/full_test_summary_shell.sh`：写出 one_click_test_full 的 JSON / Markdown 摘要并在终端汇总，并从 config/runtime/testing_manifest.json 与 config/governance/docs/full_test_surface.json 派生 latest 路径与失败说明。
+- `setup/lib/host_install_defaults.sh`：读取宿主机安装默认值。
+- `setup/lib/ingress_boundary_evidence_cache.sh`：复用 root 侧已落盘并与当前 deploy env 对齐的 ingress 边界证据，供 basic/full/deploy resume 在非 root 防火墙语义不可读时保持只读验证。
+- `setup/lib/tls_hostname_contract.sh`：统一 shell 入口的 `OPENCLAW_TLS_CN` 主机名合同，供 private ingress 初始化、证书生成、provided_files 校验与运行态恢复复用。
+- `setup/lib/runtime_permissions.sh`：处理运行态目录权限修复、runtime UID/GID 解析、control-plane state release/evidence owner-only 权限归一化与显式允许列表执行位修复逻辑，供 bootstrap / fix_permissions / doctor 入口复用。
+- `setup/lib/repo_root_bootstrap.sh`：setup/lib helper 的仓库根定位引导层；先定位 `scripts/lib/repo_root.sh`，再让被 source 的 setup 库统一取得仓库根。
+- `setup/lib/setup_flow_handoff.sh`：统一输出 setup 阶段完成后的 handoff 文案，并通过共享 repo contract 真源读取固定参考路径，禁止宿主机准备与 readiness 脚本各自硬编码下一步命令。
+- `setup/lib/setup_cli_common.sh`：提供 setup 入口脚本的 CLI 公共辅助函数，并从治理真源派生 one_click_deploy / one_click_test_* 的静态 help / explain 文本与 one_click_test_basic 的摘要辅助函数。
+- `setup/lib/setup_failure_surface_shell.sh`：读取 setup 主链失败分流说明；优先使用 governance surface 渲染，governance surface 不可用时读取同一份静态 JSON。
+- `setup/lib/test_gate_common.sh`：提供 basic/full 测试门禁的公共输出、失败分类与结果拼装逻辑。
+
+## images/
+
+- 目录职责：用于镜像治理与浏览器运行能力校验。
+- 维护说明：
+  - 镜像脚本统一读取 `scripts/lib/image_env.sh`，不要各自散落读取环境变量。
+  - 上游 stable、官方发布仓库、candidate 镜像站与 canonical / acceleration / selected runtime source 的统一真源在 `config/runtime/openclaw.runtime_contract.json` 与 `config/runtime/source_strategy.json`。
+  - 部署镜像合同角色、统一状态命令与 pin 更新后的默认顺序统一查看 docs/getting-started/image-preparation.md；脚本说明以该页为准。
+  - 浏览器能力校验属于镜像治理，不应混入平台默认部署主链。
+
+### 补充入口
+
+- `images/check_deployment_image_contract.sh`：校验部署镜像合同、模板变量集合与最终 effective compose image refs；传入 --compose-file 可比较最终 compose 与 selected source refs，--require-local 会在 compose up 前要求本地 docker image inspect 命中，并校验 RepoDigest 或 verified local refs 中的合同 image id。
+- `images/check_openclaw_digest.sh`：基于统一供应链事实独立复核当前 tag 的 selected runtime source digest 与当前 pin 是否一致；支持 --json 输出机器可读摘要。
+- `images/check_openclaw_overlay_contract.sh`：校验本项目对官方 OpenClaw 镜像采用最小 overlay，不包含应用层 patch 或额外依赖。
+- `images/check_openclaw_release.sh`：检查当前 OpenClaw pin 是否落后于上游 stable / correction tag，并校验 selected runtime source 的 latest digest 与当前 pin；支持 --json 输出机器可读摘要。
+- `images/check_openclaw_supply_chain.sh`：统一输出 OpenClaw 版本与供应链 digest 的结构化事实，供 release / digest 检查脚本与 shadow verify 复用。
+- `images/cleanup_image_aliases.sh`：清理未使用镜像别名与标签残留；执行前会先校验 docker daemon 可访问性，并在真实清理操作前创建 state/image_pull/cleanup_aliases.log 运行时记录。
+- `images/ensure_control_plane_image.sh`：显式准备 host 控制面执行 openclaw Python CLI 所需的 OPENCLAW_CONTROL_PLANE_IMAGE；优先复用本地镜像与部署镜像归档，只有归档未命中时才执行网络拉取；失败时固定输出宿主机 readiness、中国国内网络 profile 与离线归档后续动作。
+- `images/export_deployment_images.sh`：导出部署镜像归档；执行前会先校验 docker daemon 可访问性，以及 state/image_artifacts 输出目录与归档文件的本地写入权限。
+- `images/load_deployment_images.sh`：从归档加载 source_strategy 声明的部署镜像合同角色，并写出包含 pin、managed role tag 与 image id 的 verified local refs；支持显式指定归档，未指定时自动选取 state/image_artifacts/ 下最新的 deployment_images_*.tar。
+- `images/pull_images.sh`：拉取 source_strategy 声明的部署镜像合同角色，并在真实拉取操作前创建 state/image_pull 状态文件与记录文件。
+- `images/show_deployment_image_status.sh`：统一汇总部署镜像合同、compose 运行镜像集合、角色边界、本地镜像可用性与 verified local refs 的 image id 证明状态。
+- `images/update_openclaw_pin.sh`：按 candidate / promote 两种模式更新 OpenClaw 官方 Gateway pin；candidate 可用 --candidate-repo 按当前 tag@digest 派生候选仓库引用，promote 后执行 one_click_config.sh。
+- `images/update_runtime_pin.sh`：按 candidate / promote 两种模式更新 control plane Python / runtime Python / Nginx 镜像 pin；promote 后按 `docs/getting-started/image-preparation.md` 执行 one_click_config.sh。
+- `images/verify_gateway_browser.sh`：验证 official gateway 镜像中的浏览器依赖可用。
+
+## runtime/
+
+- 目录职责：用于运行时入口与控制面一致性治理。
+- 维护说明：
+  - runtime 分组覆盖运行态统一入口、证据导出与必要的 OpenClaw 版本对齐入口。
+  - 需要日常值守或排障时先看 docs/operations/runtime-service-reference.md 与 docs/operations/troubleshooting.md，再进入具体脚本。
+
+### 默认入口
+
+- `runtime/export_runtime_acceptance_evidence.sh`：导出 deployment acceptance、control-plane runtime 摘要、run ledger、job artifact policy、dispatch runtime 健康摘要与 official CLI 摘要到 `<current-host-state-root>/control_plane/release/evidence/`；默认从 `deploy/.env` 继承 active control-plane profile；导出前要求 ingress boundary evidence 已包含 Nginx allowlist 闭合结果；若 shadow verify 产物已存在，会一并同步 `shadow-verify-summary.*` 与 `shadow-verify-compare.*`。
+- `runtime/run_openclaw_python_tool.sh`：统一通过固定 PYTHON_RUNNER=scripts/runtime/run_python_container.sh 的容器化 Python 入口执行仓库级 openclaw CLI；进入前需先执行 prepare_control_plane_medium.sh，确保 OPENCLAW_CONTROL_PLANE_IMAGE 已准备完成；入口会注入 repo_python_env.sh 生成的仓库 bootstrap Python 环境，调用者已有 PYTHONPATH 不会透传；额外默认只透传 OPENCLAW_STATE_DIR、HOST_STATE_DIR、OPENCLAW_RUNTIME_PATH_VIEW，其他变量需通过 OPENCLAW_PYTHON_TOOL_EXTRA_ENV_VARS 显式放行。
+
+### 补充入口
+
+- `runtime/check_runtime_evidence_prereqs.sh`：统一检查 runtime evidence、official CLI 与 shadow verify 所需前提；默认从 `deploy/.env` 继承 active control-plane profile；`evidence-export` 用于运行验收导出前，`clean-release` 用于候选实例对照材料导出前。
+- `runtime/run_openclaw_official_cli.sh`：统一在运行中的官方 Gateway 容器内执行 OpenClaw 官方 CLI；不支持宿主机 openclaw / OPENCLAW_CONTAINER / --container。
+- `runtime/run_runtime_container_command.sh`：统一在 runtime service registry 已声明的容器内执行命令，并处理 docker exec 与容器别名映射。
+- `runtime/run_runtime_service_action.sh`：统一执行 runtime 服务的 start/stop/restart/up；`up --force-recreate` 用于刷新 env_file 派生环境。
+- `runtime/show_runtime_compose_config.sh`：统一渲染并查看 compose 配置；默认脱敏 token / secret / password / webhook / URL 类变量，确需原始值时显式追加 --show-secrets。
+- `runtime/show_runtime_container_logs.sh`：统一查看 runtime service registry 已声明的容器日志。
+- `runtime/show_runtime_service_status.sh`：统一查看 compose 服务状态与 runtime 容器健康。
+- `runtime/sync_workspace_templates.sh`：按 workspace manifest 同步 Gateway workspace 副本；`--check` 校验容器化漂移。
+- `runtime/verify_python_runtime_container.sh`：校验 Python 运行时入口、引用口径与关键链路；静态扫描不依赖 rg，并支持 Docker daemon 未就绪场景。
+
+### 内部复用
+
+- `runtime/container_openclaw_cli`：运行容器内部复用的 openclaw CLI 包装器；宿主机入口为 `scripts/runtime/run_openclaw_python_tool.sh`。
+- `runtime/container_python`：运行容器内部复用的 Python 包装器；宿主机容器化 Python 入口为 `run_python_container.sh`。
+- `runtime/run_python_container.sh`：统一容器化 Python 运行入口；不会隐式拉取 OPENCLAW_CONTROL_PLANE_IMAGE，进入前必须保证控制面执行介质已显式准备。
+- `runtime/runtime_compose_lib.sh`：统一封装 docker compose ps / up / exec 等底层调用，供 runtime、doctor 与 scheduler 脚本复用。
+- `runtime/runtime_container_lib.sh`：基于 runtime target 真源与 Docker 底层库统一维护运行容器的存在性检查、状态查询与 docker exec 封装。
+- `runtime/runtime_docker_lib.sh`：统一封装 docker inspect / logs 等底层调用，供 runtime 与 doctor 脚本复用。
+- `runtime/runtime_target_lib.sh`：统一维护 runtime target 到 compose service / docker container 的真源映射，避免 service 与 container 名混用。
+
+## agent_runtime/
+
+- 目录职责：用于受管显式扩展包 agent 模块启动入口与正式运行入口。
+- 维护说明：
+  - 该分组只负责把受管显式扩展包 `agent/extensions/*/agent/modules/*/bin/*` 接到统一容器或 control-plane 入口，不承担业务说明。
+  - 人工治理优先走 agent/ 与 control-plane 入口；该分组提供受管模块启动入口。
+
+### 内部复用
+
+- `agent_runtime/run_agent_entrypoint.sh`：统一提供受管显式扩展包 `agent/extensions/*/agent/modules/*/bin/*` 的宿主机/容器执行入口，不支持宿主机 Python。
+
+## control_plane/
+
+- 目录职责：用于控制平面的受控触发入口。
+- 维护说明：
+  - 生产调度只允许由 scheduler 自动驱动；摘要、run ledger、job 详情与 registry 校验统一经 scripts/runtime/run_openclaw_python_tool.sh control-plane 子命令进入。
+  - scheduler service exec 的正式人工入口统一经 scripts/runtime/run_openclaw_python_tool.sh 的 dispatch/control-plane 子命令进入；本组脚本只保留 run-all-once。
+  - 本组可见路径由控制平面契约与入口清单共同限定，业务调度固定由 scheduler 承载。
+
+### 补充入口
+
+- `control_plane/run_control_plane_run_all_once.sh`：在 scheduler 容器内受控执行一次 run-all-once，作为唯一人工全链触发入口；仅当 scheduler cycle lock busy 且退出码为 5 时按 OPENCLAW_RUN_ALL_ONCE_MAX_ATTEMPTS / OPENCLAW_RUN_ALL_ONCE_RETRY_SLEEP_SECONDS 有限重试，其他失败立即返回。
+
+## gateway/
+
+- 目录职责：承载 official gateway 的专属治理脚本与影子验证入口。
+- 维护说明：
+  - gateway 目录承载 official gateway 专属治理动作，不混入 Python 业务入口或宿主机直连入口。
+  - 所有官方 CLI 调用统一经 `scripts/runtime/run_openclaw_official_cli.sh` 进入容器；shadow verify 只做候选验证，不自动切流。
+  - 需要 probe / status / security audit / shadow verify 时再回统一 `scripts/README.md` 查看对应入口。
+
+### 补充入口
+
+- `gateway/run_gateway_probe.sh`：执行 official gateway 基础探针，统一走容器内官方 CLI。
+- `gateway/run_gateway_status_deep.sh`：执行 official gateway 深度状态检查，统一走容器内官方 CLI。
+- `gateway/run_security_audit.sh`：执行 official `security audit --deep --json`，输出标准化审计结果。
+- `gateway/run_shadow_upgrade_verify.sh`：对最新 pin 候选 Gateway 执行最小回归链 shadow verify，默认串行核对 release/digest、official runtime contract、internal-api runtime、gateway status --deep 与 gateway probe，并生成候选 control-plane 对照摘要写入 `<current-host-state-root>/control_plane/setup/shadow_verify/`；runtime evidence 导出脚本可同步到 `<current-host-state-root>/control_plane/release/evidence/`。摘要渲染固定通过控制面容器执行；Docker daemon 或控制面镜像未就绪时脚本直接失败。
+
+## doctor/
+
+- 目录职责：用于运行态治理与体检。
+- 维护说明：
+  - doctor 目录优先承载“看诊断”的脚本，而不是会改写主链路状态的脚本。
+  - 镜像准备失败或离线归档分歧时，先看 docs/getting-started/image-preparation.md 与 docs/operations/troubleshooting.md，再执行具体 doctor 命令。
+
+### 默认入口
+
+- `doctor/run_repo_release_gate.sh`：仓库静态发布门禁：覆盖宿主机 Python 零暴露治理、平台 Python 中文注释递进检查、CentOS 7 宿主机入口静态安全检查、冷启动导入零失败、shell repo-local PYTHONPATH 合同、Stack lock 严格发布来源检查、docs_registry 同步、文档入口/边界/导航/任务模板/页面预算/实现对齐/对象闭环、交付说明洁净度、生成文档同步与局部文档身份检查；`--help` 可离线查看，并从 verification_tiers 真源说明正式 Docker / 控制面容器门禁与 Windows 宿主机诊断回归的边界；真正执行属于 Docker 必需的仓库级静态治理入口；默认不挂载 `/var/run/docker.sock`，需要 Docker socket 时必须显式传入 `--with-docker-sock`；所有检查均为 strict；宿主机 Python 不属于支持路径；目标机实机验收链由目标机部署流程执行。
+
+### 补充入口
+
+- `doctor/check_control_plane_runtime.sh`：检查控制平面 registry、scheduler heartbeat、状态文件与 internal-api 控制平面只读接口。
+- `doctor/check_deployment_image_readiness.sh`：检查部署镜像合同在本机是否就绪；离线模式下统一复用部署镜像归档自动发现逻辑；缺镜像时固定提示 check_docker_host_readiness、--network-profile cn、pull 与 load 两条补齐路径。
+- `doctor/check_dispatch_runtime.sh`：检查 scheduler 承载的 delivery_adapter 执行能力是否 healthy，并补做 target adapter 已注册 preflight/status 任务探针。
+- `doctor/check_docker_host_readiness.sh`：在目标机上执行只读宿主机准入检查：验证系统时间、Docker / Compose、DNS / HTTPS 连通性、镜像来源、firewalld docker zone 合同与宿主机支持策略；该入口不准备 host 控制面执行介质，进入 host 控制面前必须另行执行 prepare_control_plane_medium.sh。
+- `doctor/check_system_time.sh`：只读校验宿主机系统时间：在线模式用多源 HTTPS HTTP Date 基准比对 UTC 漂移，离线模式校验本机可信时间窗口。
+- `doctor/check_ingress_boundary_evidence.sh`：检查 private ingress 只发布 80/443、内部服务不发布宿主机端口，并对 Nginx 来源 allowlist、宿主机防火墙或外部 ACL 的来源限制规则做语义校验。
+- `doctor/check_internal_api_runtime.sh`：检查 internal-api 容器是否已经进入 healthy，并输出 readyz、控制平面摘要与 job 列表。
+- `doctor/check_local_runtime_fs_contract.sh`：检查运行态目录、预创建输出目录与脚本执行位等本地文件系统前提。
+- `doctor/check_local_workspace_hygiene.sh`：只读盘点统一本地残留策略中的细分目标，按路径输出分类、默认清理标记、存在性、文件数、总字节数与最近更新时间，并校验目标路径和派生物模式都已被 `.gitignore` 覆盖。
+- `doctor/check_model_profile_connectivity.sh`：按当前 active control-plane profile 校验模型运行时后端配置与本机连通性，供 full test 与 runtime doctor 入口复用。
+- `doctor/check_openclaw_official_runtime_contract.sh`：在官方 Gateway 容器内执行带超时保护的 `doctor`、`security audit`，并在 active profile 声明 `model_runtime` 时追加 `models status` 探针，统一写出 raw JSON / 日志证据；默认读取 `deploy/.env` 的 active profile，显式覆盖使用 `OPENCLAW_CONTROL_PLANE_PROFILE`。
+- `doctor/check_runtime_bind_user_contract.sh`：按 deploy/.env 与 compose user 检查 runtime 可写 bind mount 的 UID/GID / owner / mode bit 合同。
+- `doctor/check_runtime_compose_contract.sh`：渲染当前 compose，并校验服务集合、运行镜像、private ingress 低端口能力补充、ingress/internal 双网络与启动依赖代理边界，以及 /local_ro 挂载合同。
+- `doctor/doctor_paths.sh`：检查宿主机 / gateway / scheduler 与启用扩展贡献视角的路径口径是否一致，并提示入口调用脆弱性。
+- `doctor/check_delivery_cleanliness.sh`：检查仓库说明面、正式入口与命名口径是否保持闭合；`--help` 可离线查看，真正执行属于 Docker 必需的交付说明洁净度检查。
+- `doctor/check_host_python_governance.sh`：聚合检查 shell、正式文档、生成文档与 extension 文档中的宿主机 Python 暴露面，并要求命中为零。
+- `doctor/check_platform_docstring_governance.sh`：扫描平台 Python 生产代码的模块、类、公共函数和公共方法中文 docstring 覆盖情况；默认读取分片基线并按基线递进只阻断新增退化，report 模式输出相对基线新增退化缺口与高优先模块缺口分组；执行统一走静态 Python runner 与控制面容器，--help 可离线查看。
+- `doctor/check_shell_pythonpath_contract.sh`：检查 shell wrapper 是否直接注入任意 repo-root 变量拼出的 repo-local `PYTHONPATH=.../python`，并要求通过 `repo_python_env.sh` 组装 Python 环境。
+- `doctor/check_agent_control_plane_registry.sh`：校验 control plane 中 agent / implementation 正式注册对象是否由 agent module manifest 派生并保持同步。
+- `doctor/check_agent_governance_baseline.sh`：校验 agent/ 统一治理目录、模块桥接页、group 桥接页与 control plane 注册对象是否保持一致，并确保 contract / implementation 绑定保持在 module 真源。
+- `doctor/check_architecture_import_guards.sh`：校验 Python 包导入边界、目录布局根文件预算与子包布局合同是否保持一致。
+- `doctor/check_cold_start_imports.sh`：逐个在独立新进程中冷启动导入 `openclaw.*` 模块，检查 import-order 与 package-init 顺序脆弱点。
+- `doctor/check_agent_module_smoke_tests.sh`：执行 agent 模块 smoke / regression 测试，可通过 `--extension <extension-id>` 限定单个受管显式扩展包。
+- `doctor/check_agent_runtime_script_orphans.sh`：检查受管显式扩展包 `agent/extensions/*/agent/modules/*/bin/*` 下是否残留未被真源消费的孤儿脚本，可通过 `--extension <extension-id>` 限定扫描范围。
+- `doctor/check_agent_module_optional_surface.sh`：检查正式模块是否残留模板化可选面（AGENTS.md / contracts / constraints / docs / tests README 壳）。
+- `doctor/check_agent_job_surface.sh`：检查控制平面 job manifest 的可推导默认字段与冗余面。
+- `doctor/check_agent_module_attach_detach.sh`：在隔离副本中回归验证 agent-module-attach / detach 的 apply 流程不会破坏 registry。
+- `doctor/check_agent_module_prune_drop.sh`：在隔离副本中回归验证 agent-module-prune / drop 的 apply 流程不会破坏 registry。
+
+## testing/
+
+- 目录职责：用于仓库级测试运行器、本地回归与局部实现校验；不属于生产值守或发布门禁默认入口。
+- 维护说明：
+  - 只在仓库级代码回归、局部实现校验或补单元测试时进入本目录。
+  - 推荐顺序固定为 `check_repo_test_readiness.sh` -> `run_repo_unittest.sh` -> `scripts/doctor/run_repo_release_gate.sh`。
+  - `check_repo_test_readiness.sh` 属于无 Docker 也可直接运行的 readiness 入口；`run_repo_unittest.sh` 与 `run_repo_release_gate.sh` 属于 Docker 必需入口；验证层级以 config/governance/support/verification_tiers.json 为准。
+  - 正式静态发布门禁为 scripts/doctor/run_repo_release_gate.sh；宿主机 supported path 验收由目标机部署链路执行。
+
+### 默认入口
+
+- `testing/check_repo_test_readiness.sh`：只读预检仓库级 unittest 与 repo release gate 所需的 Docker CLI、Docker daemon 与 OPENCLAW_CONTROL_PLANE_IMAGE 就绪状态；这是无 Docker 也可直接运行的仓库级 readiness 入口；失败时固定给出下一步 prepare_control_plane_medium.sh 或 Docker 修复指引。
+- `testing/run_repo_unittest.sh`：在仓库根目录执行唯一正式受支持的仓库级 unittest shell 入口，负责引导容器内 `openclaw.testing.repo_unittest`；`--help` 可离线查看，真正执行属于 Docker 必需入口；支持常见 pytest 选择器写法，并默认关闭第三方 pytest plugin autoload，避免宿主机环境污染测试结果。
+
+### 补充入口
+
+- `testing/check_python_syntax_no_bytecode.sh`：无字节码产物地检查仓库 Python 语法，正式入口为 `openclaw.testing.syntax_check`。
+
+## docs/
+
+- 目录职责：用于 docs_registry、文档入口、职责边界、导航结构、任务页模板、页面预算、实现对齐、局部文档身份与对象闭环检查。
+- 维护说明：
+  - 文档治理 surface 由基座 docs_registry.json + enabled extension 的 docsRegistryPath fragment additive merge；文档检查直接基于 merged registry 与正式页面执行。
+  - 只在整理文档唯一性、入口清单、导航结构、职责边界或局部文档身份时进入本目录。
+
+### 补充入口
+
+- `docs/check_docs_registry_sync.sh`：静态校验 merged docs registry 的 pages 结构、path 唯一性与登记页面存在性。
+- `docs/check_documentation_boundaries.sh`：检查项目级入口、导航页与专题页是否越权重复维护部署或验收内容；`--help` 可离线查看，真正执行属于 Docker 必需的 docs 静态治理检查。
+- `docs/check_documentation_entrypoints.sh`：静态检查 entrypointContract 的必需文本与禁止文本。
+- `docs/check_documentation_implementation_alignment.sh`：检查声明 implementationContract 的页面与实现真源对齐，并保证文档只描述有效实现事实。
+- `docs/check_documentation_navigation.sh`：静态检查导航页是否具备任务入口、参考页分流与下一步跳转结构。
+- `docs/check_documentation_object_closure.sh`：检查文档中的路径对象、runtime service 对象与正式命令入口的统一规格闭环。
+- `docs/check_documentation_page_budget.sh`：检查声明页面预算的任务页保持预算内，阻止一级入口与排障页无序膨胀。
+- `docs/check_documentation_task_structure.sh`：检查带 taskContract 的任务页是否具备固定任务模板区块，避免入口页重新变成无序说明页。
+- `docs/check_generated_docs_sync.sh`：统一校验 getting-started/setup 参考文档、scripts/README 与 workspace USER 自动生成段是否与仓库内规格一致；`--help` 可离线查看，真正执行属于 Docker 必需的生成文档同步检查。
+- `docs/check_local_document_identity.sh`：检查 workspace / tools 局部文档是否明确声明自己不是项目正式入口。
+
+### 内部复用
+
+- `docs/lib/static_doc_checks.sh`：docs 文档静态检查公共库；统一提供 docs_registry / 入口 / 导航三类 shell+jq 校验能力。
+- `docs/lib/repo_root_bootstrap.sh`：docs/lib helper 的仓库根定位引导层；先定位 `scripts/lib/repo_root.sh`，再让被 source 的 docs 库统一取得仓库根。
+
+## lib/
+
+- 目录职责：供其他脚本复用的公共库；不作为人工入口；控制面命令统一经 scripts/runtime/run_openclaw_python_tool.sh 暴露。
+- 维护说明：
+  - 只在排查脚本分层或补源码说明时进入本目录。
+
+### 内部复用
+
+- `lib/control_plane_config_paths.sh`：控制面配置路径的薄 shell 取值层；`config/control_plane/profile_registry.tsv` 中的 profile id / config-path 映射，以及 host 到容器内 `/opt/openclaw-tools/...` 的路径转换统一由本库解析，对外入口固定为 `scripts/runtime/run_openclaw_python_tool.sh control-plane config`。
+- `lib/cidr_contract.sh`：统一来源 CIDR 合同的 shell 真源；提供 IPv4/IPv6 私网或 loopback 校验、逗号列表校验和 allowlist 覆盖判断，供远程首装与访问端验收复用。
+- `lib/control_plane_scheduler_exec.sh`：scheduler service exec 的公共 shell 真源；统一承载 `dispatch ops run-target-operation` 与 `control-plane runtime scheduler-run-agent-runtime` 的 host 侧分流与 compose 执行。
+- `lib/repo_python_env.sh`：读取 `config/governance/support/repo_python_bootstrap.env`，只按仓库 bootstrap 真源组装 repo Python path 与 Python env 默认项，不继承调用者已有 `PYTHONPATH`，供 shell wrapper 与容器运行器复用。
+- `lib/repo_contracts.sh`：repo contract 查询入口；直接读取 `config/governance/support/repo_contracts.json`，提供静态合同路径、repo-relative 路径与顶层赋值辅助函数。
+- `lib/repo_root.sh`：统一解析当前仓库根目录；供直接入口脚本和分层 helper 获取仓库根目录。
+- `lib/docker_host_support_truth.sh`：docker host 支持策略真源的 shell 读取层；统一从 `config/governance/support/docker_host.json` 取 supported_centos7 口径，避免宿主机准备与 doctor 脚本各自维护一份。
+- `lib/local_workspace_policy.sh`：统一本地残留策略 shell 取值层；直接读取治理真源并输出细分目标、默认清理集合、.gitignore 模式、bundle excludes 与派生物扫描结果，供 doctor / cleanup / clean bundle 复用。
+- `lib/flow_entry_surface_shell.sh`：help / explain 入口切换脚本；动态帮助面不可用时显示静态说明。
+- `lib/flow_preflight_shell.sh`：主入口 preflight 与默认值加载。
+- `lib/flow_sequence_shell.sh`：按控制面顺序加载并执行 shell 阶段。
+- `lib/flow_step_runner.sh`：阶段执行日志与失败状态记录。
+- `lib/flow_summary_common_shell.sh`：成功/失败摘要的公共路径与文本拼装。
+- `lib/host_python_shell_guard.sh`：扫描 shell 中的宿主机 Python 调用。
+- `lib/image_env.sh`：加载镜像相关环境变量。
+- `lib/openclaw_runtime_contract.sh`：读取 OpenClaw 运行时合同真源。
+- `lib/pin_env_shell.sh`：更新镜像 pin 并生成 deploy/.env。
+- `lib/python_runtime_guard.sh`：宿主机 Python 静态禁令扫描入口。
+- `lib/run_static_python.sh`：只读静态 Python 入口；`--help` 可离线查看，真正执行属于 Docker 必需的静态 Python 检查；固定复用控制面容器，宿主机 Python 不属于支持路径。
+- `lib/registry_manifest_probe.sh`：探测远端 repo:tag -> digest。
+- `lib/run_summary_shell.sh`：写出 deploy/release 摘要。
+- `lib/system_time_guard.sh`：系统时间校验 / 更新公共库；统一处理多源 HTTP Date quorum、可信时间窗口、时间修复与 readiness 入口复用。
+- `lib/deployment_images.sh`：统一管理部署镜像合同的归档解析、镜像合同校验与本地就绪探测。
+
+## 使用规则
+
+- 先由项目概览、`docs/getting-started/quickstart.md` 或 `docs/operations/README.md` 确定场景，再回本页按分组选入口。
+- 内部复用脚本只作为实现支撑，不作为人工默认入口。
+- 生产计划任务统一由 control-plane scheduler 直接执行标准入口，不从脚本索引反推调度实现。
+
+## 目录规则
+
+- 顶层 `scripts/` 统一使用一个 `README.md` 与分组目录。
+- 默认入口、补充入口与内部复用入口按同一套分组目录展示。

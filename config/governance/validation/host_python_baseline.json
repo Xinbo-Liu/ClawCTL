@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "categories": {
+    "shell_exec": [],
+    "shell_indirect_exec": [],
+    "doc_example": [],
+    "generated_doc_example": [],
+    "extension_doc_example": []
+  }
+}

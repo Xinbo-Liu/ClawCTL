@@ -1,0 +1,23 @@
+{
+  "dispatch_recovery_actions": [],
+  "groups": {
+    "dispatch_targets": {
+      "script_checks": [
+        {
+          "id": "dispatch_target_rotation_sequence",
+          "failure_status": "fail",
+          "failure_action": "",
+          "use_env": "with_env",
+          "command": "bash \"$ROOT_DIR/scripts/runtime/run_openclaw_python_tool.sh\" dispatch ops verify-rotation-sequence --gate-env-file \"$ENV_FILE\" --control-plane-profile \"$OPENCLAW_CONTROL_PLANE_PROFILE\" --fail-on-fail --fail-on-warn --write-audit"
+        },
+        {
+          "id": "dispatch_target_rotation_batch_acceptance",
+          "failure_status": "fail",
+          "failure_action": "",
+          "use_env": "with_env",
+          "command": "bash \"$ROOT_DIR/scripts/runtime/run_openclaw_python_tool.sh\" dispatch observability show-batch-acceptance --gate-env-file \"$ENV_FILE\" --fail-on-warn"
+        }
+      ]
+    }
+  }
+}

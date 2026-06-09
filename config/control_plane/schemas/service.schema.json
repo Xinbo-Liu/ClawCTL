@@ -1,0 +1,171 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://openclaw.local/control-plane/service.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "service",
+    "defaults",
+    "registry",
+    "schemas"
+  ],
+  "properties": {
+    "extends": {
+      "type": "string",
+      "minLength": 1
+    },
+    "schemaVersion": {
+      "type": "integer",
+      "const": 1
+    },
+    "service": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "schedulerServiceName",
+        "stateDirName",
+        "heartbeatFile",
+        "statusFile",
+        "historyFile",
+        "agentAccessLogFile",
+        "gatewayServiceName",
+        "internalApiServiceName",
+        "autoExportAgentGroupEvidence"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "schedulerServiceName": {
+          "type": "string",
+          "minLength": 1
+        },
+        "stateDirName": {
+          "type": "string",
+          "minLength": 1
+        },
+        "heartbeatFile": {
+          "type": "string",
+          "minLength": 1
+        },
+        "statusFile": {
+          "type": "string",
+          "minLength": 1
+        },
+        "historyFile": {
+          "type": "string",
+          "minLength": 1
+        },
+        "gatewayServiceName": {
+          "type": "string",
+          "minLength": 1
+        },
+        "internalApiServiceName": {
+          "type": "string",
+          "minLength": 1
+        },
+        "agentAccessLogFile": {
+          "type": "string",
+          "minLength": 1
+        },
+        "autoExportAgentGroupEvidence": {
+          "type": "boolean"
+        }
+      }
+    },
+    "defaults": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "timezone",
+        "tickSeconds",
+        "recentHistoryLimit"
+      ],
+      "properties": {
+        "timezone": {
+          "type": "string",
+          "minLength": 1
+        },
+        "tickSeconds": {
+          "type": "integer",
+          "minimum": 5
+        },
+        "recentHistoryLimit": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "registry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "jobsDir",
+        "modelsDir",
+        "targetsDir"
+      ],
+      "properties": {
+        "jobsDir": {
+          "type": "string",
+          "minLength": 1
+        },
+        "modelsDir": {
+          "type": "string",
+          "minLength": 1
+        },
+        "targetsDir": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "extensions": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "manifestsDirs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        },
+        "enabledExtensionIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        }
+      }
+    },
+    "schemas": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "jobsSchema",
+        "modelsSchema",
+        "targetsSchema"
+      ],
+      "properties": {
+        "jobsSchema": {
+          "type": "string",
+          "minLength": 1
+        },
+        "modelsSchema": {
+          "type": "string",
+          "minLength": 1
+        },
+        "targetsSchema": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  }
+}

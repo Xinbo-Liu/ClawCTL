@@ -1,0 +1,156 @@
+{
+  "schemaVersion": 2,
+  "mode": "enforce",
+  "description": "Enforced inventory for disallowed static text/keyword gates. Blocking patterns must stay at zero; sentinel and behavior reports are informational.",
+  "scanRoots": [
+    {
+      "path": "python",
+      "includeSuffixes": [
+        ".py"
+      ]
+    },
+    {
+      "path": "scripts",
+      "includeSuffixes": [
+        ".sh"
+      ]
+    },
+    {
+      "path": "config",
+      "includeSuffixes": [
+        ".json"
+      ]
+    }
+  ],
+  "excludePaths": [
+    "config/governance/validation/keyword_gate_inventory.json"
+  ],
+  "blockedGatePatterns": [
+    {
+      "kind": "docs_blocked_text_contract_key",
+      "regex": "\"must(?:Not)?Contain\"",
+      "scanRoots": [
+        "config/governance/docs",
+        "config/governance/validation"
+      ],
+      "includeSuffixes": [
+        ".json"
+      ],
+      "domain": "documentation_contracts",
+      "classification": "blocked",
+      "replacement": "object refs in entrypoint/boundary/implementation contracts"
+    },
+    {
+      "kind": "python_static_text_assert_not_in",
+      "regex": "assertNotIn\\([\\s\\S]{0,180}?,\\s*(?:source|[A-Za-z_][A-Za-z0-9_]*_source|[A-Za-z_][A-Za-z0-9_]*_text|content|manifest_text|readme|rendered|json\\.dumps\\(|[A-Z_]+_SCRIPT\\.read_text|[A-Za-z_][A-Za-z0-9_]*\\.read_text)",
+      "scanRoots": [
+        "python/openclaw/tests/governance"
+      ],
+      "includeSuffixes": [
+        ".py"
+      ],
+      "domain": "python_static_text_tests",
+      "classification": "blocked",
+      "replacement": "openclaw.tests.support.static_text_assertions.assert_static_text_absent or structured validators"
+    }
+  ],
+  "structuredSentinelPatterns": [
+    {
+      "kind": "config_disallowed_patterns",
+      "regex": "\"disallowed_patterns\"",
+      "scanRoots": [
+        "config"
+      ],
+      "includeSuffixes": [
+        ".json"
+      ],
+      "domain": "compatibility_contract",
+      "classification": "sentinel",
+      "replacement": "kept as parser-level syntax rules"
+    },
+    {
+      "kind": "host_python_runner_literal_manifest",
+      "regex": "\"runner_surface_literal_manifest\"|runner_surface_literal_manifest",
+      "scanRoots": [
+        "config",
+        "python",
+        "scripts"
+      ],
+      "includeSuffixes": [
+        ".json",
+        ".py",
+        ".sh"
+      ],
+      "domain": "host_python_governance",
+      "classification": "sentinel",
+      "replacement": "runner binding manifest"
+    },
+    {
+      "kind": "python_forbidden_patterns",
+      "regex": "FORBIDDEN_PATTERNS|forbidden_literals",
+      "scanRoots": [
+        "python"
+      ],
+      "includeSuffixes": [
+        ".py"
+      ],
+      "domain": "python_static_checks",
+      "classification": "sentinel",
+      "replacement": "structured governance contract"
+    }
+  ],
+  "behaviorAssertionPatterns": [
+    {
+      "kind": "python_assert_not_in",
+      "regex": "assertNotIn\\(",
+      "scanRoots": [
+        "python"
+      ],
+      "includeSuffixes": [
+        ".py"
+      ],
+      "domain": "python_tests",
+      "classification": "behavior",
+      "replacement": "behavior-level assertion; not a blocked static text gate"
+    },
+    {
+      "kind": "python_assert_regex_source",
+      "regex": "assertRegex\\(",
+      "scanRoots": [
+        "python"
+      ],
+      "includeSuffixes": [
+        ".py"
+      ],
+      "domain": "python_tests",
+      "classification": "behavior",
+      "replacement": "behavior-level assertion; not a blocked static text gate"
+    },
+    {
+      "kind": "shell_fixed_grep_usage",
+      "regex": "grep -Fq",
+      "scanRoots": [
+        "scripts"
+      ],
+      "includeSuffixes": [
+        ".sh"
+      ],
+      "domain": "shell_static_guard_checks",
+      "classification": "behavior",
+      "replacement": "runtime parsing or existing structured shell guard; not a blocked static text gate"
+    },
+    {
+      "kind": "shell_extended_grep_usage",
+      "regex": "grep -(?:E|n -E|Eq)",
+      "scanRoots": [
+        "scripts"
+      ],
+      "includeSuffixes": [
+        ".sh"
+      ],
+      "domain": "shell_static_guard_checks",
+      "classification": "behavior",
+      "replacement": "runtime parsing or existing structured shell guard; not a blocked static text gate"
+    }
+  ]
+}

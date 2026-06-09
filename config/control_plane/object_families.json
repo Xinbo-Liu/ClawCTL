@@ -1,0 +1,194 @@
+{
+  "schema_version": 1,
+  "generated_artifacts": {
+    "object_family_doc": "agent/README.md"
+  },
+  "families": {
+    "acceptance_state": {
+      "label": "deployment acceptance 对象族",
+      "purpose": "统一说明 deployment acceptance state 与 private ingress 边界证据，避免 runtime acceptance surface、runtime-service-reference 与排障页重复维护同一组控制面对象。",
+      "references": [
+        "docs/operations/runtime-service-reference.md#deployment-acceptance-artifacts",
+        "docs/operations/runtime-service-reference.md",
+        "docs/operations/troubleshooting.md"
+      ],
+      "entries": [
+        {
+          "id": "deployment_acceptance",
+          "title": "deployment acceptance state",
+          "path_kind": "host_control_plane_file",
+          "path_ref": "setup/deployment_acceptance.json",
+          "producer": "bash ./scripts/setup/one_click_test_full.sh",
+          "usage": "默认全量 full test 完成后写出的 deployment acceptance 状态；只表达 eligible / accepted 与 required_checks。"
+        },
+        {
+          "id": "ingress_boundary_evidence",
+          "title": "private ingress 边界证据",
+          "path_kind": "host_control_plane_file",
+          "path_ref": "setup/ingress_boundary_evidence.json",
+          "producer": "sudo bash ./scripts/setup/apply_ingress_boundary_rules.sh --env-file deploy/.env && bash ./scripts/setup/one_click_deploy.sh",
+          "usage": "固定记录 compose/runtime 端口暴露事实、Nginx allowlist 闭合结果与来源限制语义校验结果；host_firewall 基础证据由 root 写出，Nginx policy 可由部署用户本地校验后合并。"
+        }
+      ]
+    },
+    "flow_summary_state": {
+      "label": "部署 / full test latest 摘要对象族",
+      "purpose": "统一说明 one_click_deploy 与 one_click_test_full 的固定 latest 摘要路径，供部署日志目录、排障页与入口帮助引用。",
+      "references": [
+        "docs/operations/troubleshooting.md",
+        "docs/operations/runtime-service-reference.md",
+        "docs/operations/troubleshooting.md",
+        "docs/operations/troubleshooting.md"
+      ],
+      "entries": [
+        {
+          "id": "one_click_deploy_latest_summary_json",
+          "title": "one_click_deploy 最近一次机器摘要",
+          "path_kind": "runtime_path",
+          "path_ref": "one_click_deploy_latest_summary_json",
+          "producer": "bash ./scripts/setup/one_click_deploy.sh",
+          "usage": "无论 success / failed，one_click_deploy 最近一次机器摘要都会镜像到固定 latest 路径，便于排障页与外层脚本稳定读取。"
+        },
+        {
+          "id": "one_click_deploy_latest_summary_markdown",
+          "title": "one_click_deploy 最近一次人工摘要",
+          "path_kind": "runtime_path",
+          "path_ref": "one_click_deploy_latest_summary_markdown",
+          "producer": "bash ./scripts/setup/one_click_deploy.sh",
+          "usage": "one_click_deploy 最近一次人工可读摘要的固定 latest 镜像。"
+        },
+        {
+          "id": "one_click_test_full_latest_summary_json",
+          "title": "one_click_test_full 最近一次机器摘要",
+          "path_kind": "runtime_path",
+          "path_ref": "one_click_test_full_latest_summary_json",
+          "producer": "bash ./scripts/setup/one_click_test_full.sh",
+          "usage": "full test 最近一次机器摘要固定路径；检查项明细与下一步动作以它为唯一 latest 真源。"
+        },
+        {
+          "id": "one_click_test_full_latest_summary_markdown",
+          "title": "one_click_test_full 最近一次人工摘要",
+          "path_kind": "runtime_path",
+          "path_ref": "one_click_test_full_latest_summary_markdown",
+          "producer": "bash ./scripts/setup/one_click_test_full.sh",
+          "usage": "full test 最近一次人工阅读版摘要固定路径。"
+        }
+      ]
+    },
+    "runtime_evidence": {
+      "label": "runtime evidence 对象族",
+      "purpose": "统一说明导出到 control-plane state release/evidence/ 的运行验收对象与 job artifact policy 摘要，供 runtime acceptance surface、runtime-service-reference、export_runtime_acceptance_evidence.sh 统一引用。",
+      "references": [
+        "docs/operations/runtime-service-reference.md#deployment-acceptance-artifacts",
+        "docs/operations/runtime-service-reference.md",
+        "scripts/runtime/export_runtime_acceptance_evidence.sh"
+      ],
+      "entries": [
+        {
+          "id": "runtime_acceptance",
+          "title": "runtime acceptance 摘要",
+          "path_kind": "host_control_plane_file",
+          "path_ref": "release/evidence/runtime-acceptance.json",
+          "producer": "bash ./scripts/runtime/export_runtime_acceptance_evidence.sh",
+          "usage": "聚合 deployment acceptance、official CLI 摘要、scheduler runtime 与 run ledger 后写出的运行验收证明。"
+        },
+        {
+          "id": "control_plane_run_ledger",
+          "title": "control-plane run ledger 摘要",
+          "path_kind": "host_control_plane_file",
+          "path_ref": "release/evidence/control-plane-run-ledger.json",
+          "producer": "bash ./scripts/runtime/export_runtime_acceptance_evidence.sh",
+          "usage": "逐 job 汇总 latest run / result / artifacts manifest，并作为 runtime acceptance 的结构化真源。"
+        },
+        {
+          "id": "control_plane_agent_access_log",
+          "title": "control-plane agent access log 摘要",
+          "path_kind": "host_control_plane_file",
+          "path_ref": "release/evidence/control-plane-agent-access-log.json",
+          "producer": "control-plane export-agent-group-evidence / scheduler auto export",
+          "usage": "导出最近 agent 调用访问日志摘要，作为 group 级发布证据与调用审计归档。"
+        },
+        {
+          "id": "control_plane_agent_group_access",
+          "title": "control-plane agent group access 摘要",
+          "path_kind": "host_control_plane_file",
+          "path_ref": "release/evidence/control-plane-agent-group-access.json",
+          "producer": "control-plane export-agent-group-evidence / scheduler auto export",
+          "usage": "导出按 group 聚合的 recent access、timeline、member waterfall 与 failure hotspots，作为 group_access_view 正式证据。"
+        },
+        {
+          "id": "control_plane_agent_group_acceptance_bindings",
+          "title": "agent group acceptance bindings",
+          "path_kind": "host_control_plane_file",
+          "path_ref": "release/evidence/control-plane-agent-group-acceptance-bindings.json",
+          "producer": "control-plane export-agent-group-evidence / scheduler auto export",
+          "usage": "导出按 agent group 绑定到 deployment acceptance required checks、runtime evidence 与 required run ledger jobs 的正式映射摘要。"
+        },
+        {
+          "id": "control_plane_agent_group_release_gates",
+          "title": "control-plane agent group release gates 摘要",
+          "path_kind": "host_control_plane_file",
+          "path_ref": "release/evidence/control-plane-agent-group-release-gates.json",
+          "producer": "control-plane export-agent-group-evidence / scheduler auto export",
+          "usage": "导出按 group 计算的发布门禁、required evidence 与 rollback contract 摘要，作为组发布治理的正式归档。"
+        },
+        {
+          "id": "control_plane_job_artifact_policies",
+          "title": "control-plane job artifact policy 摘要",
+          "path_kind": "host_control_plane_file",
+          "path_ref": "release/evidence/control-plane-job-artifact-policies.json",
+          "producer": "bash ./scripts/runtime/export_runtime_acceptance_evidence.sh",
+          "usage": "逐 job 固定记录 runArtifactRoot、latestAlias、retentionDays 与 scheduler run manifest 模式，供 run ledger、scheduler 文档与活动脚本统一引用。"
+        },
+        {
+          "id": "official_cli_control_plane",
+          "title": "official CLI control-plane 摘要",
+          "path_kind": "host_control_plane_file",
+          "path_ref": "release/evidence/official-cli-summary.control-plane.json",
+          "producer": "bash ./scripts/runtime/export_runtime_acceptance_evidence.sh",
+          "usage": "官方 Gateway 容器内 doctor / security audit / models probe 的聚合摘要。"
+        },
+        {
+          "id": "dispatch_runtime_check",
+          "title": "dispatch runtime 执行摘要",
+          "path_kind": "host_control_plane_file",
+          "path_ref": "release/evidence/dispatch-runtime-check.json",
+          "producer": "bash ./scripts/runtime/export_runtime_acceptance_evidence.sh",
+          "usage": "由 scheduler 承载的 delivery_adapter 执行 dispatcher preflight/status 后写出的结构化运行摘要。"
+        },
+        {
+          "id": "shadow_verify_summary_json",
+          "title": "shadow verify JSON 摘要",
+          "path_kind": "host_control_plane_file",
+          "path_ref": "release/evidence/shadow-verify-summary.json",
+          "producer": "bash ./scripts/runtime/export_runtime_acceptance_evidence.sh",
+          "usage": "候选实例 shadow verify 的结构化摘要；只有 shadow verify 已运行时才会同步。"
+        },
+        {
+          "id": "shadow_verify_summary_md",
+          "title": "shadow verify Markdown 摘要",
+          "path_kind": "host_control_plane_file",
+          "path_ref": "release/evidence/shadow-verify-summary.md",
+          "producer": "bash ./scripts/runtime/export_runtime_acceptance_evidence.sh",
+          "usage": "候选实例 shadow verify 的 Markdown 摘要。"
+        },
+        {
+          "id": "shadow_verify_compare_json",
+          "title": "shadow verify compare JSON",
+          "path_kind": "host_control_plane_file",
+          "path_ref": "release/evidence/shadow-verify-compare.json",
+          "producer": "bash ./scripts/runtime/export_runtime_acceptance_evidence.sh",
+          "usage": "当前 runtime 与 candidate runtime 的结构化对比摘要。"
+        },
+        {
+          "id": "shadow_verify_compare_md",
+          "title": "shadow verify compare Markdown",
+          "path_kind": "host_control_plane_file",
+          "path_ref": "release/evidence/shadow-verify-compare.md",
+          "producer": "bash ./scripts/runtime/export_runtime_acceptance_evidence.sh",
+          "usage": "当前 runtime 与 candidate runtime 的 Markdown 对比摘要。"
+        }
+      ]
+    }
+  }
+}

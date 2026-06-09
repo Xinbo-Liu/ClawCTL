@@ -1,0 +1,40 @@
+{
+  "service": {
+    "name": "openclaw-internal-api",
+    "bindEnv": "OPENCLAW_INTERNAL_API_BIND",
+    "portEnv": "OPENCLAW_INTERNAL_API_PORT",
+    "tokenEnv": "OPENCLAW_INTERNAL_API_TOKEN"
+  },
+  "generated_artifacts": {
+    "runtime_contract_doc": "docs/architecture/control-plane-baseline.md"
+  },
+  "hardening": {
+    "debugErrorsEnv": "OPENCLAW_INTERNAL_API_DEBUG_ERRORS",
+    "unauthExtensionRoutesEnabledEnv": "OPENCLAW_INTERNAL_API_ENABLE_UNAUTH_EXTENSION_ROUTES",
+    "unauthExtensionRouteIdsEnv": "OPENCLAW_INTERNAL_API_UNAUTH_EXTENSION_ROUTE_IDS"
+  },
+  "control_plane": {
+    "summaryRoute": "/v1/control-plane/summary",
+    "jobsRoute": "/v1/control-plane/jobs",
+    "jobDetailRouteTemplate": "/v1/control-plane/jobs/<job_id>",
+    "agentsRoute": "/v1/control-plane/agents",
+    "agentGroupsRoute": "/v1/control-plane/agent-groups",
+    "agentModulesRoute": "/v1/control-plane/agent-modules",
+    "modelsRoute": "/v1/control-plane/models",
+    "targetsRoute": "/v1/control-plane/targets",
+    "runLedgerRoute": "/v1/control-plane/run-ledger",
+    "runtimeAdaptersRoute": "/v1/control-plane/runtime-adapters",
+    "skillSetsRoute": "/v1/control-plane/skill-sets",
+    "permissionPoliciesRoute": "/v1/control-plane/permission-policies",
+    "toolsetsRoute": "/v1/control-plane/toolsets",
+    "agentAccessLogRoute": "/v1/control-plane/agent-access-log",
+    "agentGroupAccessRoute": "/v1/control-plane/agent-group-access",
+    "agentGroupReleaseGatesRoute": "/v1/control-plane/agent-group-release-gates",
+    "agentGroupAcceptanceBindingsRoute": "/v1/control-plane/agent-group-acceptance-bindings"
+  },
+  "routes": {
+    "healthzRoute": "/healthz",
+    "readyzRoute": "/readyz",
+    "configSummaryRoute": "/v1/config/summary"
+  }
+}

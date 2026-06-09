@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-06-09T17:53:26.960721Z",
+  "generatedAt": "2026-06-09T23:46:32.181304Z",
   "base": {
     "repo": "https://github.com/Xinbo-Liu/ClawCTL.git",
-    "commit": "8369ae94d302a538c3faeb110b44c1cf275b8c4f",
+    "commit": "0002efbbedfe281a0a01b13a991cbebd135f8815",
     "tag": "",
     "controlPlaneVersion": "0.1.0",
     "schemaVersion": "0.1.0",
@@ -37,7 +37,7 @@
     "managedExtensionsIndexHash": "e5beaae135823477c6217540d086da492c3dfddfa69e5347da5894f6c4ea3398",
     "profileRegistryHash": "15ee3f42dc7be094a62f84329c51be78d0313a53c50d7e226190dab1d53ecfc3",
     "extensionLockHash": "845e4e635724d24c9ccf5040454cfeafa322316c11bf072d016296646b5d9a42",
-    "stackSourceProvenanceHash": "7b3bfdb88eed6e956b485046113604ffee611469b20fd27225d5c550c39c01cd"
+    "stackSourceProvenanceHash": "81e3e9c0c84eca10d8941ecedd2c8d0899673434704a6d0c1e5bf8883c8fc7ce"
   },
   "compatibility": {
     "status": "ok",

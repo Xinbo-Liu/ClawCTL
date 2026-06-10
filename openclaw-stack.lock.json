@@ -1,14 +1,14 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-06-10T00:44:01.470587Z",
+  "generatedAt": "2026-06-10T00:48:56.175393Z",
   "base": {
     "repo": "https://github.com/Xinbo-Liu/ClawCTL.git",
-    "commit": "a40ede417a8dfdfd5dd3d0b3c8ee8fd4675da6de",
+    "commit": "06ab183a1c634cec75e57738d7e78cf20a50bbb0",
     "tag": "",
     "controlPlaneVersion": "0.1.0",
     "schemaVersion": "0.1.0",
     "runtimeContractVersion": "0.1.0",
-    "releaseBundleHash": "e8d37e123847b060ff804d8f002e44e29848e77c5bfc8a172cd066a7222ff60a"
+    "releaseBundleHash": "09b6dde4bdfcfed529732b1ef297e4ce43870ce7bb477c07dbf20684f5e8fd1d"
   },
   "extensions": [],
   "profiles": [
@@ -37,7 +37,7 @@
     "managedExtensionsIndexHash": "e5beaae135823477c6217540d086da492c3dfddfa69e5347da5894f6c4ea3398",
     "profileRegistryHash": "15ee3f42dc7be094a62f84329c51be78d0313a53c50d7e226190dab1d53ecfc3",
     "extensionLockHash": "845e4e635724d24c9ccf5040454cfeafa322316c11bf072d016296646b5d9a42",
-    "stackSourceProvenanceHash": "516184132ec735926ccfedcd62fc2265fdf8286b4cdbde6d93c85c1116e105f8"
+    "stackSourceProvenanceHash": "433925595f2a3667f5c5dc5e9557e41aad91a38d5a35515a836cd7c990823e2e"
   },
   "compatibility": {
     "status": "ok",

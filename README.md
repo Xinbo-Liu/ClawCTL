@@ -57,11 +57,11 @@ flowchart LR
 
 ## Quick Start / 快速验证
 
-本地只读验证不需要生产密钥。完整 Docker release gate 需要 Linux Docker 环境。
+正式验证入口固定通过控制面容器执行，不需要生产密钥。完整 Docker release gate 需要 Linux Docker 环境。
 
 ```bash
-python -m openclaw.cli control-plane validate registry --control-plane-profile agent_platform
-python -m openclaw.cli control-plane stack verify --json --strict-release
+bash ./scripts/runtime/run_openclaw_python_tool.sh control-plane validate registry --control-plane-profile agent_platform
+bash ./scripts/runtime/run_openclaw_python_tool.sh control-plane stack verify --json --strict-release
 bash ./scripts/testing/check_repo_test_readiness.sh
 ```
 
@@ -72,13 +72,7 @@ bash ./scripts/doctor/run_repo_release_gate.sh --json
 bash ./scripts/setup/export_clean_delivery_bundle.sh --bundle full-source-governance --check-only
 ```
 
-安装为 Python editable package 后，可使用两个等价 CLI 名称：
-
-```bash
-python -m pip install -e .
-openclaw --help
-clawctl --help
-```
+`pyproject.toml` 暴露两个等价 console script 名称：`openclaw` 和 `clawctl`。正式发布门禁仍以控制面容器入口为准。
 
 ## Repository Map / 仓库地图
 

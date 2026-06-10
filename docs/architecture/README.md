@@ -8,7 +8,7 @@
 - 判断哪些能力属于正式支持边界。
 - 判断 base 与 `agent_platform` 各自扮演什么角色。
 - 判断仓内 extension 如何通过正式装配链进入运行面。
-- 判断目标态边界应去哪里看：[../../VISION.md](../../VISION.md)。
+- 判断目标态边界应去哪里看：先回 [../README.md](../README.md)，再进入根目录 `VISION.md`。
 
 ## 合同页入口
 
@@ -35,4 +35,4 @@
 - 需要查看 agent plane 结构：从 [agent-governance.md](agent-governance.md)、[agent-module-governance.md](agent-module-governance.md) 与 [agent-group-governance.md](agent-group-governance.md) 进入。
 - 需要编写或挂载显式业务扩展包：看 [explicit-extension-packages.md](explicit-extension-packages.md)。
 - 需要升级基座与扩展组合：看 [../operations/stack-upgrade-runbook.md](../operations/stack-upgrade-runbook.md)。
-- 需要查看目标态边界：回 [../../VISION.md](../../VISION.md)。
+- 需要查看目标态边界：回 [../README.md](../README.md)，再进入根目录 `VISION.md`。

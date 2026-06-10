@@ -5,14 +5,41 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "openclaw"
 version = "0.1.0"
-description = "ClawCTL base control-plane repository package"
+description = "ClawCTL source-available non-commercial base control plane for OpenClaw runtime deployment, private ingress, scheduler automation, release governance, and managed agent extensions."
+readme = "README.md"
 requires-python = ">=3.11"
+license = { file = "LICENSE" }
+authors = [
+  { name = "Xinbo_Liu", email = "2508248897@qq.com" },
+]
+keywords = [
+  "clawctl",
+  "openclaw",
+  "control-plane",
+  "agent-platform",
+  "agent-runtime",
+  "private-ingress",
+  "scheduler",
+  "internal-api",
+  "deployment-automation",
+  "release-governance",
+  "managed-extensions",
+  "source-available",
+  "non-commercial",
+]
 dependencies = [
   "jsonschema>=4.0",
 ]
 
 [project.scripts]
 openclaw = "openclaw.cli:main"
+clawctl = "openclaw.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/Xinbo-Liu/ClawCTL"
+Repository = "https://github.com/Xinbo-Liu/ClawCTL"
+Documentation = "https://github.com/Xinbo-Liu/ClawCTL#readme"
+License = "https://github.com/Xinbo-Liu/ClawCTL/blob/main/LICENSE"
 
 [tool.setuptools]
 package-dir = {"" = "python"}

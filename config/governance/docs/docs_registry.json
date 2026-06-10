@@ -80,14 +80,17 @@
       },
       "navigationContract": {
         "requiredTokens": [
-          "## 项目定位",
-          "## 默认运行面",
-          "## 分层模型",
-          "## 阅读路径",
-          "## 交付与合规入口",
-          "## 维护边界"
+          "## What You Can Build / 可落地项",
+          "## What It Is Not / 边界说明",
+          "## Runtime Shape / 默认运行面",
+          "## Quick Start / 快速验证",
+          "## Repository Map / 仓库地图",
+          "## Developer Paths / 开发者入口",
+          "## Extension Model / 扩展模型",
+          "## Release and Audit / 发布与审计",
+          "## License / 许可"
         ],
-        "minLinks": 5
+        "minLinks": 8
       }
     },
     {

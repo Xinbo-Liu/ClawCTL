@@ -200,7 +200,7 @@
       "outputPrefix": "openclaw_full_source_governance",
       "description": "完整源码、文档、治理与运维资料交付包，使用统一 full source governance 命名。",
       "budget": {
-        "maxZipBytes": 2000000,
+        "maxZipBytes": 2300000,
         "minZipHeadroomBytes": 200000,
         "maxFiles": 1500
       },

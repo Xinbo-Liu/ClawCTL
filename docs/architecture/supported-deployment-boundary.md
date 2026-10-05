@@ -26,7 +26,7 @@
 
 ## 扩展边界
 
-- 仓内 extension 与仓内 managed explicit extension 都不属于默认正式运行面。
+- 默认正式运行面启用平台 extension `agent_platform`；仓内业务 extension 与 managed explicit extension 需显式选择。
 - managed agents extension 可通过显式 `--control-plane-profile`、有效自动发现 profile 或仓内合同 service 的显式 `--config-path` 接入；没有显式选择时，运行面固定回到 `agent_platform`。
 - 仓内登记的组合 profile 只加载平台 manifest 与白名单声明的受管扩展合同 manifest 目录。
 - 基座负责通用 extension 机制、冲突检测、ownership 解析与运行隔离；所选扩展可声明自己的 runtime service、对象和验收入口。

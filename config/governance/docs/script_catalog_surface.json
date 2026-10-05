@@ -50,7 +50,7 @@
         },
         {
           "name": "export_clean_delivery_bundle.sh",
-          "summary": "按统一本地残留策略扫描默认可清理目标与派生物；`--check-only` 只因默认可清理目标或派生物失败，`state/openclaw` 与 `state/image_artifacts` 本身不阻断；`--clean` 只清默认可清理项后再校验并导出 runtime-core / ops-toolkit / full-source-governance 交付包，同时写出 size-manifest 与 BOM。",
+          "summary": "按统一本地残留策略检查默认可清理目标与派生物；`state/openclaw` 与 `state/image_artifacts` 本身不阻断洁净度检查；`--check-only` 还校验 bundle allowlist、禁止路径、预算与 artifact smoke，不导出 zip；`--clean` 只清默认可清理项后再校验并导出 runtime-core / ops-toolkit / full-source-governance 交付包，同时写出 size-manifest 与 BOM。",
           "visibility": "supplemental_entrypoint"
         },
         {

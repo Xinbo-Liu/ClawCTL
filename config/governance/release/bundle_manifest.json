@@ -208,6 +208,7 @@
         "agent/extensions/*/offline_wheelhouse/*.whl"
       ],
       "include": [
+        ".gitattributes",
         ".github/**",
         ".gitignore",
         "COMMERCIAL_LICENSE.md",

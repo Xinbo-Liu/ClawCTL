@@ -6,7 +6,22 @@ import zipfile
 from pathlib import Path
 from unittest.mock import patch
 
+from openclaw.control_plane.stack.release import _should_hash_base_file
 from openclaw.release import bundle_governance
+
+
+class BundleGovernanceSourceClosureTest(unittest.TestCase):
+    def test_full_source_preserves_all_hashable_base_material(self) -> None:
+        """完整源码包保留来源摘要覆盖的全部基座文件，使无 Git 的解包目录也能校验溯源。"""
+        root = bundle_governance.ROOT_DIR
+        source_paths = {
+            path.relative_to(root).as_posix()
+            for path in root.rglob('*')
+            if path.is_file() and _should_hash_base_file(path.relative_to(root))
+        }
+        bundle_paths = set(bundle_governance.resolve_bundle_files('full-source-governance'))
+        self.assertTrue(source_paths)
+        self.assertFalse(source_paths - bundle_paths, f'完整源码包遗漏基座来源文件：{sorted(source_paths - bundle_paths)}')
 
 
 class BundleGovernanceZipModeTest(unittest.TestCase):

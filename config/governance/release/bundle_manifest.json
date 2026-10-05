@@ -235,7 +235,7 @@
           "env": {
             "PYTHONPATH": "python",
             "OPENCLAW_CONTROL_PLANE_SERVICE_CONFIG_PATH": "{artifact_root}/config/control_plane/profiles/agent_platform.service.json",
-            "HOST_STATE_DIR": ".artifact_smoke_state",
+            "HOST_STATE_DIR": "{artifact_state_root}",
             "OPENCLAW_READY_CACHE_TTL_SECONDS": "0",
             "PYTHONDONTWRITEBYTECODE": "1"
           },
@@ -255,7 +255,7 @@
           "env": {
             "PYTHONPATH": "python",
             "OPENCLAW_CONTROL_PLANE_SERVICE_CONFIG_PATH": "{artifact_root}/config/control_plane/profiles/agent_platform.service.json",
-            "HOST_STATE_DIR": ".artifact_smoke_state",
+            "HOST_STATE_DIR": "{artifact_state_root}",
             "OPENCLAW_READY_CACHE_TTL_SECONDS": "0",
             "PYTHONDONTWRITEBYTECODE": "1"
           },
@@ -275,7 +275,7 @@
           "env": {
             "PYTHONPATH": "python",
             "OPENCLAW_CONTROL_PLANE_SERVICE_CONFIG_PATH": "{artifact_root}/config/control_plane/profiles/agent_platform.service.json",
-            "HOST_STATE_DIR": ".artifact_smoke_state",
+            "HOST_STATE_DIR": "{artifact_state_root}",
             "OPENCLAW_READY_CACHE_TTL_SECONDS": "0",
             "PYTHONDONTWRITEBYTECODE": "1"
           },
@@ -292,7 +292,7 @@
           "env": {
             "PYTHONPATH": "python",
             "OPENCLAW_CONTROL_PLANE_SERVICE_CONFIG_PATH": "{artifact_root}/config/control_plane/profiles/agent_platform.service.json",
-            "HOST_STATE_DIR": ".artifact_smoke_state",
+            "HOST_STATE_DIR": "{artifact_state_root}",
             "OPENCLAW_READY_CACHE_TTL_SECONDS": "0",
             "PYTHONDONTWRITEBYTECODE": "1"
           },
@@ -314,7 +314,7 @@
           "env": {
             "PYTHONPATH": "python",
             "OPENCLAW_CONTROL_PLANE_SERVICE_CONFIG_PATH": "{artifact_root}/config/control_plane/service.json",
-            "HOST_STATE_DIR": ".artifact_smoke_state",
+            "HOST_STATE_DIR": "{artifact_state_root}",
             "OPENCLAW_READY_CACHE_TTL_SECONDS": "0",
             "PYTHONDONTWRITEBYTECODE": "1"
           },
@@ -334,7 +334,7 @@
           "env": {
             "PYTHONPATH": "python",
             "OPENCLAW_CONTROL_PLANE_SERVICE_CONFIG_PATH": "{artifact_root}/config/control_plane/profiles/agent_platform.service.json",
-            "HOST_STATE_DIR": ".artifact_smoke_state",
+            "HOST_STATE_DIR": "{artifact_state_root}",
             "OPENCLAW_READY_CACHE_TTL_SECONDS": "0",
             "PYTHONDONTWRITEBYTECODE": "1"
           },
@@ -354,7 +354,7 @@
           "env": {
             "PYTHONPATH": "python",
             "OPENCLAW_CONTROL_PLANE_SERVICE_CONFIG_PATH": "{artifact_root}/config/control_plane/profiles/agent_platform.service.json",
-            "HOST_STATE_DIR": ".artifact_smoke_state",
+            "HOST_STATE_DIR": "{artifact_state_root}",
             "OPENCLAW_READY_CACHE_TTL_SECONDS": "0",
             "PYTHONDONTWRITEBYTECODE": "1"
           },
@@ -374,7 +374,7 @@
           "env": {
             "PYTHONPATH": "python",
             "OPENCLAW_CONTROL_PLANE_SERVICE_CONFIG_PATH": "{artifact_root}/config/control_plane/profiles/agent_platform.service.json",
-            "HOST_STATE_DIR": ".artifact_smoke_state",
+            "HOST_STATE_DIR": "{artifact_state_root}",
             "OPENCLAW_READY_CACHE_TTL_SECONDS": "0",
             "PYTHONDONTWRITEBYTECODE": "1"
           },

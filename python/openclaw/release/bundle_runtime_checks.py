@@ -131,7 +131,8 @@ def run_artifact_smoke(
                 if target.exists():
                     target.chmod(mode)
         artifact_root = extract_root.resolve()
-        artifact_state_root = artifact_root / '.artifact_smoke_state'
+        # 运行状态与解包源码分开存放，避免烟测写入影响来源摘要和包内容校验。
+        artifact_state_root = (Path(tmpdir) / 'state').resolve()
         artifact_state_root.mkdir(parents=True, exist_ok=True)
         _prepare_artifact_state_root(artifact_state_root)
         for step in steps:

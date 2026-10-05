@@ -11,6 +11,8 @@ from typing import Any
 import unittest
 from unittest import mock
 
+from openclaw.control_plane.registry_loader import load_registry_from_path
+from openclaw.doctor.agent_modules.managed_probe_fixture import materialize_managed_probe_extension
 from openclaw.lib.repo.layout import resolve_repo_root
 from openclaw.lib.runtime.time import DEFAULT_APP_TZ
 from openclaw.lib.runtime.resolver_loader import require_path_resolver
@@ -459,36 +461,38 @@ class RuntimePathViewTest(unittest.TestCase):
                 sessions_mock.assert_called_once()
 
     def test_gateway_agent_state_prunes_dirs_outside_current_registry(self) -> None:
-        registry = _managed_registry()
-        resolver = _managed_resolver()
+        """真实探针 registry 的 Gateway state 保留当前 agent，并删除带生成标记的过期目录。"""
         with TemporaryDirectory() as tmpdir:
-            gateway_root = Path(tmpdir) / 'gateway'
+            fixture = materialize_managed_probe_extension(Path(tmpdir), base_repo_root=ROOT_DIR)
+            registry = load_registry_from_path(fixture.service_path)
+            resolver = require_path_resolver(repo_root=fixture.repo_root, config_path=fixture.service_path)
+            self.assertTrue(managed_extension_agent_ids(registry))
+            gateway_root = resolver.absolute_host_path('gateway_host_state_dir')
+            gateway_root.relative_to(fixture.repo_root)
+            marker = f'> 由 `{gateway_workspace.RENDER_GENERATED_RUNTIME_PATHS_CMD}` 根据 active control-plane registry 生成；\n'
+            retained_dirs = gateway_agent_state_dir_targets(registry, resolver)
+            self.assertTrue(retained_dirs)
+            for directory in retained_dirs:
+                directory.mkdir(parents=True, exist_ok=True)
+                if directory.name != 'sessions':
+                    (directory / 'AGENTS.md').write_text(marker, encoding='utf-8')
             stale_agent_root = gateway_root / 'agents' / 'obsolete_business_agent'
             stale_agent_dir = stale_agent_root / 'agent'
             stale_workspace = gateway_root / 'workspace-obsolete_business_agent'
             stale_agent_dir.mkdir(parents=True)
             stale_workspace.mkdir(parents=True)
-            marker = f'> 由 `{gateway_workspace.RENDER_GENERATED_RUNTIME_PATHS_CMD}` 根据 active control-plane registry 生成；\n'
             (stale_agent_dir / 'AGENTS.md').write_text(marker, encoding='utf-8')
             (stale_workspace / 'AGENTS.md').write_text(marker, encoding='utf-8')
             (stale_agent_root / 'sessions').mkdir()
-            original_absolute_host_path = resolver.absolute_host_path
+            stale = stale_gateway_agent_state_dirs(registry, resolver)
+            self.assertEqual({path.name for path in stale}, {'obsolete_business_agent', 'workspace-obsolete_business_agent'})
 
-            with mock.patch.object(resolver, 'absolute_host_path') as absolute_host_path:
-                absolute_host_path.side_effect = (
-                    lambda entry_id: gateway_root
-                    if entry_id == 'gateway_host_state_dir'
-                    else original_absolute_host_path(entry_id)
-                )
-
-                stale = stale_gateway_agent_state_dirs(registry, resolver)
-                self.assertEqual({path.name for path in stale}, {'obsolete_business_agent', 'workspace-obsolete_business_agent'})
-
-                removed = prune_stale_gateway_agent_state_dirs(registry, resolver)
+            removed = prune_stale_gateway_agent_state_dirs(registry, resolver)
 
             self.assertEqual({path.name for path in removed}, {'obsolete_business_agent', 'workspace-obsolete_business_agent'})
             self.assertFalse(stale_agent_root.exists())
             self.assertFalse(stale_workspace.exists())
+            self.assertTrue(all(directory.is_dir() for directory in retained_dirs))
 
     def test_gateway_cron_state_prunes_migration_backups(self) -> None:
         resolver = _managed_resolver()

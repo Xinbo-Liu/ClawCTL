@@ -1,19 +1,47 @@
 from __future__ import annotations
 
+import json
+import shutil
 import threading
 import unittest
+from contextlib import contextmanager
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from typing import Iterator
 from unittest.mock import patch
 
+from openclaw.doctor.agent_modules.managed_probe_fixture import (
+    ManagedProbeExtensionFixture,
+    PROBE_RELEASE_CHECK_ID,
+    remove_managed_extension,
+)
 from openclaw.doctor.release import repo_release_gate
 from openclaw.doctor.release import repo_release_gate_support
 from openclaw.lib.repo import verification_tiers
 from openclaw.lib.repo.verification_tiers import verification_tier_rows
 from openclaw.lib.runtime.bounded_process import BoundedProcessResult
+from openclaw.tests.support.managed_probe import managed_probe_repo
 
 
 class RepoReleaseGateModeTest(unittest.TestCase):
+    @contextmanager
+    def _managed_release_repo(self) -> Iterator[ManagedProbeExtensionFixture]:
+        """准备真实扩展登记和声明的发布脚本，并隔离临时根的检查缓存。"""
+        source_root = repo_release_gate_support.ROOT_DIR
+        with managed_probe_repo('release-gate-managed-probe', base_repo_root=source_root) as fixture:
+            testing_manifest = json.loads(fixture.testing_manifest_path.read_text(encoding='utf-8'))
+            for row in testing_manifest['release_gate_checks']:
+                script_rel = row['command']['script']
+                target = fixture.repo_root / script_rel
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(source_root / script_rel, target)
+            with patch.object(repo_release_gate_support, 'ROOT_DIR', fixture.repo_root):
+                repo_release_gate_support._managed_extension_release_checks_cached.cache_clear()
+                try:
+                    yield fixture
+                finally:
+                    repo_release_gate_support._managed_extension_release_checks_cached.cache_clear()
+
     def _process_outcome(
         self,
         exit_code: int | None,
@@ -175,13 +203,15 @@ class RepoReleaseGateModeTest(unittest.TestCase):
         self.assertNotIn('cold_start_imports', [item.check_id for item in static_checks])
 
     def test_managed_static_governance_checks_are_batch_eligible(self) -> None:
-        eligible = [
-            item
-            for item in repo_release_gate_support.managed_extension_release_checks()
-            if repo_release_gate_support.is_agent_governance_batch_spec(item)
-        ]
+        with self._managed_release_repo():
+            eligible = [
+                item
+                for item in repo_release_gate_support.managed_extension_release_checks()
+                if repo_release_gate_support.is_agent_governance_batch_spec(item)
+            ]
 
         self.assertTrue(eligible)
+        self.assertIn(PROBE_RELEASE_CHECK_ID, [item.check_id for item in eligible])
         self.assertTrue(all(item.lane == 'static' for item in eligible))
         self.assertFalse(
             repo_release_gate_support.is_agent_governance_batch_spec(
@@ -315,18 +345,43 @@ class RepoReleaseGateModeTest(unittest.TestCase):
         )
 
     def test_base_checks_include_managed_extension_release_gate_checks(self) -> None:
-        checks = {item.check_id: item for item in repo_release_gate.base_checks()}
-        expected_specs = {
-            item.check_id: item
-            for item in repo_release_gate_support.managed_extension_release_checks()
-        }
+        with self._managed_release_repo() as fixture:
+            profile_paths = repo_release_gate_support.control_plane_profile_config_rel_paths(
+                fixture.repo_root, allow_env_override=False
+            )
+            platform_config = fixture.repo_root / profile_paths['agent_platform']
+            platform = json.loads(platform_config.read_text(encoding='utf-8'))
+            self.assertNotIn(fixture.extension_id, platform['extensions']['enabledExtensionIds'])
+            checks = {item.check_id: item for item in repo_release_gate.base_checks()}
+            expected_specs = {
+                item.check_id: item
+                for item in repo_release_gate_support.managed_extension_release_checks()
+            }
 
         self.assertTrue(expected_specs)
+        self.assertIn(PROBE_RELEASE_CHECK_ID, expected_specs)
         for check_id, expected_spec in expected_specs.items():
             with self.subTest(check_id=check_id):
                 self.assertIn(check_id, checks)
                 self.assertEqual(checks[check_id].command_text, expected_spec.command_text)
                 self.assertEqual(tuple(checks[check_id].command), tuple(expected_spec.command))
+
+    def test_empty_managed_repository_keeps_base_release_checks(self) -> None:
+        with self._managed_release_repo() as fixture:
+            remove_managed_extension(fixture.repo_root, fixture.extension_id)
+            profile_registry = fixture.repo_root / 'config/control_plane/profile_registry.tsv'
+            lines = profile_registry.read_text(encoding='utf-8').splitlines()
+            profile_registry.write_text(
+                '\n'.join(line for line in lines if not line.startswith(fixture.extension_id + '\t')) + '\n',
+                encoding='utf-8',
+            )
+            repo_release_gate_support._managed_extension_release_checks_cached.cache_clear()
+            self.assertEqual(repo_release_gate_support.managed_extension_release_checks(), [])
+            checks = {item.check_id: item for item in repo_release_gate.base_checks()}
+
+        self.assertTrue(checks)
+        self.assertIn('stack_lock_verify', checks)
+        self.assertNotIn(PROBE_RELEASE_CHECK_ID, checks)
 
     def test_git_bash_candidates_are_resolved_from_install_markers(self) -> None:
         with TemporaryDirectory() as tmpdir:

@@ -13,8 +13,10 @@ from openclaw.control_plane.registry import (
     load_registry,
     resolve_dispatch_target_operation_command,
 )
-from openclaw.lib.repo.layout import resolve_repo_root
+from openclaw.doctor.agent_modules.managed_probe_fixture import materialize_managed_probe_extension
+from openclaw.lib.repo.layout import DEFAULT_RUNTIME_CONTROL_PLANE_SERVICE_CONFIG_REL_PATH, resolve_repo_root
 from openclaw.lib.repo.managed_extensions import load_managed_extensions_index
+from openclaw.tests.support.helpers import isolated_test_root
 
 
 ROOT_DIR = resolve_repo_root(Path(__file__))
@@ -77,9 +79,9 @@ def _target_operation_invocations(command: str) -> list[tuple[str, str, str, lis
     return invocations
 
 
-def _dispatch_target_contexts() -> list[tuple[dict[str, object], str]]:
+def _dispatch_target_contexts(repo_root: Path) -> list[tuple[dict[str, object], str]]:
     contexts: list[tuple[dict[str, object], str]] = []
-    for extension in load_managed_extensions_index(ROOT_DIR):
+    for extension in load_managed_extensions_index(repo_root):
         registry = load_registry(extension.default_service_config_path)
         registry_paths = dict(registry.get('registryPaths') or {})
         for path_text in list(registry_paths.get(DISPATCH_TARGET_REGISTRY_PATHS_KEY) or []):
@@ -120,21 +122,22 @@ class DispatchOperationsSurfaceExamplesTest(unittest.TestCase):
             for command in _surface_commands(payload)
             for invocation in _target_operation_invocations(command)
         ]
-        target_contexts = _dispatch_target_contexts()
-
         self.assertTrue(invocations)
-        self.assertTrue(target_contexts)
-        for operation, _template_target, _template_profile, extra_args in invocations:
-            for registry, target_id in target_contexts:
-                with self.subTest(operation=operation, target=target_id):
-                    command = resolve_dispatch_target_operation_command(
-                        registry,
-                        dispatch_target_id=target_id,
-                        operation=operation,
-                        extra_args=extra_args,
-                        exec_mode=SCHEDULER_SERVICE_EXEC,
-                    )
-                    self.assertTrue(command)
+        with isolated_test_root('dispatch-operation-examples') as repo_root:
+            materialize_managed_probe_extension(repo_root, base_repo_root=ROOT_DIR)
+            target_contexts = _dispatch_target_contexts(repo_root)
+            self.assertTrue(target_contexts)
+            for operation, _template_target, _template_profile, extra_args in invocations:
+                for registry, target_id in target_contexts:
+                    with self.subTest(operation=operation, target=target_id):
+                        command = resolve_dispatch_target_operation_command(
+                            registry,
+                            dispatch_target_id=target_id,
+                            operation=operation,
+                            extra_args=extra_args,
+                            exec_mode=SCHEDULER_SERVICE_EXEC,
+                        )
+                        self.assertTrue(command)
         dry_run_entry = payload['entries']['dispatch_target_default_dry_run']
         dry_run_operations = {
             operation
@@ -142,6 +145,13 @@ class DispatchOperationsSurfaceExamplesTest(unittest.TestCase):
             for operation, _target, _profile, _extra_args in _target_operation_invocations(str(command))
         }
         self.assertEqual(dry_run_operations, {'send', 'retry'})
+
+    def test_platform_profile_does_not_load_installed_target_operations(self) -> None:
+        with isolated_test_root('dispatch-operation-platform') as repo_root:
+            materialize_managed_probe_extension(repo_root, base_repo_root=ROOT_DIR)
+            self.assertTrue(_dispatch_target_contexts(repo_root))
+            registry = load_registry(repo_root / DEFAULT_RUNTIME_CONTROL_PLANE_SERVICE_CONFIG_REL_PATH)
+            self.assertFalse(dict(registry.get('registryPaths') or {}).get(DISPATCH_TARGET_REGISTRY_PATHS_KEY))
 
     def test_step_commands_are_not_adjacent_duplicates(self) -> None:
         payload = json.loads(SURFACE_PATH.read_text(encoding='utf-8'))

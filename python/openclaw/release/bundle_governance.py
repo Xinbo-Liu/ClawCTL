@@ -102,10 +102,13 @@ def _git_index_file_modes() -> dict[str, str]:
     """读取 Git index 中的文件模式。
 
     返回：
-        返回仓库相对路径到 Git index mode 的映射；无 Git 目录的源码包返回空映射并使用文件权限。
+        dict[str, str]：仓库相对路径到 Git index mode 的映射；无 Git 目录的源码包返回空映射。
+
+    异常：
+        BundleGovernanceError：工作树存在但 Git 不可用、索引读取失败，或记录不合法、含未合并项。
 
     副作用：
-        调用 `git ls-files --stage -z` 读取工作树 index；工作树存在但 Git 无法读取时抛出治理错误。
+        调用 `git ls-files --stage -z` 读取工作树 index，不修改文件或索引。
     """
     if not (ROOT_DIR / '.git').exists():
         return {}
@@ -136,7 +139,18 @@ def _git_index_file_modes() -> dict[str, str]:
 
 
 def _zip_external_mode(rel_path: str, git_index_modes: dict[str, str]) -> int:
-    """已跟踪普通文件采用索引权限；无 Git 的源码包和未跟踪交付材料保留文件权限。"""
+    """计算交付文件写入 ZIP 的 Unix 模式。
+
+    参数：
+        rel_path（str）：仓库内的交付文件相对路径，用于查找索引和读取文件权限。
+        git_index_modes（dict[str, str]）：已读取的 Git 索引模式；空映射表示源码包不含 Git 目录。
+
+    返回：
+        int：已跟踪普通文件采用索引的 100644 或 100755；其余文件保留 stat 模式的低 16 位。
+
+    异常：
+        OSError：需要读取文件权限时，文件不存在或不可访问。
+    """
     git_mode = git_index_modes.get(rel_path)
     if git_mode == '100755':
         return 0o100755

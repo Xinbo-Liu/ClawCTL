@@ -25,7 +25,6 @@ class ImageRole:
 
 
 def _load_strategy(root_dir: Path) -> dict[str, Any]:
-    """从 repo contract 定位并读取 runtime source strategy JSON。"""
     path = repo_contract_path('runtime.source_strategy', root_dir=root_dir)
     payload = json.loads(path.read_text(encoding='utf-8'))
     if not isinstance(payload, dict):
@@ -34,7 +33,6 @@ def _load_strategy(root_dir: Path) -> dict[str, Any]:
 
 
 def _pin_contract_from_file(pin_file: str, root_dir: Path) -> str:
-    """把 source strategy 中的 pin_file 映射为 repo contract id。"""
     normalized = str(pin_file or '').strip().replace('\\', '/')
     matches = [
         contract.id
@@ -47,7 +45,6 @@ def _pin_contract_from_file(pin_file: str, root_dir: Path) -> str:
 
 
 def _image_role_from_entry(image_id: str, payload: dict[str, Any], root_dir: Path) -> ImageRole:
-    """把单个 source strategy image entry 转换为 ImageRole。"""
     selected = payload.get('selected_runtime_source') if isinstance(payload.get('selected_runtime_source'), dict) else {}
     contract = payload.get('deployment_contract') if isinstance(payload.get('deployment_contract'), dict) else {}
     runtime = payload.get('compose_runtime') if isinstance(payload.get('compose_runtime'), dict) else {}
@@ -71,7 +68,6 @@ def _image_role_from_entry(image_id: str, payload: dict[str, Any], root_dir: Pat
 
 
 def _iter_strategy_images(root_dir: Path) -> list[tuple[str, dict[str, Any]]]:
-    """读取 source_strategy.images 并保留 JSON 中的角色顺序。"""
     strategy = _load_strategy(root_dir)
     images = strategy.get('images')
     if not isinstance(images, dict):
@@ -80,7 +76,6 @@ def _iter_strategy_images(root_dir: Path) -> list[tuple[str, dict[str, Any]]]:
 
 
 def deployment_image_roles(root_dir: Path) -> list[ImageRole]:
-    """按 source_strategy 顺序返回部署镜像合同角色集合。"""
     roles: list[ImageRole] = []
     for image_id, raw in _iter_strategy_images(root_dir):
         contract = raw.get('deployment_contract') if isinstance(raw.get('deployment_contract'), dict) else {}
@@ -91,7 +86,6 @@ def deployment_image_roles(root_dir: Path) -> list[ImageRole]:
 
 
 def runtime_service_image_roles(root_dir: Path) -> list[ImageRole]:
-    """按 source_strategy 顺序返回 compose 运行服务镜像角色集合。"""
     roles: list[ImageRole] = []
     for image_id, raw in _iter_strategy_images(root_dir):
         contract = raw.get('deployment_contract') if isinstance(raw.get('deployment_contract'), dict) else {}

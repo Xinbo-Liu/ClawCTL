@@ -1,3 +1,5 @@
+"""提供OpenClaw doctor 子系统的生产实现。"""
+
 from __future__ import annotations
 
 import ipaddress
@@ -13,6 +15,12 @@ RFC1918_V4_NETWORKS = (
 LOOPBACK_V4_NETWORK = ipaddress.IPv4Network("127.0.0.0/8")
 ULA_V6_NETWORK = ipaddress.IPv6Network("fc00::/7")
 LOOPBACK_V6_NETWORK = ipaddress.IPv6Network("::1/128")
+
+
+def _is_precise_public_host(network: ipaddress.IPv4Network | ipaddress.IPv6Network) -> bool:
+    if network.version == 4:
+        return network.prefixlen == 32 and network.network_address.is_global
+    return network.prefixlen == 128 and network.network_address.is_global
 
 
 def load_json(path: str | Path) -> Any:
@@ -40,11 +48,15 @@ def normalize_source_cidrs(raw: str) -> tuple[dict[str, Any], int]:
             issues.append(f'无效 CIDR：{item}')
             continue
         if network.version == 4:
-            allowed = any(network.subnet_of(base) or network == base for base in RFC1918_V4_NETWORKS) or network.subnet_of(LOOPBACK_V4_NETWORK)
+            allowed = (
+                any(network.subnet_of(base) or network == base for base in RFC1918_V4_NETWORKS)
+                or network.subnet_of(LOOPBACK_V4_NETWORK)
+                or _is_precise_public_host(network)
+            )
         else:
-            allowed = network.subnet_of(ULA_V6_NETWORK) or network.subnet_of(LOOPBACK_V6_NETWORK)
+            allowed = network.subnet_of(ULA_V6_NETWORK) or network.subnet_of(LOOPBACK_V6_NETWORK) or _is_precise_public_host(network)
         if not allowed:
-            issues.append(f'只允许私网或 loopback CIDR：{item}')
+            issues.append(f'只允许私网、loopback 或精确公网主机 CIDR：{item}')
             continue
         text = network.with_prefixlen
         if text in seen:

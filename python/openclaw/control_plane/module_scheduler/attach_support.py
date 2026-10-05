@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Agent module scheduler attach helper builders."""
+"""提供OpenClaw 控制平面子系统的生产实现。"""
 from __future__ import annotations
 
 import copy
@@ -23,7 +23,6 @@ def build_attach_module_write(
     target_binding_ref: str,
     module_path: Path,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
-    """构建 attach 对 module 的写入变更。"""
     next_module_payload = copy.deepcopy(module_payload)
     next_operation_payload = ensure_known_operation(next_module_payload, module_ref=module_ref, operation_ref=operation_ref)
     next_job_bindings = json_object(next_operation_payload.get('jobBindings'))
@@ -55,7 +54,6 @@ def build_attach_group_write(
     recovery_after_minutes: int | None,
     recovery_action_kind: str,
 ) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
-    """构建 attach 对 group 的写入变更。"""
     if not group_ref:
         return None, None
     group_row = json_object(registry.get('agentGroupsById')).get(group_ref)
@@ -94,7 +92,6 @@ def build_attach_target_write(
     target_binding_ref: str,
     agent_ref: str,
 ) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
-    """构建 attach 对 target 的写入变更。"""
     if not target_binding_ref:
         return None, None
     target_row = json_object(registry.get('targetsById')).get(target_binding_ref)
@@ -132,7 +129,6 @@ def build_attach_plan_payload(
     target_change: dict[str, Any] | None,
     writes: list[dict[str, Any]],
 ) -> dict[str, Any]:
-    """构建 attach 计划的展示载荷。"""
     previous_job_refs, previous_target_refs = module_binding_refs(module_payload)
     next_job_refs, next_target_refs = module_binding_refs(next_module_payload)
     return {

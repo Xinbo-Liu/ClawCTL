@@ -22,6 +22,67 @@ def gateway_cron_jobs_state_path_from_gateway_state_root(gateway_state_root: Pat
     return gateway_state_root / 'cron' / 'jobs.json'
 
 
+def stale_gateway_cron_migration_paths_from_gateway_state_root(gateway_state_root: Path) -> List[Path]:
+    """按 Gateway state 根列出旧 cron 迁移备份文件。
+
+    参数：
+        gateway_state_root（Path）：Gateway state 根目录；函数只检查其 `cron/` 子目录。
+
+    返回：
+        返回 List[Path]，表示当前运行态不再读取的旧 Gateway cron 迁移备份文件。
+    """
+    cron_dir = gateway_cron_jobs_state_path_from_gateway_state_root(gateway_state_root).parent
+    if not cron_dir.is_dir():
+        return []
+    return sorted(path for path in cron_dir.glob('jobs.json.migrated*') if path.is_file())
+
+
+def stale_gateway_cron_migration_paths(resolver: PathResolver) -> List[Path]:
+    """列出 Gateway cron 旧迁移备份文件。
+
+    参数：
+        resolver（PathResolver）：运行态路径解析器，用来定位 Gateway state 根目录。
+
+    返回：
+        返回 List[Path]，表示当前运行态不再读取的旧 Gateway cron 迁移备份文件。
+    """
+    return stale_gateway_cron_migration_paths_from_gateway_state_root(
+        resolver.absolute_host_path('gateway_host_state_dir')
+    )
+
+
+def prune_stale_gateway_cron_migration_paths_from_gateway_state_root(gateway_state_root: Path) -> List[Path]:
+    """按 Gateway state 根删除旧 cron 迁移备份文件。
+
+    参数：
+        gateway_state_root（Path）：Gateway state 根目录；函数只删除其 `cron/` 子目录下的旧迁移备份。
+
+    返回：
+        返回 List[Path]，表示本次删除的旧 Gateway cron 迁移备份文件。
+
+    副作用：
+        删除 Gateway state 根内不再被当前运行态读取的 cron 迁移备份文件。
+    """
+    removed = stale_gateway_cron_migration_paths_from_gateway_state_root(gateway_state_root)
+    for path in removed:
+        path.unlink()
+    return removed
+
+
+def prune_stale_gateway_cron_migration_paths(resolver: PathResolver) -> List[Path]:
+    """删除 Gateway cron 旧迁移备份文件。
+
+    参数：
+        resolver（PathResolver）：运行态路径解析器，用来定位 Gateway state 根目录。
+
+    返回：
+        返回 List[Path]，表示本次删除的旧 Gateway cron 迁移备份文件。
+    """
+    return prune_stale_gateway_cron_migration_paths_from_gateway_state_root(
+        resolver.absolute_host_path('gateway_host_state_dir')
+    )
+
+
 def _cron_schedule(job: Dict[str, Any]) -> Dict[str, Any]:
     schedule = _json_object(job.get('schedule'))
     return {
@@ -159,4 +220,5 @@ def build_gateway_cron_jobs_output(
 
 
 def render_gateway_cron_jobs(resolver: PathResolver, config_path: Path | None = None) -> None:
+    prune_stale_gateway_cron_migration_paths(resolver)
     write_text(gateway_cron_jobs_state_path(resolver), build_gateway_cron_jobs_output(config_path or resolver.config_path))

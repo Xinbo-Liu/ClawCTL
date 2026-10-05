@@ -67,6 +67,11 @@
       "format": "json"
     },
     {
+      "id": "control_plane.job_artifact_policy_surface",
+      "relative_path": "agent/control_plane/job_artifact_policy_surface.json",
+      "format": "json"
+    },
+    {
       "id": "workspace_templates.manifest",
       "relative_path": "config/workspace_templates/manifest.json",
       "format": "json"
@@ -189,16 +194,6 @@
     {
       "id": "governance.documentation_closure_rules",
       "relative_path": "config/governance/validation/closure_rules.json",
-      "format": "json"
-    },
-    {
-      "id": "governance.absent_surfaces",
-      "relative_path": "config/governance/validation/absent_surfaces.json",
-      "format": "json"
-    },
-    {
-      "id": "governance.keyword_gate_inventory",
-      "relative_path": "config/governance/validation/keyword_gate_inventory.json",
       "format": "json"
     },
     {

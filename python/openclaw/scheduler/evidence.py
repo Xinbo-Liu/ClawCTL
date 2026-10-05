@@ -65,7 +65,6 @@ def maybe_export_agent_group_evidence(
     base_root: Path,
     warn: Callable[[str], None] | None = None,
 ) -> dict[str, Any] | None:
-    """按条件导出 agent group evidence。"""
     should_export, executed_count, blocked_count = _should_export_agent_group_evidence(config, execution)
     if not should_export:
         return None

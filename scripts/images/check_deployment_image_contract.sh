@@ -40,7 +40,7 @@ while [[ $# -gt 0 ]]; do
   bash ./scripts/images/check_deployment_image_contract.sh [--env-file <path>] [--compose-file <path>] [--require-local]
 
 说明：
-  --compose-file    指向已渲染 effective compose 时，校验最终 compose 实际 image refs 与 source_strategy/deploy env selected refs 一致。
+  --compose-file    指向已渲染 effective compose 时，校验最终 compose 实际 image refs 与 source_strategy/deploy env 选定镜像引用一致。
   --require-local   要求最终 compose 中每个 image ref 都能被 docker image inspect 命中，并校验 tag@digest 的 RepoDigest 或 verified local refs 中的合同 image id。
 USAGE
       exit 0
@@ -54,7 +54,7 @@ done
 
 IMAGE_ENV_DEPLOY_ENV_PATH="$ENV_FILE"
 export IMAGE_ENV_DEPLOY_ENV_PATH
-source "$ROOT_DIR/scripts/lib/image_env.sh"
+source "$ROOT_DIR/scripts/lib/deployment_images.sh"
 source "$ROOT_DIR/scripts/runtime/runtime_compose_lib.sh"
 image_env_load
 
@@ -150,31 +150,6 @@ compose_actual_image_refs() {
   compose_declared_image_refs
 }
 
-image_ref_digest() {
-  local ref="$1"
-  [[ "$ref" == *@* ]] || { printf ''; return 0; }
-  printf '%s\n' "${ref#*@}"
-}
-
-image_ref_repo() {
-  local ref="$1"
-  local without_digest="${ref%@*}"
-  local last_segment="${without_digest##*/}"
-  if [[ "$last_segment" == *:* ]]; then
-    printf '%s\n' "${without_digest%:*}"
-  else
-    printf '%s\n' "$without_digest"
-  fi
-}
-
-gateway_selection_value() {
-  local key="$1"
-  local selection_file="$ROOT_DIR/state/image_pull/gateway_source_selection.json"
-  [[ -f "$selection_file" && -r "$selection_file" ]] || { printf ''; return 0; }
-  command -v jq >/dev/null 2>&1 || { printf ''; return 0; }
-  jq -r --arg key "$key" '.[$key] // empty' "$selection_file" 2>/dev/null || true
-}
-
 verified_local_ref_for_expected() {
   local expected="$1"
   local refs_file='' env_key='' recorded_pin='' local_ref=''
@@ -236,22 +211,22 @@ classify_compose_mismatch() {
   local expected="$1"
   local actual_joined="$2"
   local selected='' official='' env_rewritten=''
-  selected="$(gateway_selection_value selected)"
-  official="$(gateway_selection_value official)"
-  env_rewritten="$(gateway_selection_value envRewritten)"
+  selected="$(deployment_images_gateway_source_selection_value selected)"
+  official="$(deployment_images_gateway_source_selection_value official)"
+  env_rewritten="$(deployment_images_gateway_source_selection_value envRewritten)"
   if [[ "$env_rewritten" == 'true' && -n "$selected" && "$expected" == "$selected" && -n "$official" ]]; then
     if printf '%s\n' "$actual_joined" | tr ',' '\n' | grep -Fxq "$official"; then
       fail "Gateway candidate 已选中并写入 deploy env，但 effective compose 仍指向 canonical：selected=$selected actual=$official。请在 pull_images 改写 env 后重新加载镜像 env，并重渲染 state/openclaw/control_plane/setup/docker-compose.effective.yml。"
     fi
   fi
   local expected_digest='' actual='' actual_digest=''
-  expected_digest="$(image_ref_digest "$expected")"
+  expected_digest="$(deployment_images_ref_digest "$expected")"
   if [[ -n "$expected_digest" ]]; then
     while IFS= read -r actual; do
       [[ -n "$actual" ]] || continue
-      actual_digest="$(image_ref_digest "$actual")"
+      actual_digest="$(deployment_images_ref_digest "$actual")"
       if [[ "$actual_digest" == "$expected_digest" && "$actual" != "$expected" ]]; then
-        fail "effective compose 引用的镜像 digest 与 selected ref 相同但仓库/tag 不一致：selected=$expected actual=$actual。若这是 Gateway candidate 自动切换，请确认 compose 已按改写后的 deploy env 重新渲染。"
+        fail "effective compose 引用的镜像 digest 与当前选定镜像引用相同但仓库/tag 不一致：selected=$expected actual=$actual。若这是 Gateway candidate 自动切换，请确认 compose 已按改写后的 deploy env 重新渲染。"
       fi
     done < <(printf '%s\n' "$actual_joined" | tr ',' '\n')
   fi
@@ -264,20 +239,20 @@ require_local_image_ref() {
   local expected_digest='' repo_digest_lines='' repo_digest_match='' image_id='' recorded_image_id=''
   if ! image_id="$(docker image inspect "$image" --format '{{.Id}}' 2>/dev/null)"; then
     local selected='' candidate='' official='' env_rewritten=''
-    selected="$(gateway_selection_value selected)"
-    candidate="$(gateway_selection_value candidate)"
-    official="$(gateway_selection_value official)"
-    env_rewritten="$(gateway_selection_value envRewritten)"
+    selected="$(deployment_images_gateway_source_selection_value selected)"
+    candidate="$(deployment_images_gateway_source_selection_value candidate)"
+    official="$(deployment_images_gateway_source_selection_value official)"
+    env_rewritten="$(deployment_images_gateway_source_selection_value envRewritten)"
     if [[ "$env_rewritten" == 'true' && -n "$candidate" && "$image" == "$official" ]] && docker image inspect "$candidate" >/dev/null 2>&1; then
       fail "Gateway candidate 已拉取但 compose 仍指 canonical：compose=$image candidate=$candidate。请在 pull_images 改写 env 后重新加载镜像 env、重渲染 effective compose，再执行 compose up。"
     fi
     if [[ -n "$selected" && "$image" == "$selected" ]]; then
-      fail "selected ref 未拉取或本地不可见：$image。请先执行 bash ./scripts/images/pull_images.sh，或使用 load_deployment_images.sh 导入同一 pin 的离线归档。"
+      fail "当前选定镜像引用未拉取或本地不可见：$image。请先执行 bash ./scripts/images/pull_images.sh，或使用 load_deployment_images.sh 导入同一 pin 的离线归档。"
     fi
     fail "final compose image ref 本地不存在：$image。docker_compose_up 前必须先完成部署镜像准备；若 registry 不可达，先运行 check_docker_host_readiness.sh 定位 selected/candidate 链路，或改用离线归档。"
   fi
   if [[ "$image" != "$expected" ]] && image_ref_matches_expected "$image" "$expected"; then
-    expected_digest="$(image_ref_digest "$expected")"
+    expected_digest="$(deployment_images_ref_digest "$expected")"
     recorded_image_id="$(verified_local_image_id_for_expected "$expected" || true)"
     if [[ -n "$recorded_image_id" && "$image_id" != "$recorded_image_id" ]]; then
       fail "verified local ref 的 image ID 与合同记录不一致：local=$image pin=$expected expected_id=$recorded_image_id actual_id=$image_id"
@@ -292,7 +267,7 @@ require_local_image_ref() {
     fi
     return 0
   fi
-  expected_digest="$(image_ref_digest "$expected")"
+  expected_digest="$(deployment_images_ref_digest "$expected")"
   [[ -n "$expected_digest" ]] || return 0
   repo_digest_lines="$(docker image inspect "$image" --format '{{range .RepoDigests}}{{println .}}{{end}}' 2>/dev/null || true)"
   if [[ -z "$repo_digest_lines" ]]; then

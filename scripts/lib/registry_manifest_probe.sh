@@ -28,25 +28,12 @@ registry_manifest_probe_has_shell_stack() {
   command -v curl >/dev/null 2>&1 && command -v jq >/dev/null 2>&1
 }
 
-# 确认当前环境至少具备 shell 栈或宿主机 Python 探测分支。
+# 确认当前环境具备 registry manifest 探测所需的 shell 工具链。
 registry_manifest_probe_require_cmds() {
   if registry_manifest_probe_has_shell_stack; then
     return 0
   fi
-  registry_manifest_probe_python_executable >/dev/null 2>&1 || registry_manifest_probe_fail '缺少 curl/jq，且未检测到可用 Python；无法探测远端 registry manifest。' 20
-}
-
-# 在 Git Bash / Windows host 场景下，允许退回到宿主机 Python 访问 registry。
-registry_manifest_probe_python_executable() {
-  local candidate=''
-  for candidate in "${REGISTRY_MANIFEST_PROBE_PYTHON_BIN:-}" python python3 py; do
-    [[ -n "$candidate" ]] || continue
-    if command -v "$candidate" >/dev/null 2>&1; then
-      printf '%s\n' "$candidate"
-      return 0
-    fi
-  done
-  return 1
+  registry_manifest_probe_fail '缺少 curl/jq，无法探测远端 registry manifest。' 20
 }
 
 # 移除 HTTP 响应头中可能残留的回车符。
@@ -156,94 +143,6 @@ registry_manifest_probe_fetch_bearer_token() {
   printf '%s' "$token_json" | jq -r '.token // .access_token // empty'
 }
 
-# 使用宿主机 Python 作为 registry manifest 探测回退。
-registry_manifest_probe_resolve_digest_python() {
-  local repo_ref="$1"
-  local tag="$2"
-  local python_bin=''
-  python_bin="$(registry_manifest_probe_python_executable)" || return 1
-  "$python_bin" - "$repo_ref" "$tag" "$REGISTRY_MANIFEST_PROBE_ACCEPT_HEADER" "$REGISTRY_MANIFEST_PROBE_USER_AGENT" <<'PY'
-from __future__ import annotations
-
-import hashlib
-import json
-import re
-import sys
-import urllib.error
-import urllib.parse
-import urllib.request
-
-repo_ref, tag, accept_header, user_agent = sys.argv[1:5]
-MAX_MANIFEST_BYTES = 4 * 1024 * 1024
-MAX_TOKEN_BYTES = 256 * 1024
-if "/" not in repo_ref:
-    raise SystemExit(11)
-registry, repo_path = repo_ref.split("/", 1)
-manifest_url = f"https://{registry}/v2/{repo_path}/manifests/{tag}"
-
-
-def parse_www_authenticate(value: str) -> dict[str, str]:
-    return {key: data for key, data in re.findall(r'([a-zA-Z_]+)="([^"]*)"', value or "")}
-
-
-def read_limited(response, limit: int) -> bytes:
-    body = response.read(limit + 1)
-    if len(body) > limit:
-        raise SystemExit(11)
-    return body
-
-
-def open_manifest(token: str = "") -> tuple[bytes, str]:
-    headers = {
-        "Accept": accept_header,
-        "User-Agent": user_agent,
-    }
-    if token:
-        headers["Authorization"] = f"Bearer {token}"
-    request = urllib.request.Request(manifest_url, headers=headers)
-    with urllib.request.urlopen(request, timeout=30) as response:
-        body = read_limited(response, MAX_MANIFEST_BYTES)
-        digest = response.headers.get("Docker-Content-Digest") or ""
-        return body, digest
-
-
-try:
-    try:
-        body, digest = open_manifest()
-    except urllib.error.HTTPError as exc:
-        if exc.code != 401:
-            raise
-        params = parse_www_authenticate(exc.headers.get("WWW-Authenticate", ""))
-        realm = params.get("realm", "").strip()
-        if not realm:
-            raise SystemExit(11)
-        query: list[tuple[str, str]] = []
-        if params.get("service"):
-            query.append(("service", params["service"]))
-        if params.get("scope"):
-            query.append(("scope", params["scope"]))
-        token_url = realm
-        if query:
-            token_url += "?" + urllib.parse.urlencode(query)
-        token_request = urllib.request.Request(token_url, headers={"User-Agent": user_agent})
-        with urllib.request.urlopen(token_request, timeout=30) as response:
-            token_payload = json.loads(read_limited(response, MAX_TOKEN_BYTES).decode("utf-8"))
-        token = str(token_payload.get("token") or token_payload.get("access_token") or "").strip()
-        if not token:
-            raise SystemExit(11)
-        body, digest = open_manifest(token)
-    if not digest:
-        digest = "sha256:" + hashlib.sha256(body).hexdigest()
-    if not digest:
-        raise SystemExit(11)
-    print(digest)
-except SystemExit:
-    raise
-except Exception:
-    raise SystemExit(11)
-PY
-}
-
 # 解析指定 repo:tag 在远端 registry 上的 digest。
 registry_manifest_probe_resolve_digest() {
   local repo_ref="$1"
@@ -261,12 +160,6 @@ registry_manifest_probe_resolve_digest() {
 
   if [[ "$repo_ref" != */* ]]; then
     return 2
-  fi
-  if ! registry_manifest_probe_has_shell_stack; then
-    digest="$(registry_manifest_probe_resolve_digest_python "$repo_ref" "$tag" 2>/dev/null || true)"
-    [[ -n "$digest" ]] || return 11
-    printf '%s\n' "$digest"
-    return 0
   fi
   registry="${repo_ref%%/*}"
   repo_path="${repo_ref#*/}"
@@ -290,11 +183,7 @@ registry_manifest_probe_resolve_digest() {
   fi
 
   if [[ "$http_code" != '200' ]]; then
-    [[ "$http_code" =~ ^[0-9][0-9][0-9]$ ]] && return 11
-    digest="$(registry_manifest_probe_resolve_digest_python "$repo_ref" "$tag" 2>/dev/null || true)"
-    [[ -n "$digest" ]] || return 11
-    printf '%s\n' "$digest"
-    return 0
+    return 11
   fi
   digest="$(registry_manifest_probe_extract_header_value "$headers_file" 'Docker-Content-Digest')"
   if [[ -z "$digest" ]]; then

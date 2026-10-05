@@ -13,11 +13,13 @@ from .constants import RENDER_GENERATED_RUNTIME_PATHS_CMD
 from .env import build_env_outputs, env_targets, render_envs
 from .gateway.config import build_public_openclaw_config_output, public_openclaw_state_path, render_public_openclaw_config
 from .gateway.cron import build_gateway_cron_jobs_output, gateway_cron_jobs_state_path, render_gateway_cron_jobs
+from .gateway.cron import stale_gateway_cron_migration_paths
 from .gateway.workspace import (
     gateway_agent_core_file_targets,
     gateway_healthcheck_script_targets,
     render_gateway_agent_state_dirs,
     render_gateway_exec_approvals,
+    stale_gateway_agent_state_dirs,
 )
 from .path_index import build_path_index_outputs, render_path_index
 from .registry import _load_registry
@@ -102,7 +104,8 @@ def check_generated_outputs(repo_root: Path, resolver: PathResolver, config_path
     expected[openclaw_state_path] = build_public_openclaw_config_output(repo_root, resolver, config_path)
     expected[cron_jobs_path] = build_gateway_cron_jobs_output(config_path or resolver.config_path)
     expected.update(gateway_healthcheck_script_targets(repo_root, resolver))
-    expected.update(gateway_agent_core_file_targets(_load_registry(config_path or resolver.config_path), resolver))
+    registry = _load_registry(config_path or resolver.config_path)
+    expected.update(gateway_agent_core_file_targets(registry, resolver))
     path_targets = {
         'path-index.json': resolver.absolute_host_path('path_index_json'),
         'path-index.md': resolver.absolute_host_path('path_index_markdown'),
@@ -116,6 +119,10 @@ def check_generated_outputs(repo_root: Path, resolver: PathResolver, config_path
 
     missing: list[str] = []
     mismatches: list[str] = []
+    stale_paths = [
+        *stale_gateway_agent_state_dirs(registry, resolver),
+        *stale_gateway_cron_migration_paths(resolver),
+    ]
     for target, content in expected.items():
         if not target.exists():
             missing.append(str(target))
@@ -129,7 +136,7 @@ def check_generated_outputs(repo_root: Path, resolver: PathResolver, config_path
             cron_jobs_state_path=cron_jobs_path,
         ):
             mismatches.append(str(target))
-    if missing or mismatches:
+    if missing or mismatches or stale_paths:
         if missing:
             print('[render_paths][MISSING] 下列产物不存在：', file=sys.stderr)
             for item in missing:
@@ -137,6 +144,10 @@ def check_generated_outputs(repo_root: Path, resolver: PathResolver, config_path
         if mismatches:
             print('[render_paths][DRIFT] 下列产物与仓库真源或 manifest 结果不一致：', file=sys.stderr)
             for item in mismatches:
+                print(f'- {item}', file=sys.stderr)
+        if stale_paths:
+            print('[render_paths][STALE] 下列 Gateway 派生产物不属于当前 registry：', file=sys.stderr)
+            for item in stale_paths:
                 print(f'- {item}', file=sys.stderr)
         print(f'[render_paths] 请先执行 {RENDER_GENERATED_RUNTIME_PATHS_CMD} 或 bootstrap.sh 同步路径派生产物，再重新校验。', file=sys.stderr)
         return 2

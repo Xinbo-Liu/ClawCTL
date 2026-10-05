@@ -24,7 +24,6 @@ CANDIDATE_IMAGE_REF=""
 JSON_STDOUT=0
 REQUIRE_CANDIDATE_RUNTIME=0
 SKIP_CANDIDATE_RUNTIME=0
-
 usage() {
   cat <<'USAGE'
 用法：
@@ -35,13 +34,13 @@ usage() {
   - 默认会尽力在隔离网络中真实拉起候选 control-plane，输出独立 state_root / config / env / network / container_name；
   - Docker daemon 与控制面容器属于当前脚本固定前提；若当前环境缺少 Docker daemon，脚本会直接失败；
   - 若当前环境缺少 gateway token，脚本会在摘要中明确记录 candidate runtime 未执行的原因；
+  - 候选状态目录会按候选镜像的运行 UID/GID 初始化；启动、status 或 probe 失败时保留 stderr 与容器日志；
   - 输出 active runtime 与 candidate instance 的差异摘要；
   - 把 latest 摘要镜像到 control-plane state release/evidence/shadow-verify-summary.json(.md) 与 shadow-verify-compare.json(.md)；
   - 摘要渲染固定通过控制面容器执行；Docker daemon 或控制面镜像未就绪时脚本直接失败；
   - 当前流程只做影子验证，不自动切流。
 USAGE
 }
-
 fail() {
   echo "[shadow-verify][FAIL] $*" >&2
   exit 2
@@ -97,6 +96,9 @@ COMPARE_MD="$STATE_DIR/compare.md"
 CANDIDATE_PLAN_JSON="$STATE_DIR/candidate-instance.json"
 CANDIDATE_STATUS_JSON="$STATE_DIR/candidate_status_deep.json"
 CANDIDATE_PROBE_JSON="$STATE_DIR/candidate_probe.json"
+CANDIDATE_STATUS_STDERR_LOG="$STATE_DIR/candidate_status_deep.stderr.log"
+CANDIDATE_PROBE_STDERR_LOG="$STATE_DIR/candidate_probe.stderr.log"
+CANDIDATE_CONTAINER_LOG="$STATE_DIR/candidate_container.log"
 CANDIDATE_ENV="$STATE_DIR/runtime.control-plane.shadow.env"
 EVIDENCE_JSON="$EVIDENCE_DIR/shadow-verify-summary.json"
 EVIDENCE_MD="$EVIDENCE_DIR/shadow-verify-summary.md"
@@ -126,7 +128,6 @@ GATEWAY_TOKEN_SOURCE=""
 GATEWAY_AUTH_TOKEN=""
 SUMMARY_RENDERER_MODE='control_plane_container'
 SUMMARY_RENDERER_BIN='python3 -B'
-
 capture_json_evidence() {
   local output_path="$1"
   local error_message="$2"
@@ -142,21 +143,18 @@ capture_json_evidence() {
   fi
   return "$status"
 }
-
 run_summary_python() {
   SUMMARY_RENDERER_MODE='control_plane_container'
   SUMMARY_RENDERER_BIN='python3 -B'
   docker_daemon_ready || fail '当前无法连接 Docker daemon；shadow verify 固定通过控制面容器生成摘要。'
   bash "$PYTHON_RUNNER" --workdir "$ROOT_DIR" -- - "$@"
 }
-
 trim_shell_value() {
   local value="${1-}"
   value="${value#"${value%%[![:space:]]*}"}"
   value="${value%"${value##*[![:space:]]}"}"
   printf '%s\n' "$value"
 }
-
 load_env_value() {
   local file_path="$1"
   local key="$2"
@@ -181,15 +179,12 @@ load_env_value() {
   done < "$file_path"
   return 1
 }
-
 docker_cli_ready() {
   command -v docker >/dev/null 2>&1
 }
-
 docker_daemon_ready() {
   docker_cli_ready && docker info >/dev/null 2>&1
 }
-
 ensure_shadow_verify_readiness() {
   local docker_info_output=''
   if ! docker_cli_ready; then
@@ -205,7 +200,6 @@ ensure_shadow_verify_readiness() {
     exit 2
   fi
 }
-
 inspect_active_runtime() {
   if ! docker_daemon_ready; then
     return 0
@@ -218,7 +212,6 @@ inspect_active_runtime() {
     fi
   fi
 }
-
 resolve_gateway_auth_token() {
   if [[ -n "${OPENCLAW_GATEWAY_TOKEN:-}" ]]; then
     GATEWAY_AUTH_TOKEN="$OPENCLAW_GATEWAY_TOKEN"
@@ -242,7 +235,39 @@ resolve_gateway_auth_token() {
   fi
   return 1
 }
-
+prepare_candidate_home_permissions() {
+  local runtime_identity=''
+  local runtime_uid=''
+  local runtime_gid=''
+  runtime_identity="$(
+    docker run --rm \
+      --network none \
+      --read-only \
+      --security-opt no-new-privileges:true \
+      --cap-drop ALL \
+      --entrypoint sh \
+      "$CANDIDATE_IMAGE_REF" \
+      -c 'printf "%s:%s\n" "$(id -u)" "$(id -g)"'
+  )" || return 1
+  [[ "$runtime_identity" =~ ^[0-9]+:[0-9]+$ ]] || {
+    echo "[shadow-verify][FAIL] 无法解析候选镜像运行 UID/GID：$runtime_identity" >&2
+    return 1
+  }
+  runtime_uid="${runtime_identity%%:*}"
+  runtime_gid="${runtime_identity##*:}"
+  docker run --rm \
+    --network none \
+    --read-only \
+    --tmpfs /tmp \
+    --security-opt no-new-privileges:true \
+    --cap-drop ALL \
+    --cap-add CHOWN \
+    --user 0:0 \
+    --entrypoint sh \
+    -v "$CANDIDATE_HOME_DIR:/candidate-home:Z" \
+    "$CANDIDATE_IMAGE_REF" \
+    -c 'chown -R "$1:$2" /candidate-home' shadow-permissions "$runtime_uid" "$runtime_gid"
+}
 cleanup_candidate_runtime() {
   local cleanup_ok=1
   if docker_cli_ready; then
@@ -275,12 +300,15 @@ cleanup_candidate_runtime() {
     CANDIDATE_CLEANUP_COMPLETED=0
   fi
 }
-
 run_candidate_runtime() {
   mkdir -p "$CANDIDATE_STATE_ROOT" "$CANDIDATE_LOCAL_RO_DIR" "$CANDIDATE_STATE_ROOT/logs"
   cp "$GATEWAY_SOURCE_PATH" "$CANDIDATE_CONFIG_JSON"
   if [[ -f "$HOST_STATE_ROOT/gateway/exec-approvals.json" ]]; then
     cp "$HOST_STATE_ROOT/gateway/exec-approvals.json" "$CANDIDATE_STATE_ROOT/exec-approvals.json"
+  fi
+  if ! prepare_candidate_home_permissions; then
+    CANDIDATE_EXECUTION_REASON="candidate-state-permission-prepare-failed"
+    return 1
   fi
 
   if ! docker network inspect "$CANDIDATE_NETWORK_NAME" >/dev/null 2>&1; then
@@ -317,18 +345,44 @@ run_candidate_runtime() {
 
   local status_ok_local=0
   local probe_ok_local=0
+  local status_attempt_json="$STATE_DIR/.candidate_status_deep.attempt.json"
+  local status_attempt_stderr="$STATE_DIR/.candidate_status_deep.attempt.stderr.log"
+  local probe_attempt_json="$STATE_DIR/.candidate_probe.attempt.json"
+  local probe_attempt_stderr="$STATE_DIR/.candidate_probe.attempt.stderr.log"
   : > "$CANDIDATE_STATUS_JSON"
   : > "$CANDIDATE_PROBE_JSON"
+  : > "$CANDIDATE_STATUS_STDERR_LOG"
+  : > "$CANDIDATE_PROBE_STDERR_LOG"
+  : > "$CANDIDATE_CONTAINER_LOG"
   for _ in $(seq 1 15); do
-    if bash "$ROOT_DIR/scripts/runtime/run_openclaw_official_cli.sh" --container "$CANDIDATE_CONTAINER_NAME" -- gateway status --json --deep >"$CANDIDATE_STATUS_JSON" 2>/dev/null; then
+    : > "$status_attempt_json"
+    : > "$status_attempt_stderr"
+    if bash "$ROOT_DIR/scripts/runtime/run_openclaw_official_cli.sh" --container "$CANDIDATE_CONTAINER_NAME" -- gateway status --json --deep >"$status_attempt_json" 2>"$status_attempt_stderr" \
+      && [[ -s "$status_attempt_json" ]] \
+      && jq -e 'type == "object"' "$status_attempt_json" >/dev/null 2>&1; then
       status_ok_local=1
-      if bash "$ROOT_DIR/scripts/runtime/run_openclaw_official_cli.sh" --container "$CANDIDATE_CONTAINER_NAME" -- gateway probe --json >"$CANDIDATE_PROBE_JSON" 2>/dev/null; then
+      cp "$status_attempt_json" "$CANDIDATE_STATUS_JSON"
+      cp "$status_attempt_stderr" "$CANDIDATE_STATUS_STDERR_LOG"
+      : > "$probe_attempt_json"
+      : > "$probe_attempt_stderr"
+      if bash "$ROOT_DIR/scripts/runtime/run_openclaw_official_cli.sh" --container "$CANDIDATE_CONTAINER_NAME" -- gateway probe --json >"$probe_attempt_json" 2>"$probe_attempt_stderr" \
+        && [[ -s "$probe_attempt_json" ]] \
+        && jq -e 'type == "object"' "$probe_attempt_json" >/dev/null 2>&1; then
         probe_ok_local=1
+        cp "$probe_attempt_json" "$CANDIDATE_PROBE_JSON"
+        cp "$probe_attempt_stderr" "$CANDIDATE_PROBE_STDERR_LOG"
         break
       fi
+      cp "$probe_attempt_json" "$CANDIDATE_PROBE_JSON"
+      cp "$probe_attempt_stderr" "$CANDIDATE_PROBE_STDERR_LOG"
+    elif (( status_ok_local == 0 )); then
+      cp "$status_attempt_json" "$CANDIDATE_STATUS_JSON"
+      cp "$status_attempt_stderr" "$CANDIDATE_STATUS_STDERR_LOG"
     fi
     sleep 2
   done
+  docker logs "$CANDIDATE_CONTAINER_NAME" >"$CANDIDATE_CONTAINER_LOG" 2>&1 || true
+  rm -f "$status_attempt_json" "$status_attempt_stderr" "$probe_attempt_json" "$probe_attempt_stderr"
   CANDIDATE_STATUS_OK=$status_ok_local
   CANDIDATE_PROBE_OK=$probe_ok_local
   if (( CANDIDATE_STATUS_OK == 0 || CANDIDATE_PROBE_OK == 0 )); then
@@ -500,7 +554,25 @@ candidate_env_path.write_text('\n'.join(candidate_env_lines) + '\n', encoding='u
 
 candidate_status = safe_read_json(candidate_status_json_path)
 candidate_probe = safe_read_json(candidate_probe_json_path)
-active_status_ok = str(status.get('status') or '').lower() in {'ok', 'healthy', 'ready'} or bool(status.get('ok', False))
+
+
+def gateway_status_ok(payload: dict) -> bool:
+    if str(payload.get('status') or '').lower() in {'ok', 'healthy', 'ready'} or bool(payload.get('ok', False)):
+        return True
+    rpc = payload.get('rpc') if isinstance(payload.get('rpc'), dict) else {}
+    config = payload.get('config') if isinstance(payload.get('config'), dict) else {}
+    config_rows = [config.get(key) for key in ('cli', 'daemon') if isinstance(config.get(key), dict)]
+    service = payload.get('service') if isinstance(payload.get('service'), dict) else {}
+    config_audit = service.get('configAudit') if isinstance(service.get('configAudit'), dict) else {}
+    return (
+        bool(rpc.get('ok'))
+        and bool(config_rows)
+        and all(bool(row.get('valid')) for row in config_rows)
+        and (not config_audit or bool(config_audit.get('ok')))
+    )
+
+
+active_status_ok = gateway_status_ok(status)
 active_probe_ok = str(probe.get('status') or '').lower() in {'ok', 'healthy', 'ready'} or bool(probe.get('ok', False))
 internal_readyz = internal_api.get('readyz') if isinstance(internal_api.get('readyz'), dict) else {}
 internal_summary = internal_api.get('controlPlaneSummary') if isinstance(internal_api.get('controlPlaneSummary'), dict) else {}
@@ -541,6 +613,9 @@ candidate_plan = {
     'artifacts': {
         'candidate_status_deep': candidate_status_json_path.name if candidate_status_json_path.exists() else None,
         'candidate_probe': candidate_probe_json_path.name if candidate_probe_json_path.exists() else None,
+        'candidate_status_stderr': 'candidate_status_deep.stderr.log',
+        'candidate_probe_stderr': 'candidate_probe.stderr.log',
+        'candidate_container_log': 'candidate_container.log',
     },
     'notes': [
         'candidate instance 只使用 shadow_verify 目录下的独立 state_root / config / env，并以 /home/node/.openclaw/openclaw.json 暴露官方合同。',
@@ -614,6 +689,9 @@ summary = {
         'internal_api_runtime': pathlib.Path(sys.argv[6]).name,
         'candidate_status_deep': candidate_status_json_path.name if candidate_status_json_path.exists() else None,
         'candidate_probe': candidate_probe_json_path.name if candidate_probe_json_path.exists() else None,
+        'candidate_status_stderr': 'candidate_status_deep.stderr.log',
+        'candidate_probe_stderr': 'candidate_probe.stderr.log',
+        'candidate_container_log': 'candidate_container.log',
         'shadow_compare': compare_json_path.name,
     },
 }

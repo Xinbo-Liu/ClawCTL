@@ -119,7 +119,6 @@ def _validate_platform_baseline(enabled_ids: list[str]) -> None:
 
 
 def load_extension_manifests(service_payload: dict[str, Any], *, service_base_dir: Path) -> list[dict[str, Any]]:
-    """加载配置可见的全部扩展 manifest，不过滤启用状态。"""
     return list(
         _load_manifest_rows(
             service_payload,
@@ -130,7 +129,6 @@ def load_extension_manifests(service_payload: dict[str, Any], *, service_base_di
 
 
 def load_enabled_extensions(service_payload: dict[str, Any], *, service_base_dir: Path) -> list[dict[str, Any]]:
-    """按 enabledExtensionIds 顺序加载已启用扩展，并校验扩展间冲突。"""
     extensions = service_payload.get('extensions') if isinstance(service_payload.get('extensions'), dict) else {}
     enabled_ids = _normalize_text_list(extensions.get('enabledExtensionIds'), label='control plane extensions.enabledExtensionIds')
     if not enabled_ids:
@@ -164,7 +162,6 @@ def known_extensions_from_config(config_path: Path | None = None) -> list[dict[s
 
 
 def discover_known_extension_ids(start_path: Path | None = None) -> set[str]:
-    """从显式索引与有效自动发现结果中发现已知扩展 id。"""
     return {
         row.id
         for row in managed_explicit_extensions(
@@ -174,7 +171,6 @@ def discover_known_extension_ids(start_path: Path | None = None) -> set[str]:
 
 
 def import_extension_callable(module_name: str, attr_name: str) -> ExtensionCallable:
-    """导入扩展暴露的 callable，并把缺失成员转换为扩展语义错误。"""
     try:
         return import_callable(module_name, attr_name, ExtensionError, '扩展目标')
     except ExtensionError as exc:
@@ -200,17 +196,14 @@ def _cli_commands_from_manifests(manifests: list[dict[str, Any]]) -> dict[str, s
 
 
 def extension_cli_commands(config_path: Path | None = None) -> dict[str, str]:
-    """返回启用扩展贡献的 CLI 命令映射。"""
     return _cli_commands_from_manifests(enabled_extensions_from_config(config_path))
 
 
 def known_extension_cli_commands(config_path: Path | None = None) -> dict[str, str]:
-    """返回当前配置可见扩展贡献的 CLI 命令映射。"""
     return _cli_commands_from_manifests(known_extensions_from_config(config_path))
 
 
 def extension_internal_api_routes(config_path: Path | None = None) -> list[dict[str, Any]]:
-    """返回启用扩展贡献的 internal-api route 定义。"""
     routes: list[dict[str, Any]] = []
     for manifest in enabled_extensions_from_config(config_path):
         for row in manifest.get('internalApiRoutes') or []:
@@ -220,7 +213,6 @@ def extension_internal_api_routes(config_path: Path | None = None) -> list[dict[
 
 
 def extension_ready_checks(config_path: Path | None = None) -> list[dict[str, Any]]:
-    """返回启用扩展贡献的 ready check 定义。"""
     checks: list[dict[str, Any]] = []
     for manifest in enabled_extensions_from_config(config_path):
         for row in manifest.get('readyChecks') or []:

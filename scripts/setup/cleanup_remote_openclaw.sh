@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 用途：远程清理 OpenClaw 历史痕迹；默认 dry-run，显式 --apply 后才删除带项目证据的对象。
+# 用途：远程清理 OpenClaw 项目对象；默认 dry-run，显式 --apply 后才删除带项目证据的对象。
 set -euo pipefail
 
 __openclaw_script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
@@ -14,7 +14,6 @@ DEPLOY_USER="openclaw"
 APPLY=0
 SSH_PORT=""
 SSH_OPTS=()
-
 usage() {
   cat <<'USAGE'
 用法：
@@ -37,30 +36,25 @@ usage() {
   --apply              执行删除；缺省只输出计划
 USAGE
 }
-
 fail() {
   echo "[cleanup_remote_openclaw][FAIL] $*" >&2
   exit 2
 }
-
 shell_quote() {
   printf '%q' "$1"
 }
-
 validate_simple_value() {
   local label="$1"
   local value="$2"
   local pattern="$3"
   [[ -z "$value" || "$value" =~ $pattern ]] || fail "$label 包含不支持字符：$value"
 }
-
 validate_cleanup_repo_dir() {
   case "$REPO_DIR" in
     /|/root|/home|/opt|/usr|/var|/etc|*/../*|*/..|*/.|*//*) fail "--repo-dir 不是可清理的 OpenClaw 仓库路径：$REPO_DIR" ;;
   esac
   [[ "$REPO_DIR" == *openclaw* || "$REPO_DIR" == *clawctl* ]] || fail "--repo-dir 必须包含 openclaw 或 clawctl 路径证据：$REPO_DIR"
 }
-
 validate_cleanup_deploy_user() {
   case "$DEPLOY_USER" in
     root|daemon|bin|sys|sync|games|man|lp|mail|news|uucp|proxy|www-data|backup|list|irc|_apt|nobody)
@@ -68,14 +62,12 @@ validate_cleanup_deploy_user() {
       ;;
   esac
 }
-
 validate_ssh_port() {
   [[ -z "$SSH_PORT" ]] && return 0
   [[ "$SSH_PORT" =~ ^[0-9]+$ ]] || fail "--ssh-port 必须是 1-65535 的整数：$SSH_PORT"
   local port_num=$((10#$SSH_PORT))
   (( port_num >= 1 && port_num <= 65535 )) || fail "--ssh-port 必须是 1-65535 的整数：$SSH_PORT"
 }
-
 validate_inputs() {
   [[ -n "$HOST" ]] || fail '必须提供 --host <ssh-target>'
   validate_simple_value '--host' "$HOST" '^[A-Za-z0-9_.:@-]+$'
@@ -85,25 +77,21 @@ validate_inputs() {
   validate_cleanup_repo_dir
   validate_cleanup_deploy_user
 }
-
 ssh_remote_cleanup() {
   local port_args=()
   [[ -n "$SSH_PORT" ]] && port_args=(-p "$SSH_PORT")
   ssh "${port_args[@]}" "${SSH_OPTS[@]}" "$HOST" "bash -s" <<< "$(remote_cleanup_script)"
 }
-
 remote_cleanup_script() {
   cat <<EOF
 set -euo pipefail
 APPLY="$APPLY"
 REPO_DIR="$(shell_quote "$REPO_DIR")"
 DEPLOY_USER="$(shell_quote "$DEPLOY_USER")"
-
 note() { printf '%s\n' "\$*"; }
 plan() { note "[PLAN] \$*"; }
 applied() { note "[APPLY] \$*"; }
 warn() { note "[WARN] \$*"; }
-
 run_apply() {
   local label="\$1"
   shift
@@ -114,22 +102,18 @@ run_apply() {
     plan "\$label"
   fi
 }
-
 docker_available() {
   command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1
 }
-
 collect_openclaw_containers() {
   docker ps -a --format '{{.ID}}|{{.Image}}|{{.Names}}|{{.Labels}}' 2>/dev/null \
     | awk -F'|' '\$3 ~ /^openclaw-/ || \$4 ~ /(openclaw|clawctl)/ { print }'
 }
-
 collect_labeled_objects() {
   local kind="\$1"
   docker "\$kind" ls --format '{{.Name}}|{{.Labels}}' 2>/dev/null \
     | awk -F'|' '\$1 ~ /(openclaw|clawctl)/ || \$2 ~ /(openclaw|clawctl)/ { print \$1 }'
 }
-
 openclaw_repo_dir_has_evidence() {
   local dir="\$1"
   [[ -d "\$dir" ]] || return 1
@@ -138,7 +122,6 @@ openclaw_repo_dir_has_evidence() {
   [[ -f "\$dir/.git/config" ]] && grep -Eiq '(openclaw|clawctl)' "\$dir/.git/config" 2>/dev/null && return 0
   return 1
 }
-
 deploy_user_has_openclaw_evidence() {
   local user="\$1"
   local passwd_line='' home_dir='' marker_path='' repo_owner=''
@@ -155,7 +138,6 @@ deploy_user_has_openclaw_evidence() {
   fi
   return 1
 }
-
 deploy_group_has_openclaw_evidence() {
   local group="\$1"
   local repo_group=''
@@ -165,7 +147,6 @@ deploy_group_has_openclaw_evidence() {
   fi
   return 1
 }
-
 cleanup_docker_objects() {
   local row='' container_id='' image_name='' container_name='' image_id=''
   local image_ids_file=''
@@ -194,7 +175,6 @@ cleanup_docker_objects() {
   done
   rm -f "\$image_ids_file"
 }
-
 cleanup_filesystem() {
   if [[ ! -e "\$REPO_DIR" ]]; then
     note "[SKIP] 仓库目录不存在：\$REPO_DIR"
@@ -223,7 +203,6 @@ cleanup_filesystem() {
     fi
   fi
 }
-
 cleanup_user() {
   local user_evidence=0
   if getent passwd "\$DEPLOY_USER" >/dev/null 2>&1; then
@@ -245,11 +224,18 @@ cleanup_user() {
     fi
   fi
 }
-
 cleanup_iptables_rules() {
   local cmd='iptables'
   local line='' parts=()
   command -v "\$cmd" >/dev/null 2>&1 || { warn '缺少 iptables，跳过 OPENCLAW_INGRESS_BOUNDARY 规则清理。'; return 0; }
+  # 职责：优先用 sudo 枚举 DOCKER-USER，避免普通用户看不到 root-only 防火墙规则。
+  list_iptables_docker_user_rules() {
+    if sudo -n true >/dev/null 2>&1; then
+      sudo "\$cmd" -S DOCKER-USER 2>/dev/null || true
+    else
+      "\$cmd" -S DOCKER-USER 2>/dev/null || true
+    fi
+  }
   while IFS= read -r line; do
     [[ -n "\$line" ]] || continue
     if [[ "\$APPLY" == '1' ]]; then
@@ -260,12 +246,19 @@ cleanup_iptables_rules() {
     else
       plan "删除 iptables 规则：\$line"
     fi
-  done < <("\$cmd" -S DOCKER-USER 2>/dev/null | awk '/OPENCLAW_INGRESS_BOUNDARY/ {print}')
+  done < <(list_iptables_docker_user_rules | awk '/OPENCLAW_INGRESS_BOUNDARY/ {print}')
 }
-
 cleanup_nft_rules() {
   local family='' table_name='' chain_name='' handle='' raw=''
   if command -v nft >/dev/null 2>&1; then
+    # 职责：优先用 sudo 枚举 nft ruleset，避免普通用户看不到 root-only 防火墙规则。
+    list_nft_ruleset() {
+      if sudo -n true >/dev/null 2>&1; then
+        sudo nft -a list ruleset 2>/dev/null || true
+      else
+        nft -a list ruleset 2>/dev/null || true
+      fi
+    }
     while IFS='|' read -r family table_name chain_name handle raw; do
       [[ -n "\$family" && -n "\$table_name" && -n "\$chain_name" && -n "\$handle" ]] || continue
       if [[ "\$APPLY" == '1' ]]; then
@@ -275,7 +268,7 @@ cleanup_nft_rules() {
         plan "删除 nft 规则：\$raw"
       fi
     done < <(
-      nft -a list ruleset 2>/dev/null | awk '
+      list_nft_ruleset | awk '
         \$1 == "table" { family = \$2; table_name = \$3; gsub(/[{}]/, "", table_name) }
         \$1 == "chain" { chain_name = \$2; gsub(/[{}]/, "", chain_name) }
         /OPENCLAW_INGRESS_BOUNDARY/ && /# handle / {

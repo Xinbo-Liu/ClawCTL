@@ -21,7 +21,34 @@ def representative_managed_extension(start_path: Path | None = None) -> ManagedE
     extensions = managed_extensions(repo_root)
     if not extensions:
         raise AssertionError(f'expected at least one managed explicit extension in {repo_root}')
+    for row in sorted(extensions, key=lambda item: item.id):
+        try:
+            registry = load_registry_from_path(row.default_service_config_path)
+        except Exception:
+            continue
+        has_agents = bool(registry_rows(registry, 'agents'))
+        has_cron_jobs = bool(cron_jobs(registry, require_agent=True))
+        has_ollama_model = any(
+            str(model.get('provider') or '').strip() == 'ollama'
+            for model in registry_rows(registry, 'models')
+        )
+        if has_agents and has_cron_jobs and has_ollama_model:
+            return row
     return sorted(extensions, key=lambda row: row.id)[0]
+
+
+def representative_managed_extension_with_registry_path(
+    start_path: Path | None = None,
+    *,
+    registry_key: str,
+) -> ManagedExtensionRow:
+    repo_root = resolve_repo_root(ROOT_DIR if start_path is None else start_path)
+    for row in sorted(managed_extensions(repo_root), key=lambda item: item.id):
+        registry = load_registry_from_path(row.default_service_config_path)
+        paths = (registry.get('registryPaths') or {}).get(registry_key) or []
+        if paths:
+            return row
+    raise AssertionError(f'expected at least one managed explicit extension with registryPaths.{registry_key} in {repo_root}')
 
 
 def current_managed_extension(start_path: Path | None = None, *, extension_id: str | None = None) -> ManagedExtensionRow:

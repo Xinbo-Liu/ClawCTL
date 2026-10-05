@@ -4,16 +4,19 @@
 
 ## 项目级阅读入口
 
-| 任务或主题       | 入口                                                                                             |
-|-------------|------------------------------------------------------------------------------------------------|
-| 项目结构与运行分层 | [architecture/control-plane-baseline.md](architecture/control-plane-baseline.md)               |
-| 平台部署主路径   | [architecture/platform-main-path.md](architecture/platform-main-path.md)                       |
+| 任务或主题           | 入口                                                                                           |
+|----------------------|------------------------------------------------------------------------------------------------|
+| 新维护者最小理解路径 | [architecture/maintainer-minimal-path.md](architecture/maintainer-minimal-path.md)             |
+| 项目结构与运行分层   | [architecture/control-plane-baseline.md](architecture/control-plane-baseline.md)               |
+| 平台部署主路径       | [architecture/platform-main-path.md](architecture/platform-main-path.md)                       |
 | 支持范围与不支持范围 | [architecture/supported-deployment-boundary.md](architecture/supported-deployment-boundary.md) |
-| 正式部署主线    | [getting-started/quickstart.md](getting-started/quickstart.md)                                 |
-| 维护事实总览    | [operations/maintenance-map.md](operations/maintenance-map.md)                                 |
-| 运行验收和值守入口 | [operations/runtime-service-reference.md](operations/runtime-service-reference.md)             |
-| 安全边界      | [operations/security-boundary.md](operations/security-boundary.md)                             |
-| Agent 治理目录 | [../agent/README.md](../agent/README.md)                                                       |
+| 正式部署主线         | [getting-started/quickstart.md](getting-started/quickstart.md)                                 |
+| 维护事实总览         | [operations/maintenance-map.md](operations/maintenance-map.md)                                 |
+| 运行验收和值守入口   | [operations/runtime-service-reference.md](operations/runtime-service-reference.md)             |
+| 安全边界             | [operations/security-boundary.md](operations/security-boundary.md)                             |
+| 运行对象与产物策略   | [operations/runtime-artifacts-reference.md](operations/runtime-artifacts-reference.md)         |
+| Dispatch 目标治理    | [operations/dispatch-targets.md](operations/dispatch-targets.md)                               |
+| Agent 治理目录       | [../agent/README.md](../agent/README.md)                                                       |
 
 ## 目录职责
 
@@ -28,5 +31,5 @@
 
 - `docs/` 只维护项目级正式文档，不复制模块局部实现说明或仓库外 extension 内容。
 - 主仓库正式文档覆盖 kernel、`agent_platform`、部署主链、运行验收与通用 extension 机制；仓内扩展通过正式 profile、有效自动发现 profile 或仓内合同 service 的显式 `--config-path` 接入。
-- 目标态边界统一记录在 [../VISION.md](../VISION.md)。
+- 当前能力以 [项目概览](../README.md) 和正式实现合同为准；长期方向统一记录在 [VISION.md](../VISION.md)，不作为当前交付承诺。
 - 结构、边界与入口说明统一以正式页面为准。

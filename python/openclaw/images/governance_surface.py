@@ -80,7 +80,6 @@ def render_index() -> str:
 
 
 def render_contract() -> str:
-    """渲染部署镜像治理合同，镜像角色直接从 runtime source strategy 派生。"""
     info = contract_info()
     lines = [
         f"title: {str(info.get('title') or 'contract').strip()}",

@@ -12,6 +12,7 @@ from openclaw.lib.http.json_client import http_post_json
 
 @dataclass(frozen=True)
 class ChannelDeliveryRequest:
+    """通道发送请求。"""
     provider: str
     transport: str
     endpoint_url: str

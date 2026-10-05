@@ -4,14 +4,14 @@
 
 本页覆盖三类运行态任务：运行状态查看、deployment acceptance / runtime acceptance 默认顺序、以及最终交付前的证据归档。
 
-详细对象解释、路径合同、dispatch 观察与恢复说明统一查看 `../architecture/control-plane-baseline.md`、`dispatch-targets.md` 与仓库根路径 `agent/README.md`。
+详细对象解释与路径合同查看 [运行产物参考](runtime-artifacts-reference.md) 和 `../architecture/control-plane-baseline.md`；dispatch 观察与恢复查看 `dispatch-targets.md`。
 
 ## 适用范围
 
 - 本页定义 **运行态入口、deployment acceptance 默认顺序，以及 runtime acceptance 证据归档**。
 - runtime 服务名、容器名与 target 边界由 service registry、testing manifest 与 runtime entrypoints 共同定义。
 - 当前 compose 运行治理固定显式声明为 user + cap_drop ALL + no-new-privileges + read_only + init: true + cgroup: private + pull_policy: never；镜像拉取统一前置到 one-click 的镜像阶段。
-- acceptance / runtime evidence / health / recovery / dispatch observability 的固定对象路径统一回 `config/control_plane/object_families.json` 与 `agent/README.md`；本页只维护运行入口与顺序。
+- acceptance / runtime evidence / health / recovery / dispatch observability 的固定对象路径统一回 `config/control_plane/object_families.json` 与 `docs/operations/runtime-artifacts-reference.md`；本页只维护运行入口与顺序。
 
 - 需要部署主链时回到 `../getting-started/quickstart.md`。
 - 需要统一排障时回到 `troubleshooting.md`。
@@ -34,15 +34,17 @@ bash ./scripts/runtime/export_runtime_acceptance_evidence.sh
 
 ## 常用动作
 
-| 场景                   | 默认入口                                                                                                          | 下一步                                                                                                                                                                       |
-|----------------------|---------------------------------------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| 统一查看服务状态             | `bash ./scripts/runtime/show_runtime_service_status.sh`                                                       | 确认启用的 runtime target 是否在线、healthy。                                                                                                                                        |
-| 查看容器日志               | `bash ./scripts/runtime/show_runtime_container_logs.sh --target gateway`                                      | 需要排查单个 runtime target 的最近日志或持续跟随。                                                                                                                                         |
-| 统一执行服务动作             | `bash ./scripts/runtime/run_runtime_service_action.sh restart --target gateway`                               | 需要对单个或多个 runtime target 执行 start / stop / restart / up。                                                                                                                   |
-| 官方 Gateway 运行态深查     | `bash ./scripts/gateway/run_gateway_status_deep.sh`                                                           | 需要查看 official gateway status --deep、probe、安全审计等治理结果。                                                                                                                      |
-| private ingress 边界证据 | `sudo bash ./scripts/doctor/check_ingress_boundary_evidence.sh --env-file deploy/.env --require-nginx-policy` | 需要确认 private ingress 只有 80/443 暴露、内部服务不发布宿主机端口，Nginx 来源 allowlist 渲染结果、只读控制面 API Gateway token 校验与代理，且来源限制规则由宿主机防火墙或外部 ACL 语义证明时。                                         |
-| 导出运行验收证据             | `bash ./scripts/runtime/export_runtime_acceptance_evidence.sh`                                                | 需要手工把 acceptance / dispatch runtime / official CLI / shadow verify 结果导出到 <current-host-state-root>/control_plane/release/evidence；one_click_deploy 默认在 full test 通过后自动执行。 |
-| 交付前工作树清洁与导出          | `bash ./scripts/setup/export_clean_delivery_bundle.sh --bundle runtime-core --clean`                          | 需要导出最终仓库交付包，并阻断默认可清理目标或派生物混入 zip。                                                                                                                                         |
+| 场景                     | 默认入口                                                                                                               | 下一步                                                                                                                                                                                           |
+|--------------------------|------------------------------------------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| 统一查看部署状态         | `bash ./scripts/runtime/show_runtime_deployment_status.sh`                                                             | 需要同时查看 effective compose、Docker MTU、服务状态、run ledger 与 acceptance 摘要；默认任一核心状态面缺失或查询失败即返回非 0，人工排障保留部分输出时显式追加 `--allow-partial`。              |
+| 统一查看服务状态         | `bash ./scripts/runtime/show_runtime_service_status.sh`                                                                | 确认启用的 runtime target 是否在线、healthy。                                                                                                                                                    |
+| 查看容器日志             | `bash ./scripts/runtime/show_runtime_container_logs.sh --target gateway`                                               | 需要排查单个 runtime target 的最近日志或持续跟随。                                                                                                                                               |
+| 统一执行服务动作         | `bash ./scripts/runtime/run_runtime_service_action.sh restart --target gateway`                                        | 需要对单个或多个 runtime target 执行 start / stop / restart / up。                                                                                                                               |
+| 官方 Gateway 运行态深查  | `bash ./scripts/gateway/run_gateway_status_deep.sh`                                                                    | 需要查看 official gateway status --deep、probe、安全审计等治理结果。                                                                                                                             |
+| private ingress 边界证据 | `sudo bash ./scripts/doctor/check_ingress_boundary_evidence.sh --env-file deploy/.env --require-nginx-policy`          | 需要确认 private ingress 只有 80/443 暴露、内部服务不发布宿主机端口，Nginx 来源 allowlist 渲染结果、只读控制面 API Gateway token 校验与代理，且来源限制规则由宿主机防火墙或外部 ACL 语义证明时。 |
+| 导出运行验收证据         | `bash ./scripts/runtime/export_runtime_acceptance_evidence.sh`                                                         | 需要手工把 acceptance / dispatch runtime / official CLI / shadow verify 结果导出到 <current-host-state-root>/control_plane/release/evidence；one_click_deploy 默认在 full test 通过后自动执行。  |
+| 扩展真实外部闭环验收     | `bash ./scripts/setup/one_click_upgrade.sh --repo-url <git-url> --ref main --require-live-verification <extension-id>` | 需要在正式升级主链中执行扩展 testing manifest 声明的 `live_acceptance_checks`；默认 full test 不触发外部发送，live 脱敏输出和部署机可访问证据路径由升级报告目录归档。                            |
+| 交付前工作树清洁与导出   | `bash ./scripts/setup/export_clean_delivery_bundle.sh --bundle runtime-core --clean`                                   | 需要导出最终仓库交付包，并阻断默认可清理目标或派生物混入 zip。                                                                                                                                   |
 
 ## runtime target / service / container 对照
 
@@ -55,7 +57,7 @@ bash ./scripts/runtime/export_runtime_acceptance_evidence.sh
 
 ## 运行镜像来源与 source strategy
 
-runtime contract 与 source strategy 的正式事实统一记录在本节。
+本节列出运行镜像的官方来源、所选引用、pin 文件与来源校验规则。
 
 | object                 | canonical source            | selected env                      | selected pin                     |
 |------------------------|-----------------------------|-----------------------------------|----------------------------------|
@@ -90,7 +92,7 @@ runtime contract 与 source strategy 的正式事实统一记录在本节。
 7. control plane Python / runtime Python / Nginx 宿主机预检只验证本地缓存与 Docker 传输链路；精确 tag@digest artifact 可用性统一在 check_deployment_image_readiness.sh、pull_images.sh 与部署镜像归档链路闭合。
 8. 宿主机静态预检、Gateway 供应链事实与 registry manifest 探针固定走 bash + jq + curl 静态链路；这些入口不准备 host 控制面执行介质，进入 host 控制面命令前必须显式执行 prepare_control_plane_medium.sh。
 9. Gateway 宿主机预检必须复用统一供应链事实，明确区分 selected source 不可达、selected source digest 与 pin 不一致、以及候选链路可用三种状态。
-10. pull_images.sh 默认按 PULL_GATEWAY_CANDIDATE_MODE=auto-switch 在 CN profile 下选择等值 Gateway candidate；该选择只写当前 deploy/.env 与 state/image_pull/gateway_source_selection.json，不改写 config/image_pins/openclaw.env。
+10. pull_images.sh 默认按 PULL_GATEWAY_CANDIDATE_MODE=auto-switch 在 CN profile 下选择等值 Gateway candidate；该选择仅切换当前 deploy/.env 的 Gateway 镜像引用，并写入 state/image_pull/gateway_source_selection.json，不改写 config/image_pins/openclaw.env；拉取完成后默认移除未被当前部署选用的 Gateway canonical/candidate 来源标签。
 
 <a id="manual-post-deploy-checks"></a>
 ## 首次部署后的人工补充核对
@@ -147,10 +149,10 @@ bash ./scripts/doctor/check_openclaw_official_runtime_contract.sh
 
 ```bash
 bash ./scripts/setup/one_click_deploy.sh
-bash ./scripts/runtime/run_openclaw_python_tool.sh runtime acceptance acceptance-summary
+bash ./scripts/runtime/run_openclaw_python_tool.sh runtime acceptance acceptance-summary --strict true
 ```
 
-- 若当前 profile / extension 声明 `required_run_ledger_jobs`，`one_click_deploy.sh` 会在 full test 前自动执行 `run_control_plane_run_all_once.sh` 生成当前机器真实 run ledger；发送动作按当前 target 配置执行。当前 target 配置不允许发送时，使用 `--skip-acceptance` 仅启动服务，并把 deployment acceptance / runtime acceptance evidence 未闭合作为显式交接状态。
+- 若平台 deployment acceptance manifest 声明 `required_run_ledger_jobs`，`one_click_deploy.sh` 会在 full test 前自动执行 `run_control_plane_run_all_once.sh` 生成当前机器真实 run ledger；发送动作按当前 target 配置执行。当前 target 配置不允许发送时，使用 `--skip-acceptance` 仅启动服务，并把 deployment acceptance / runtime acceptance evidence 未闭合作为显式交接状态。
 
 使用 `--skip-acceptance` 或 `--prepare-only` 后，先确认 runtime 服务已启动，再按 run ledger 状态闭合 deployment acceptance 与 runtime evidence：
 
@@ -160,7 +162,7 @@ bash ./scripts/runtime/run_openclaw_python_tool.sh runtime acceptance acceptance
 ```bash
 bash ./scripts/setup/one_click_deploy.sh --resume-from post_deploy_acceptance
 bash ./scripts/setup/one_click_deploy.sh --resume-from post_deploy_full_acceptance
-bash ./scripts/runtime/run_openclaw_python_tool.sh runtime acceptance acceptance-summary
+bash ./scripts/runtime/run_openclaw_python_tool.sh runtime acceptance acceptance-summary --strict true
 ```
 
 需要单独查看结构化 full test 摘要时，执行 `bash ./scripts/setup/one_click_test_full.sh --json`；该命令不替代部署恢复入口。
@@ -186,18 +188,18 @@ bash ./scripts/runtime/export_runtime_acceptance_evidence.sh
 <a id="deployment-acceptance-artifacts"></a>
 ### deployment acceptance 与 runtime acceptance 证据产物
 
-| 路径                                                                                                  | 写出者                                     | 作用                                                                                                                                                       |
-|-----------------------------------------------------------------------------------------------------|-----------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `<current-host-state-root>/control_plane/setup/deployment_acceptance.json`                          | `one_click_test_full.sh`                | 默认全量 full 验证完成后写出的 deployment acceptance state，只表达 eligible / accepted 与 required_checks，不内嵌 runtime evidence。                                           |
-| `<current-host-state-root>/control_plane/setup/ingress_boundary_evidence.json`                      | `check_ingress_boundary_evidence.sh`    | private ingress 边界证据摘要；记录 compose/runtime 端口暴露事实、Nginx allowlist，以及宿主机防火墙或外部 ACL 证据文件的检查结果。                                                              |
-| `<current-host-state-root>/control_plane/release/evidence/runtime-acceptance.json`                  | `export_runtime_acceptance_evidence.sh` | 把 deployment acceptance state、control-plane scheduler runtime、run ledger 与官方 CLI 摘要聚合后的运行验收证明。                                                           |
+| 路径                                                                                                | 写出者                                  | 作用                                                                                                                                                                          |
+|-----------------------------------------------------------------------------------------------------|-----------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `<current-host-state-root>/control_plane/setup/deployment_acceptance.json`                          | `one_click_test_full.sh`                | 默认全量 full 验证完成后写出的 deployment acceptance state，只表达 eligible / accepted 与 required_checks，不内嵌 runtime evidence。                                          |
+| `<current-host-state-root>/control_plane/setup/ingress_boundary_evidence.json`                      | `check_ingress_boundary_evidence.sh`    | private ingress 边界证据摘要；记录 compose/runtime 端口暴露事实、Nginx allowlist，以及宿主机防火墙或外部 ACL 证据文件的检查结果。                                             |
+| `<current-host-state-root>/control_plane/release/evidence/runtime-acceptance.json`                  | `export_runtime_acceptance_evidence.sh` | 把 deployment acceptance state、control-plane scheduler runtime、run ledger 与官方 CLI 摘要聚合后的运行验收证明。                                                             |
 | `<current-host-state-root>/control_plane/release/evidence/control-plane-run-ledger.json`            | `export_runtime_acceptance_evidence.sh` | 控制平面 run ledger 验收摘要；逐 job 回收 run / result / artifacts manifest，并以 artifactRoot、evidenceSources、observedEntries 与 schedulerEntries 判断 artifact evidence。 |
-| `<current-host-state-root>/control_plane/release/evidence/control-plane-job-artifact-policies.json` | `export_runtime_acceptance_evidence.sh` | 控制平面 job artifact policy 摘要；逐 job 固定记录 runArtifactRoot、latestAlias、retentionDays 与 scheduler run manifest 模式。                                            |
-| `<current-host-state-root>/control_plane/release/evidence/official-cli-summary.control-plane.json`  | `export_runtime_acceptance_evidence.sh` | 官方 Gateway 容器内 openclaw doctor / security audit / models probe 的聚合摘要。                                                                                    |
-| `<current-host-state-root>/control_plane/release/evidence/shadow-verify-summary.json`               | `export_runtime_acceptance_evidence.sh` | 候选 Gateway 隔离实例的影子验证摘要；在 shadow verify 产物存在时由导出脚本同步写入。                                                                                                   |
-| `<current-host-state-root>/control_plane/release/evidence/shadow-verify-summary.md`                 | `export_runtime_acceptance_evidence.sh` | shadow-verify-summary.json 的人工阅读版摘要。                                                                                                                     |
-| `<current-host-state-root>/control_plane/release/evidence/shadow-verify-compare.json`               | `export_runtime_acceptance_evidence.sh` | 影子验证候选控制面的隔离实例计划与 active/candidate 差异摘要；用于证明候选实例与正式运行面没有共用状态目录、容器名或网络。                                                                                   |
-| `<current-host-state-root>/control_plane/release/evidence/shadow-verify-compare.md`                 | `export_runtime_acceptance_evidence.sh` | shadow-verify-compare.json 的人工阅读版摘要。                                                                                                                     |
+| `<current-host-state-root>/control_plane/release/evidence/control-plane-job-artifact-policies.json` | `export_runtime_acceptance_evidence.sh` | 控制平面 job artifact policy 摘要；逐 job 固定记录 runArtifactRoot、latestAlias、retentionDays 与 scheduler run manifest 模式。                                               |
+| `<current-host-state-root>/control_plane/release/evidence/official-cli-summary.control-plane.json`  | `export_runtime_acceptance_evidence.sh` | 官方 Gateway 容器内 openclaw doctor / security audit / models probe 的聚合摘要。                                                                                              |
+| `<current-host-state-root>/control_plane/release/evidence/shadow-verify-summary.json`               | `export_runtime_acceptance_evidence.sh` | 候选 Gateway 隔离实例的影子验证摘要；在 shadow verify 产物存在时由导出脚本同步写入。                                                                                          |
+| `<current-host-state-root>/control_plane/release/evidence/shadow-verify-summary.md`                 | `export_runtime_acceptance_evidence.sh` | shadow-verify-summary.json 的人工阅读版摘要。                                                                                                                                 |
+| `<current-host-state-root>/control_plane/release/evidence/shadow-verify-compare.json`               | `export_runtime_acceptance_evidence.sh` | 影子验证候选控制面的隔离实例计划与 active/candidate 差异摘要；用于证明候选实例与正式运行面没有共用状态目录、容器名或网络。                                                    |
+| `<current-host-state-root>/control_plane/release/evidence/shadow-verify-compare.md`                 | `export_runtime_acceptance_evidence.sh` | shadow-verify-compare.json 的人工阅读版摘要。                                                                                                                                 |
 
 - runtime evidence 统一写入 `<current-host-state-root>/control_plane/release/evidence/`，该目录属于 control-plane state 的 owner-only 运行验收面。
 - runtime acceptance 以最新有效运行事实为准；control-plane run ledger 同时使用 executionAccepted / effectiveExecutionAccepted 与 artifactAccepted / artifactEffectiveAccepted 判断 required job 闭合，artifact manifest 固定记录 artifactRoot、evidenceSources、observedEntries 与 schedulerEntries。
@@ -214,17 +216,17 @@ bash ./scripts/runtime/export_runtime_acceptance_evidence.sh
 - `control_plane_runtime`
 - `official_openclaw_cli`
 
-group 级发布门禁若需要对齐 deployment acceptance required checks，统一通过 `bash ./scripts/runtime/run_openclaw_python_tool.sh control-plane evidence agent-group-acceptance-bindings` 与 `/v1/control-plane/agent-group-acceptance-bindings` 查看正式映射摘要。
+group 级发布门禁通过 `control-plane evidence agent-group-release-gates` 与 `/v1/control-plane/agent-group-release-gates` 查看，required evidence、run ledger、recent access 和 group health 均在该视图中闭合。
 
 ## 失败分流
 
-| 当前现象                                        | 先跳哪里                                                      |
-|---------------------------------------------|-----------------------------------------------------------|
-| 服务不在线、健康异常、日志异常                             | `troubleshooting.md#runtime-与-ingress-问题`                 |
-| ingress 边界证据不通过                             | `troubleshooting.md#runtime-与-ingress-问题`                 |
-| full test 未闭合或 acceptance state 不通过         | `troubleshooting.md#full-test-与-deployment-acceptance-问题` |
-| runtime evidence / clean release 导出失败       | `troubleshooting.md#验收归档与交付导出问题`                          |
-| 需要对象路径、run ledger、dispatch observability 长表 | `agent/README.md`、`dispatch-targets.md`                   |
+| 当前现象                                              | 先跳哪里                                                              |
+|-------------------------------------------------------|-----------------------------------------------------------------------|
+| 服务不在线、健康异常、日志异常                        | `troubleshooting.md#runtime-与-ingress-问题`                          |
+| ingress 边界证据不通过                                | `troubleshooting.md#runtime-与-ingress-问题`                          |
+| full test 未闭合或 acceptance state 不通过            | `troubleshooting.md#full-test-与-deployment-acceptance-问题`          |
+| runtime evidence / clean release 导出失败             | `troubleshooting.md#验收归档与交付导出问题`                           |
+| 需要对象路径、run ledger、dispatch observability 长表 | [运行产物参考](runtime-artifacts-reference.md)、`dispatch-targets.md` |
 
 ## 下一步
 

@@ -1,73 +1,30 @@
-# ClawCTL Vision / 项目目标态
+# ClawCTL 长期方向
 
-ClawCTL 的目标是提供一个可审计、可部署、可扩展的 OpenClaw 基座控制面。它把 runtime ingress、Gateway 接入、Python control plane、scheduler、internal API、运行证据、发布治理和 managed extension 合同收口在一个 source-available, non-commercial repository 中。
+ClawCTL 希望把私有智能体运行从“能启动、能调用”推进到“能持续运营、能核对结果、能交接维护”。项目的长期方向是形成围绕 OpenClaw runtime 的可运营平台基座，让智能体能力可以在明确的配置、权限、运行证据和交付边界内演进。
 
-ClawCTL aims to provide an auditable, deployable, and extensible base control plane for OpenClaw runtime operations. It keeps private ingress, Gateway integration, Python control-plane services, scheduler automation, internal API checks, runtime evidence, release governance, and managed extension contracts in one source-available, non-commercial repository.
+本页描述方向，不作为已实现功能、交付期限或服务承诺。当前能力、默认运行面和评估入口见 [README.md](README.md)，正式实现边界见 [支持边界](docs/architecture/supported-deployment-boundary.md)。
 
-## Product Position / 产品定位
+## 希望达到的状态
 
-ClawCTL is:
+- **部署容易理解**：维护者能清楚区分人工输入、派生配置和运行状态，并用一条可恢复的部署主线验证结果。
+- **任务结果能够解释**：任务状态可以回溯到输入、执行、产物和投递证据，失败分类能够帮助操作员决定下一步。
+- **扩展能够独立治理**：业务扩展维护自身职责、依赖、权限与验收，公共通道能力通过显式合同复用。
+- **运行维护能够交接**：新的维护者能够从服务状态和运行证据判断当前情况，按正式手册处理恢复、升级和退役。
+- **交付边界能够证明**：版本、来源、配置、依赖和交付文件清单可以互相核对，文档与实际交付保持一致。
 
-- a base control-plane repository for OpenClaw runtime deployment;
-- a governance surface for release gates, clean delivery bundles, third-party notices, and runtime evidence;
-- a managed extension platform that keeps business capabilities outside the base release surface;
-- a deployment and operations toolkit for private OpenClaw runtime boundaries.
+## 演进原则
 
-ClawCTL 是：
+已有运行合同是实现新能力的依据。影响部署行为、权限、扩展装配或验收语义的变化，应同步更新对应真源、文档与相关检查，并由运行证据证明结果。
 
-- OpenClaw runtime 部署基座控制面；
-- 发布门禁、干净交付包、第三方声明和运行证据的治理面；
-- 将业务能力隔离在基座发布面之外的 managed extension 平台；
-- 面向私有 OpenClaw runtime 边界的部署与运维工具链。
+文档应分别说明当前事实与未来方向。通用平台文档解释公共机制，业务扩展文档解释具体工作流和业务验收；默认运行选择、源码交付内容和正式支持范围分别明确。
 
-## Supported Outcome / 支持的落地结果
+- **可审计部署**：部署输入、版本、配置和验收结果能够关联到明确真源。
+- **扩展隔离**：扩展以 owner 和显式依赖声明能力，公共平台保持通用职责。
+- **运行追踪**：任务状态与执行、产物、投递和接受证据保持可回溯关联。
+- **运维闭环**：诊断、恢复、升级和退役都有操作入口、结果和交接依据。
 
-一个合格的 ClawCTL 基座部署应具备以下结果：
+## 边界
 
-- private HTTPS ingress 是唯一外部入口；
-- official Gateway 承接 OpenClaw runtime 接入与 token auth；
-- `agent_platform` profile 提供默认平台运行面；
-- internal API 和 scheduler 可提供只读状态、调度、diagnostics、evidence 与 recovery 表面；
-- clean delivery bundle 可从仓库真源导出；
-- Docker release gate 与 strict stack verify 可证明发布面闭合；
-- managed extension 可以按仓内合同显式加入，但不会污染默认基座。
+平台基座面向自有环境的技术团队，业务成果由具体扩展实现和验证。托管 SaaS、客户定制交付和商业服务并非本页承诺；许可条件以 [LICENSE](LICENSE) 和 [COMMERCIAL_LICENSE.md](COMMERCIAL_LICENSE.md) 为准。
 
-A valid ClawCTL base deployment should provide:
-
-- one private HTTPS ingress boundary;
-- official Gateway access and token authentication;
-- the `agent_platform` default runtime profile;
-- internal API and scheduler surfaces for status, diagnostics, runtime evidence, and recovery;
-- clean delivery bundle export from repository truth;
-- Docker release gate and strict stack verification;
-- managed extension onboarding without adding business-specific logic to the base release surface.
-
-## Non-Goals / 非目标
-
-ClawCTL does not aim to be:
-
-- an OSI-approved open source project;
-- a hosted SaaS product;
-- a business agent suite;
-- a prebuilt customer-specific workflow package;
-- a repository for real credentials, production certificates, private env files, or generated runtime state.
-
-ClawCTL 不以以下事项为目标：
-
-- 成为 OSI 批准的开源项目；
-- 提供托管 SaaS；
-- 内置业务 agent 套件；
-- 提供客户定制业务流程包；
-- 保存真实凭据、生产证书、私有 env 文件或生成态运行数据。
-
-## Release Boundary / 发布边界
-
-The public base release surface contains only `base` and `agent_platform` capabilities. Business profiles, business agents, business jobs, business models, business listeners, customer scripts, generated credentials, certificate output, runtime state, and private env files must stay outside the base release.
-
-公开基座发布面只包含 `base` 与 `agent_platform` 能力。业务 profile、业务 agent、业务 job、业务模型、业务 listener、客户脚本、生成凭据、证书输出、运行态 state 和私有 env 文件都不得进入基座发布面。
-
-## Governance Principle / 治理原则
-
-ClawCTL treats documentation, scripts, manifests, profiles, Compose files, and release bundles as one contract. Any change that affects deployment behavior, supported runtime shape, extension authoring, licensing, or release cleanliness must update the corresponding source of truth and pass the release gate before publication.
-
-ClawCTL 将文档、脚本、manifest、profile、Compose 文件和发布包视为同一个合同。任何影响部署行为、支持运行面、扩展开发、许可口径或发布洁净度的修改，都必须更新对应真源，并在公开前通过发布门禁。
+项目不以替代 OpenClaw runtime、把所有业务工作流内置到基座或依赖未核验的单次成功输出为目标。真实凭据、证书和运行状态由部署环境管理，不能成为仓库源码与文档的交付内容。

@@ -17,7 +17,7 @@
     {
       "id": "host_firewall",
       "title": "宿主机防火墙证据",
-      "summary": "以宿主机 firewalld / nftables / iptables 规则作为来源限制真相面，并对允许来源段与默认拒绝语义进行核验。"
+      "summary": "以宿主机 firewalld / nftables / iptables 规则作为来源限制真相面，并对允许来源 CIDR 与默认拒绝语义进行核验。"
     },
     {
       "id": "external_acl",
@@ -26,7 +26,7 @@
     }
   ],
   "allowed_source_cidrs_key": "OPENCLAW_INGRESS_ALLOWED_SOURCE_CIDRS",
-  "allowed_source_cidrs_format": "comma_separated_private_cidrs",
+  "allowed_source_cidrs_format": "comma_separated_ingress_source_cidrs",
   "external_acl_contract": {
     "format": "json",
     "required_keys": [

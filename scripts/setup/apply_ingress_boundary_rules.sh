@@ -16,7 +16,6 @@ repo_contract_assign_path POLICY_PATH governance.ingress_boundary_evidence
 ENV_FILE="$ROOT_DIR/deploy/.env"
 DRY_RUN=0
 NO_VERIFY=0
-
 usage() {
   cat <<'USAGE'
 用法：
@@ -36,18 +35,15 @@ usage() {
   - 当前只按受支持拓扑收口 private ingress 80/443；不负责额外业务端口或非默认 Docker 网络面。
 USAGE
 }
-
 fail() {
   local message="$1"
   local code="${2:-2}"
   echo "[apply_ingress_boundary_rules][FAIL] $message" >&2
   exit "$code"
 }
-
 note() {
   echo "[apply_ingress_boundary_rules] $*"
 }
-
 run_ingress_boundary_verify() {
   local -a args=(--env-file "$ENV_FILE")
   if [[ -f "$(runtime_permissions_host_gateway_file "$ROOT_DIR" nginx.gateway.conf)" ]]; then
@@ -55,7 +51,6 @@ run_ingress_boundary_verify() {
   fi
   bash "$ROOT_DIR/scripts/doctor/check_ingress_boundary_evidence.sh" "${args[@]}"
 }
-
 require_root() {
   [[ "$(id -u)" == '0' ]] || fail '当前脚本需要 root 权限；请使用 sudo bash ./scripts/setup/apply_ingress_boundary_rules.sh ...' 30
 }
@@ -162,7 +157,6 @@ fi
 if [[ "$NEEDS_IPV6" == '1' ]]; then
   command -v ip6tables >/dev/null 2>&1 || fail '存在 IPv6 bind/CIDR，但缺少 ip6tables'
 fi
-
 rule_spec_accept() {
   local cidr="$1"
   local port="$2"
@@ -173,7 +167,6 @@ rule_spec_accept() {
     printf '%s\n' "-p tcp -m conntrack --ctorigdstport $port -s $cidr -m comment --comment OPENCLAW_INGRESS_BOUNDARY -j ACCEPT"
   fi
 }
-
 rule_spec_established() {
   local port="$1"
   local original_dest_ip="${2:-}"
@@ -183,7 +176,6 @@ rule_spec_established() {
     printf '%s\n' "-p tcp -m conntrack --ctstate RELATED,ESTABLISHED --ctorigdstport $port -m comment --comment OPENCLAW_INGRESS_BOUNDARY -j ACCEPT"
   fi
 }
-
 rule_spec_drop() {
   local port="$1"
   local original_dest_ip="${2:-}"
@@ -193,7 +185,6 @@ rule_spec_drop() {
     printf '%s\n' "-p tcp -m conntrack --ctorigdstport $port -m comment --comment OPENCLAW_INGRESS_BOUNDARY -j DROP"
   fi
 }
-
 ensure_docker_user_chain() {
   local cmd="$1"
   if ! "$cmd" -S DOCKER-USER >/dev/null 2>&1; then
@@ -202,7 +193,6 @@ ensure_docker_user_chain() {
   fi
   "$cmd" -C DOCKER-USER -j RETURN >/dev/null 2>&1 || "$cmd" -A DOCKER-USER -j RETURN >/dev/null 2>&1 || true
 }
-
 prune_managed_rules() {
   local cmd="$1"
   local -a lines=()
@@ -219,14 +209,12 @@ prune_managed_rules() {
     "$cmd" "${parts[@]}" >/dev/null
   done
 }
-
 insert_rule() {
   local cmd="$1"
   local spec="$2"
   read -r -a parts <<< "$spec"
   "$cmd" -I DOCKER-USER 1 "${parts[@]}" >/dev/null
 }
-
 apply_family_rules() {
   local cmd="$1"
   local dest_ip="$2"

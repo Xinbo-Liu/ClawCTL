@@ -278,27 +278,27 @@
       "manual_required": true,
       "default_kind": "placeholder",
       "placeholder": "__REQUIRED__",
-      "doc_summary": "允许访问 private ingress 80/443 的来源网段（逗号分隔，仅接受私网或 loopback IPv4/IPv6 CIDR）",
+      "doc_summary": "允许访问 private ingress 80/443 的实际观测来源 CIDR（逗号分隔，接受私网、loopback 或精确公网主机 CIDR）",
       "doc_location": "deploy/site.env",
       "validator": {
-        "type": "private_cidr_csv"
+        "type": "ingress_source_cidr_csv"
       },
       "site_env_annotations": [
-        "含义：允许访问 private ingress 80/443 的来源网段。",
-        "获取：填写“目标机最终看到的源地址网段”。直连办公网/堡垒机时，也必须以目标机日志、上游转发记录或抓包看到的来源地址为准；通过 VPN 时，填 VPN 地址池或 VPN 出口 NAT 网段；经上游 ACL/安全组/LB 时，填上游实际放行到目标机的源网段。",
+        "含义：允许访问 private ingress 80/443 的实际观测来源 CIDR。",
+        "获取：填写“目标机最终看到的来源地址或来源网段”。直连办公网/堡垒机时，也必须以目标机日志、上游转发记录或抓包看到的来源地址为准；通过 TUN/VPN 时，填目标机实际看到的 TUN/VPN 出口、地址池或出口 NAT 网段；经上游 ACL/安全组/LB 时，填上游实际放行到目标机的来源 CIDR。",
         "目标机本机验收：one_click_deploy 默认会在目标机本机通过 ingress 请求 /healthz 与 /readyz，因此该字段还必须包含 OPENCLAW_INGRESS_LISTEN_IP 对应的本机来源 /32（IPv4）或 /128（IPv6）。",
         "填写原则：按当前确需放行的最小来源面填写；不要为了省事把整个办公私网、宿主机大网段或泛化虚拟交换机网段直接放开。",
-        "跨 OS / 跨网络实例访问时，优先填写目标机实际看到的访问端源 IP `/32`；只有虚拟链路、VPN、NAT 或上游代理以网段呈现时才填写对应网段。若网络层把访问端流量翻译成网关地址，则填写该翻译后地址 `/32` 或对应链路网段。",
-        "不要填写：Docker/容器网段、公网 CIDR；除本机验收必需的 `OPENCLAW_INGRESS_LISTEN_IP` 精确主机段外，不要把目标机所在大网段当作来源面。",
+        "跨 OS / 跨网络实例访问时，优先填写目标机实际看到的访问端源 IP `/32`；只有虚拟链路、TUN、VPN、NAT 或上游代理以网段呈现时才填写对应网段。若网络层把访问端流量翻译成网关地址，则填写该翻译后地址 `/32` 或对应链路网段。",
+        "不要填写：Docker/容器网段、公网网段；公网来源只允许填写目标机实际看到的精确公网主机 `/32`（IPv4）或 `/128`（IPv6）。除本机验收必需的 `OPENCLAW_INGRESS_LISTEN_IP` 精确主机段外，不要把目标机所在大网段当作来源面。",
         "校验：必须与 Nginx 渲染 allowlist、host_firewall 规则或 external_acl 证据中的 `source_cidrs` 归一化后精确一致。"
       ],
       "doc_details": {
         "step2_role": "第 2 步必须人工确认；这是 private ingress 来源限制的固定输入项。",
         "meaning": "该字段定义“谁可以访问 ingress”，描述的是流量来源面，而不是目标机绑定地址。",
         "how_to_get": [
-          "直连办公网或堡垒机访问时，未确认目标机实际看到的来源地址就填写访问端所在网段。",
-          "通过 VPN 访问时，填写 VPN 地址池或 VPN 出口 NAT 网段；不要机械填写用户电脑本地 Wi-Fi 网段。",
-          "通过上游 ACL、安全组、负载均衡或代理访问时，填写目标机最终看到、且被上游放行到目标机的源地址网段。",
+          "直连办公网或堡垒机访问时，先通过目标机日志、抓包或上游转发记录确认实际来源，再填写该来源的最小 CIDR。",
+          "通过 TUN/VPN 访问时，填写目标机实际看到的 TUN/VPN 出口、地址池或出口 NAT 网段；公网 EIP 场景填写目标机实际看到的公网出口 `/32` 或 `/128`，不要机械填写用户电脑本地 Wi-Fi 私网段。",
+          "通过上游 ACL、安全组、负载均衡或代理访问时，填写目标机最终看到、且被上游放行到目标机的实际观测来源 CIDR。",
           "同时加入目标机本机执行 full test 时的来源地址：通常就是 `OPENCLAW_INGRESS_LISTEN_IP/32`（IPv4）或 `/128`（IPv6）。",
           "始终按最小必要来源面填写；没有业务必要时，不要把整个 10.0.0.0/8、192.168.0.0/16 或泛化虚拟交换机大网段直接写入。",
           "跨 OS / 跨网络实例访问时，优先收窄为目标机实际看到的访问端源 IP `/32`；若网络层只暴露链路网段或网关翻译地址，再填写该链路网段或翻译后 `/32`。"
@@ -309,14 +309,14 @@
           "Get-NetIPAddress -AddressFamily IPv4 | Format-Table InterfaceAlias,IPAddress,PrefixLength",
           "ip route get <OPENCLAW_INGRESS_LISTEN_IP>  # 在 Linux 宿主机读取 src，优先把该 src 收窄成 /32"
         ],
-        "format": "只允许逗号分隔的私网或 loopback IPv4/IPv6 CIDR；系统会归一化网络前缀、拒绝重复项，并要求输入值按最小必要范围填写。",
+        "format": "只允许逗号分隔的私网、loopback 或精确公网主机 IPv4/IPv6 CIDR；公网 IPv4 必须是 `/32`，公网 IPv6 必须是 `/128`；系统会归一化网络前缀、拒绝重复项，并要求输入值按最小必要范围填写。",
         "common_errors": [
           "遗漏目标机本机验收来源，导致 one_click_deploy 的 `/healthz` / `/readyz` 检查在目标机本机返回 403。",
-          "把 Docker bridge 网段、容器网段或任意公网 CIDR 写进该字段。",
-          "VPN / NAT 场景只按终端本机网段填写，忽略目标机实际看到的源地址面。",
+          "把 Docker bridge 网段、容器网段、公网网段或非精确公网主机 CIDR 写进该字段。",
+          "TUN / VPN / NAT 场景只按终端本机网段、api.ipify 出口或 Wi-Fi 网段填写，忽略目标机实际看到的源地址面。",
           "为了图省事直接放开整个办公私网、虚拟交换机大网段或超出当前业务所需的泛化私网段。",
           "字段值与 Nginx 渲染 allowlist、host_firewall 或 external_acl 证据中的 `source_cidrs` / `ip_families` 不一致。",
-          "把访问端本地网卡整段、目标机所在大网段、本地 Wi-Fi 网段或未实际命中的 NAT 前地址写进该字段，而不是目标机实际看到的来源地址面。"
+          "把访问端本地网卡整段、目标机所在大网段、本地 Wi-Fi 私网段、api.ipify/TUN 出口推断值或未实际命中的 NAT 前地址写进该字段，而不是目标机实际看到的来源地址面。"
         ],
         "verify": [
           "执行 `bash ./scripts/setup/one_click_config.sh` 后，先执行 `bash ./scripts/runtime/run_openclaw_python_tool.sh setup env validate --env-file deploy/.env`。",
@@ -324,7 +324,7 @@
           "再立即执行 `sudo bash ./scripts/setup/apply_ingress_boundary_rules.sh --env-file deploy/.env` 与 `sudo bash ./scripts/doctor/check_ingress_boundary_evidence.sh --env-file deploy/.env`，不要等到 full test 才发现来源限制口径错误。",
           "部署渲染 `nginx.gateway.conf` 后，部署用户会复用 root 侧基础 evidence，对当前 Nginx allowlist 做本地校验，并把 `nginx_policy` 合并回 evidence；只有基础 evidence 缺失、env 漂移或本地 Nginx 校验失败时，才补跑 `sudo bash ./scripts/doctor/check_ingress_boundary_evidence.sh --env-file deploy/.env --require-nginx-policy`。",
           "external_acl 模式下，证据文件中的 `source_cidrs` 必须与该字段归一化后集合一致。",
-          "跨 OS / 跨网络实例访问时，先确认浏览器访问目标机时目标机实际看到的来源地址，再让 host_firewall 或 external_acl 证据与该地址面精确一致。"
+          "跨 OS / 跨网络实例访问时，先确认浏览器访问目标机时目标机实际看到的来源地址；若访问端使用 TUN/VPN，必须以目标机或上游记录看到的出口地址为准，再让 host_firewall 或 external_acl 证据与该地址面精确一致。"
         ]
       }
     },
@@ -455,7 +455,7 @@
         "生成：one_click_config 会自动映射生成 OPENCLAW_CONTROL_PLANE_SERVICE_CONFIG_PATH，并按该 profile 装载扩展 deploy env schema、扩展内部 agent/extensions/<extension-id>/deploy/extension.env、dispatch target registry 与模型输入。"
       ],
       "doc_details": {
-        "step2_role": "默认使用 agent_platform；启用业务扩展或受控组合 profile 时填写对应 profile id。",
+        "step2_role": "默认使用 agent_platform；启用业务扩展或仓内组合 profile 时填写对应 profile id。",
         "meaning": [
           "该字段选择 active control-plane service profile，并驱动扩展 deploy env schema、扩展内部 agent/extensions/<extension-id>/deploy/extension.env、dispatch target registry、模型输入与运行态路径合并。"
         ],
@@ -463,7 +463,7 @@
           "先执行 profile 列表命令，确认要启用的 profile id。",
           "默认保留 agent_platform。",
           "启用单个业务扩展时，填写 profile 列表中登记或有效发现的扩展 profile id。",
-          "启用仓内受控组合 profile 时，填写 profile_registry.tsv 中登记的组合 profile id。",
+          "启用仓内组合 profile 时，填写 profile_registry.tsv 中登记的组合 profile id。",
           "组合 profile 中 OLLAMA_BASE_URL 与 OLLAMA_MODEL_REF 是共享模型输入，写入 deploy/site.env；扩展专属 provider、角色、通知目标与功能开关变量写入对应 agent/extensions/<extension-id>/deploy/extension.env。",
           "不要填写 /opt/openclaw-tools/.../*.service.json 路径。"
         ],

@@ -214,5 +214,7 @@ for target_image in "${TARGET_IMAGES[@]}"; do
   done <<< "$all_local_refs"
 done
 
+deployment_images_cleanup_gateway_source_aliases "$OPENCLAW_OFFICIAL_GATEWAY_IMAGE" "$CLEANUP_LOG" "$DRY_RUN"
+
 echo "[OK] 镜像别名清理完成。"
 echo "[INFO] 清理记录：$CLEANUP_LOG"

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Runtime validation helpers for bundle governance."""
+"""提供OpenClaw release子系统的生产实现。"""
 from __future__ import annotations
 
 import locale
@@ -20,7 +20,6 @@ def _raise(error_factory: ErrorFactory, message: str) -> None:
 
 
 def _normalize_artifact_smoke_steps(bundle_id: str, spec: dict[str, Any], *, error_factory: ErrorFactory) -> list[dict[str, Any]]:
-    """规范化 artifact smoke 步骤。"""
     rows = spec.get('artifactSmoke')
     if rows in (None, ''):
         return []
@@ -51,12 +50,10 @@ def _normalize_artifact_smoke_steps(bundle_id: str, spec: dict[str, Any], *, err
 
 
 def _render_artifact_smoke_value(value: str, *, artifact_root: Path, artifact_state_root: Path) -> str:
-    """渲染 artifact smoke 参数值。"""
     return str(value).format(artifact_root=str(artifact_root), artifact_state_root=str(artifact_state_root), python=os.sys.executable)
 
 
 def _output_snippet(text: str, *, limit: int = 4000, tail: int = 1200) -> str:
-    """截取输出片段用于错误展示。"""
     normalized = str(text or '').strip()
     if len(normalized) <= limit:
         return normalized
@@ -69,7 +66,6 @@ def _output_snippet(text: str, *, limit: int = 4000, tail: int = 1200) -> str:
 
 
 def _decode_subprocess_output(data: bytes | None) -> str:
-    """解码子进程输出。"""
     if not data:
         return ''
     preferred = locale.getpreferredencoding(False) or 'utf-8'
@@ -91,7 +87,6 @@ def _decode_subprocess_output(data: bytes | None) -> str:
 
 
 def _prepare_artifact_state_root(artifact_state_root: Path) -> None:
-    """创建 artifact smoke 使用的最小运行态 state 骨架。"""
     for rel_path in (
         'tmp',
         'setup',
@@ -103,7 +98,6 @@ def _prepare_artifact_state_root(artifact_state_root: Path) -> None:
 
 
 def artifact_smoke_failures(results: list[dict[str, Any]]) -> list[str]:
-    """收集 artifact smoke 失败项。"""
     return [f"artifact smoke 失败：{row.get('id')} (exit={row.get('returncode')})" for row in results if int(row.get('returncode') or 0) != 0]
 
 
@@ -115,7 +109,6 @@ def run_artifact_smoke(
     artifact_smoke_active_env: str,
     error_factory: ErrorFactory,
 ) -> list[dict[str, Any]]:
-    """执行 bundle 的 artifact smoke 校验。"""
     if str(os.environ.get(artifact_smoke_active_env) or '').strip().lower() in {'1', 'true', 'yes', 'on'}:
         return []
     steps = _normalize_artifact_smoke_steps(bundle_id, spec, error_factory=error_factory)
@@ -138,7 +131,8 @@ def run_artifact_smoke(
                 if target.exists():
                     target.chmod(mode)
         artifact_root = extract_root.resolve()
-        artifact_state_root = artifact_root / '.artifact_smoke_state'
+        # 运行状态与解包源码分开存放，避免烟测写入影响来源摘要和包内容校验。
+        artifact_state_root = (Path(tmpdir) / 'state').resolve()
         artifact_state_root.mkdir(parents=True, exist_ok=True)
         _prepare_artifact_state_root(artifact_state_root)
         for step in steps:
@@ -171,7 +165,6 @@ def run_artifact_smoke(
 
 
 def _files_lt_threshold(root_dir: Path, file_list: list[str], threshold: int) -> int:
-    """统计小于阈值的文件数量。"""
     return sum(1 for rel in file_list if (root_dir / rel).stat().st_size < threshold)
 
 
@@ -185,7 +178,6 @@ def build_size_manifest(
     manifest_path: Path,
     must_not_ship_hits: Callable[[list[str]], list[str]],
 ) -> dict[str, Any]:
-    """构建 bundle size manifest。"""
     with zipfile.ZipFile(zip_path) as archive:
         infos = archive.infolist()
     top_level = Counter()
@@ -226,13 +218,19 @@ def build_size_manifest(
 
 
 def budget_failures(size_manifest: dict[str, Any], *, spec: dict[str, Any]) -> list[str]:
-    """计算 bundle 体积预算失败项。"""
     budget_payload = spec.get('budget')
     budget: dict[str, Any] = budget_payload if isinstance(budget_payload, dict) else {}
     failures: list[str] = []
     max_zip_bytes = budget.get('maxZipBytes')
-    if isinstance(max_zip_bytes, int) and size_manifest['size']['zipBytes'] > max_zip_bytes:
-        failures.append(f'zipBytes 超预算：{size_manifest["size"]["zipBytes"]} > {max_zip_bytes}')
+    zip_bytes = int(size_manifest['size']['zipBytes'])
+    if isinstance(max_zip_bytes, int) and zip_bytes > max_zip_bytes:
+        failures.append(f'zipBytes 超预算：{zip_bytes} > {max_zip_bytes}')
+    elif isinstance(max_zip_bytes, int):
+        min_zip_headroom_bytes = budget.get('minZipHeadroomBytes')
+        if isinstance(min_zip_headroom_bytes, int):
+            zip_headroom_bytes = max_zip_bytes - zip_bytes
+            if zip_headroom_bytes < min_zip_headroom_bytes:
+                failures.append(f'zipBytes 余量不足：{zip_headroom_bytes} < {min_zip_headroom_bytes}')
     max_files = budget.get('maxFiles')
     if isinstance(max_files, int) and size_manifest['counts']['files'] > max_files:
         failures.append(f'files 超预算：{size_manifest["counts"]["files"]} > {max_files}')

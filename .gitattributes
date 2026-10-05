@@ -1,13 +1,19 @@
-/.gitattributes text eol=lf
+# Keep repository text surfaces on LF even when contributors use Windows autocrlf.
+* text=auto eol=lf
+.gitattributes text eol=lf
 *.md text eol=lf
-*.toml text eol=lf
 *.py text eol=lf
 *.json text eol=lf
 *.jsonl text eol=lf
 *.tsv text eol=lf
-*.yml text eol=lf
-*.yaml text eol=lf
 *.sh text eol=lf
 *.env text eol=lf
+*.env.example text eol=lf
 *.example text eol=lf
+*.toml text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
 *.txt text eol=lf
+*.whl binary
+agent/**/bin/* text eol=lf
+scripts/runtime/container_* text eol=lf

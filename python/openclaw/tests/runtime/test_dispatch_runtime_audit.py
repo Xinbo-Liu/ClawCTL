@@ -85,6 +85,7 @@ class DispatchRuntimeAuditSurfaceTest(unittest.TestCase):
                     'boundary': {
                         'dispatchLane': 'operations_monitoring',
                         'payloadScope': 'ops_summary',
+                        'completionRole': 'required',
                         'publishLatestDefault': False,
                         'description': 'Audit boundary',
                     },
@@ -103,6 +104,7 @@ class DispatchRuntimeAuditSurfaceTest(unittest.TestCase):
                     'boundary': {
                         'dispatchLane': 'integration_validation',
                         'payloadScope': 'validation_digest',
+                        'completionRole': 'advisory',
                         'publishLatestDefault': False,
                         'description': 'Audit boundary',
                     },
@@ -166,7 +168,7 @@ class DispatchRuntimeAuditSurfaceTest(unittest.TestCase):
         }
         with TemporaryDirectory() as tmp:
             audit_dir = Path(tmp) / 'audits'
-            with patch('openclaw.control_plane.dispatch.audit.writers.get_entry', return_value={'resolved_path': str(audit_dir)}):
+            with patch('openclaw.control_plane.dispatch.audit.writers.get_entry', return_value={'resolved_path': str(audit_dir)}) as get_entry:
                 path = dispatch_runtime_audit.maybe_write_target_acceptance_audit(
                     payload,
                     config_path=Path(tmp) / 'service.json',
@@ -176,6 +178,7 @@ class DispatchRuntimeAuditSurfaceTest(unittest.TestCase):
 
         self.assertTrue(path.name.startswith('target_target_alpha.'))
         self.assertEqual(saved['target_id'], 'target_alpha')
+        self.assertEqual(get_entry.call_args.kwargs.get('extension_id'), 'agent_platform')
 
 
 if __name__ == '__main__':

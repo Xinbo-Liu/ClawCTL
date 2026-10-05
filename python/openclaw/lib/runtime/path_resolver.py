@@ -11,24 +11,20 @@ DEFAULT_INTERNAL_VIEWS = ("host", "gateway", "scheduler")
 
 
 def _json_object(value: Any) -> dict[str, Any]:
-    """把任意值转为对象视图。"""
     return value if isinstance(value, dict) else {}
 
 
 def _json_array(value: Any) -> list[Any]:
-    """把任意值转为数组视图。"""
     return value if isinstance(value, list) else []
 
 
 def _json_object_map(value: Any) -> dict[str, dict[str, Any]]:
-    """把对象映射规范化为对象字典。"""
     if not isinstance(value, dict):
         return {}
     return {str(key): item for key, item in value.items() if isinstance(item, dict)}
 
 
 def _root_placeholder_values(repo_root: Path) -> dict[str, str]:
-    """构建路径模板可用的根占位符值。"""
     values = {'__HOST_STATE_ROOT_DEFAULT__': '<current-host-state-root>'}
     try:
         from openclaw.lib.repo.install_defaults import read_repo_contract_json
@@ -45,18 +41,15 @@ def _root_placeholder_values(repo_root: Path) -> dict[str, str]:
 
 
 def normalize_view(view: str) -> str:
-    """规范化 runtime view 名称。"""
     normalized = str(view or 'host').strip().lower()
     return normalized
 
 
 def _snake_to_upper(name: str) -> str:
-    """把 snake_case 转成大写环境变量风格。"""
     return name.upper()
 
 
 def _state_root_override_candidates(view: str, state_root_env_name: Optional[str]) -> list[str]:
-    """生成 state root 的环境变量覆盖候选。"""
     names: list[str] = []
     if state_root_env_name:
         names.append(state_root_env_name)
@@ -66,7 +59,6 @@ def _state_root_override_candidates(view: str, state_root_env_name: Optional[str
 
 
 def _derive_from_state_root(default_path: Optional[str], default_state_root: Optional[str], overridden_state_root: Optional[str]) -> Optional[str]:
-    """从 state root 推导派生路径。"""
     if not default_path or not default_state_root or not overridden_state_root:
         return None
     default = Path(default_path)
@@ -90,7 +82,6 @@ class PathResolver:
 
     @classmethod
     def from_repo_root(cls, repo_root: Path, *, config_path: Path | None = None) -> 'PathResolver':
-        """从仓库根目录加载路径 surface 并创建解析器。"""
         from openclaw.control_plane.surfaces import load_runtime_paths_manifest
         from openclaw.lib.repo.layout import (
             resolve_default_runtime_control_plane_service_config_path,
@@ -107,18 +98,15 @@ class PathResolver:
 
     @property
     def view_contract(self) -> Dict[str, Any]:
-        """返回 view 合同定义。"""
         return dict(_json_object(self.manifest.get('view_contract')))
 
     @property
     def internal_views(self) -> tuple[str, ...]:
-        """返回 internal 视图集合。"""
         configured = tuple(str(item) for item in _json_array(self.view_contract.get('internal_view_keys')) if str(item).strip())
         return configured or DEFAULT_INTERNAL_VIEWS
 
     @property
     def public_view_names(self) -> Dict[str, str]:
-        """返回公开 view 名称集合。"""
         configured = {str(key): str(value) for key, value in _json_object(self.view_contract.get('public_view_names')).items() if str(value).strip()}
         defaults = {view: view for view in self.internal_views}
         defaults.update(configured)
@@ -126,22 +114,18 @@ class PathResolver:
 
     @property
     def gateway_public_label(self) -> str:
-        """返回 gateway 对外展示标签。"""
         return str(self.public_view_names.get('gateway') or 'gateway')
 
     def normalize_view(self, view: str) -> str:
-        """规范化传入的 view 名称。"""
         return normalize_view(view)
 
     @property
     def roots(self) -> Dict[str, str]:
-        """返回逻辑根定义。"""
         raw = {str(key): str(value) for key, value in _json_object(self.manifest.get('roots')).items()}
         placeholders = _root_placeholder_values(self.repo_root)
         resolved: Dict[str, str] = {}
 
         def resolve_root(name: str) -> str:
-            """解析 根目录。"""
             if name in resolved:
                 return resolved[name]
             value = str(raw[name])
@@ -158,27 +142,22 @@ class PathResolver:
 
     @property
     def entries(self) -> Dict[str, Dict[str, Any]]:
-        """返回路径条目定义。"""
         return _json_object_map(self.manifest.get('entries'))
 
     @property
     def logical_groups(self) -> Dict[str, Dict[str, Any]]:
-        """返回逻辑分组定义。"""
         return _json_object_map(self.manifest.get('logical_groups'))
 
     @property
     def gateway_exec_approvals_spec(self) -> Dict[str, Any]:
-        """返回 gateway exec approvals 规格。"""
         return dict(_json_object(self.manifest.get('gateway_exec_approvals')))
 
     def render_value(self, template: Optional[str]) -> Optional[str]:
-        """渲染单个模板值。"""
         if template is None:
             return None
         return str(template).format(**self.roots)
 
     def resolve_entry(self, entry_id: str) -> Dict[str, Any]:
-        """解析单个路径条目。"""
         entry = self.entries[entry_id]
         entry_paths = _json_object(entry.get('paths'))
         paths = {
@@ -198,11 +177,9 @@ class PathResolver:
         return resolved
 
     def resolve_all(self) -> Dict[str, Dict[str, Any]]:
-        """解析全部路径条目。"""
         return {entry_id: self.resolve_entry(entry_id) for entry_id in self.entries}
 
     def env_name(self, entry_id: str, view: str) -> str:
-        """生成路径条目的环境变量名。"""
         view = self.normalize_view(view)
         entry = self.entries[entry_id]
         explicit = str(_json_object(entry.get('env_names')).get(view) or '').strip()
@@ -216,7 +193,6 @@ class PathResolver:
         return base
 
     def resolve_path(self, entry_id: str, view: str = 'gateway', env: Optional[dict[str, str]] = None) -> str:
-        """解析指定路径名。"""
         view = self.normalize_view(view)
         if view not in self.internal_views:
             raise KeyError(f'unknown view: {view}')
@@ -241,7 +217,6 @@ class PathResolver:
         return default_path
 
     def workspace_placeholders(self) -> Dict[str, str]:
-        """返回 workspace 占位符字典。"""
         result: Dict[str, str] = {}
         for entry_id in self.entries:
             if not entry_id.startswith('workspace_'):
@@ -253,7 +228,6 @@ class PathResolver:
         return result
 
     def build_index(self) -> Dict[str, Any]:
-        """构建路径索引。"""
         entries: list[Dict[str, Any]] = []
         for entry_id, entry in self.resolve_all().items():
             rows = {
@@ -286,15 +260,13 @@ class PathResolver:
         }
 
     def absolute_host_path(self, entry_id: str) -> Path:
-        """解析 view 下的宿主机绝对路径。"""
         rel = self.resolve_entry(entry_id)['paths']['host']
         if rel is None:
             raise KeyError(f'entry {entry_id} has no host path')
         path = Path(rel)
         return path if path.is_absolute() else (self.repo_root / path).resolve()
 
-    def _repo_host_output_paths(self, spec: Dict[str, Any], label: str) -> Dict[str, Path]:
-        """返回仓库内输出路径集合。"""
+    def _workspace_output_paths(self, spec: Dict[str, Any], label: str) -> Dict[str, Path]:
         repo_output = str(spec.get('repo_output') or '').strip()
         host_output = str(spec.get('host_output') or '').strip()
         if not repo_output or not host_output:
@@ -309,11 +281,9 @@ class PathResolver:
         return {'repo_output': repo_path, 'host_output': host_path}
 
     def gateway_exec_approvals_paths(self) -> Dict[str, Path]:
-        """解析 gateway exec approvals 相关路径。"""
-        return self._repo_host_output_paths(self.gateway_exec_approvals_spec, 'gateway_exec_approvals')
+        return self._workspace_output_paths(self.gateway_exec_approvals_spec, 'gateway_exec_approvals')
 
     def read_gateway_exec_approvals_source(self) -> str:
-        """读取 gateway exec approvals 真源文件。"""
         from openclaw.control_plane.surfaces import load_gateway_exec_approvals
 
         return json.dumps(load_gateway_exec_approvals(config_path=self.config_path), ensure_ascii=False, indent=2) + '\n'

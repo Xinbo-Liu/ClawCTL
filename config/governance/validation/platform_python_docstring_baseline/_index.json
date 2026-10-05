@@ -31,7 +31,7 @@
       "path": "docs.json"
     },
     {
-      "fileCount": 37,
+      "fileCount": 36,
       "key": "doctor",
       "path": "doctor.json"
     },
@@ -51,7 +51,7 @@
       "path": "internal_api.json"
     },
     {
-      "fileCount": 80,
+      "fileCount": 79,
       "key": "lib",
       "path": "lib.json"
     },
@@ -76,7 +76,7 @@
       "path": "scheduler.json"
     },
     {
-      "fileCount": 39,
+      "fileCount": 40,
       "key": "setup",
       "path": "setup.json"
     },
@@ -87,7 +87,7 @@
     }
   ],
   "summaryMinimums": {
-    "moduleChineseDocstrings": 186,
-    "publicChineseDocstrings": 658
+    "moduleChineseDocstrings": 377,
+    "publicChineseDocstrings": 560
   }
 }

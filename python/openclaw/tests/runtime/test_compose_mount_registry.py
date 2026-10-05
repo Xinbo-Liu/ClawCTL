@@ -104,6 +104,83 @@ class ComposeMountRegistrySplitTest(unittest.TestCase):
         self.assertIn('# RUNTIME_EXTENSION_SERVICES_BEGIN\nworker:\n  image: example\n# RUNTIME_EXTENSION_SERVICES_END', rendered)
         self.assertIn('../data:/srv/data:ro  # repo data', rendered)
 
+    def test_sync_bridge_network_mtu_injects_driver_opts_for_bridge_networks(self) -> None:
+        content = '\n'.join([
+            'networks:',
+            '  openclaw_ingress_net:',
+            '    driver: bridge',
+            '    ipam:',
+            '      config:',
+            '        - subnet: 172.29.0.0/28',
+            '  external_net:',
+            '    external: true',
+            '',
+        ])
+
+        rendered = mount_sync.sync_bridge_network_mtu(content, 1450)
+
+        self.assertIn('    driver_opts:\n      com.docker.network.driver.mtu: "1450"\n    ipam:', rendered)
+        self.assertNotIn('external_net:\n    driver_opts:', rendered)
+
+    def test_sync_bridge_network_mtu_preserves_existing_driver_opts(self) -> None:
+        content = '\n'.join([
+            'networks:',
+            '  openclaw_ingress_net:',
+            '    driver: bridge',
+            '    driver_opts:',
+            '      com.docker.network.bridge.host_binding_ipv4: "127.0.0.1"',
+            '    ipam:',
+            '      config: []',
+            '',
+        ])
+
+        rendered = mount_sync.sync_bridge_network_mtu(content, 1450)
+
+        self.assertIn('      com.docker.network.driver.mtu: "1450"', rendered)
+        self.assertIn('      com.docker.network.bridge.host_binding_ipv4: "127.0.0.1"', rendered)
+
+    def test_sync_bridge_network_mtu_replaces_existing_mtu_once(self) -> None:
+        content = '\n'.join([
+            'networks:',
+            '  openclaw_ingress_net:',
+            '    driver: bridge',
+            '    driver_opts:',
+            '      com.docker.network.driver.mtu: "1500"',
+            '      com.docker.network.bridge.name: openclaw0',
+            '',
+        ])
+
+        rendered = mount_sync.sync_bridge_network_mtu(content, 1450)
+
+        self.assertEqual(rendered.count('com.docker.network.driver.mtu'), 1)
+        self.assertIn('      com.docker.network.driver.mtu: "1450"', rendered)
+        self.assertIn('      com.docker.network.bridge.name: openclaw0', rendered)
+
+    def test_requested_docker_network_mtu_auto_only_applies_below_standard_mtu(self) -> None:
+        with patch.dict('os.environ', {'OPENCLAW_DOCKER_NETWORK_MTU': 'auto'}):
+            with patch.object(mount_sync, 'default_route_mtu', return_value=1450):
+                self.assertEqual(
+                    mount_sync.requested_docker_network_mtu(
+                        fail=lambda message, code=2: (_ for _ in ()).throw(RuntimeError(message))
+                    ),
+                    1450,
+                )
+            with patch.object(mount_sync, 'default_route_mtu', return_value=1500):
+                self.assertIsNone(
+                    mount_sync.requested_docker_network_mtu(
+                        fail=lambda message, code=2: (_ for _ in ()).throw(RuntimeError(message))
+                    )
+                )
+
+    def test_requested_docker_network_mtu_accepts_explicit_value(self) -> None:
+        with patch.dict('os.environ', {'OPENCLAW_DOCKER_NETWORK_MTU': '1400'}):
+            self.assertEqual(
+                mount_sync.requested_docker_network_mtu(
+                    fail=lambda message, code=2: (_ for _ in ()).throw(RuntimeError(message))
+                ),
+                1400,
+            )
+
     def test_runtime_control_plane_services_mount_docs_for_registry_validation(self) -> None:
         payload = json.loads((ROOT_DIR / 'config/services/runtime_mounts.json').read_text(encoding='utf-8'))
         services = {str(row.get('service') or ''): row for row in payload.get('services') or []}

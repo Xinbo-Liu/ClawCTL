@@ -11,7 +11,6 @@ SETUP_FLOW_HANDOFF_ROOT="$(openclaw_repo_root_from "$SETUP_FLOW_HANDOFF_LIB_DIR"
 source "$SETUP_FLOW_HANDOFF_ROOT/scripts/lib/repo_contracts.sh"
 unset SETUP_FLOW_HANDOFF_LIB_DIR
 repo_contract_assign_path SETUP_FLOW_HANDOFF_CONFIG_PATH governance.setup_handoff
-
 setup_flow_handoff_config_get() {
   local path_expr="$1"
   local default_value="${2:-}"
@@ -30,7 +29,6 @@ setup_flow_handoff_config_get() {
   fi
   printf '%s' "$default_value"
 }
-
 setup_flow_handoff_reference_lines() {
   if command -v jq >/dev/null 2>&1 && [[ -f "$SETUP_FLOW_HANDOFF_CONFIG_PATH" ]]; then
     jq -r '.references[]? | select((.label // "") != "" and (.path // "") != "") | "\(.label)：\(.path)"' "$SETUP_FLOW_HANDOFF_CONFIG_PATH" 2>/dev/null || true
@@ -38,7 +36,6 @@ setup_flow_handoff_reference_lines() {
   fi
   printf '%s\n' '统一部署基线与执行位置：docs/getting-started/quickstart.md'
 }
-
 setup_flow_print_unified_handoff() {
   local phase_label="$1"
   local status_label="${2:-已完成}"

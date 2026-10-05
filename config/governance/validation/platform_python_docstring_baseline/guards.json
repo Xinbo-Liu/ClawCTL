@@ -29,8 +29,8 @@
       "publicMissingDocstrings": 0
     },
     "python/openclaw/guards/host_python/matching.py": {
-      "moduleHasChineseDocstring": false,
-      "publicChineseDocstrings": 0,
+      "moduleHasChineseDocstring": true,
+      "publicChineseDocstrings": 1,
       "publicEnglishOnlyDocstrings": 0,
       "publicItemBaselines": {
         "function:contains_host_python_command": {
@@ -58,17 +58,17 @@
           "qualname": "resolve_static_command_string"
         },
         "module:<module>": {
-          "hasChineseDocstring": false,
-          "hasDocstring": false,
+          "hasChineseDocstring": true,
+          "hasDocstring": true,
           "kind": "module",
           "qualname": "<module>"
         }
       },
-      "publicMissingDocstrings": 5
+      "publicMissingDocstrings": 4
     },
     "python/openclaw/guards/host_python/scanner.py": {
-      "moduleHasChineseDocstring": false,
-      "publicChineseDocstrings": 0,
+      "moduleHasChineseDocstring": true,
+      "publicChineseDocstrings": 1,
       "publicEnglishOnlyDocstrings": 0,
       "publicItemBaselines": {
         "function:collect_shell_files": {
@@ -90,17 +90,17 @@
           "qualname": "scan_shell_source"
         },
         "module:<module>": {
-          "hasChineseDocstring": false,
-          "hasDocstring": false,
+          "hasChineseDocstring": true,
+          "hasDocstring": true,
           "kind": "module",
           "qualname": "<module>"
         }
       },
-      "publicMissingDocstrings": 4
+      "publicMissingDocstrings": 3
     },
     "python/openclaw/guards/host_python/syntax.py": {
-      "moduleHasChineseDocstring": false,
-      "publicChineseDocstrings": 0,
+      "moduleHasChineseDocstring": true,
+      "publicChineseDocstrings": 1,
       "publicEnglishOnlyDocstrings": 0,
       "publicItemBaselines": {
         "function:append_logical_line": {
@@ -176,17 +176,17 @@
           "qualname": "trim_tokens"
         },
         "module:<module>": {
-          "hasChineseDocstring": false,
-          "hasDocstring": false,
+          "hasChineseDocstring": true,
+          "hasDocstring": true,
           "kind": "module",
           "qualname": "<module>"
         }
       },
-      "publicMissingDocstrings": 13
+      "publicMissingDocstrings": 12
     },
     "python/openclaw/guards/host_python/variables.py": {
-      "moduleHasChineseDocstring": false,
-      "publicChineseDocstrings": 0,
+      "moduleHasChineseDocstring": true,
+      "publicChineseDocstrings": 1,
       "publicEnglishOnlyDocstrings": 0,
       "publicItemBaselines": {
         "function:expand_shell_variables": {
@@ -232,22 +232,22 @@
           "qualname": "update_shell_variable_env"
         },
         "module:<module>": {
-          "hasChineseDocstring": false,
-          "hasDocstring": false,
+          "hasChineseDocstring": true,
+          "hasDocstring": true,
           "kind": "module",
           "qualname": "<module>"
         }
       },
-      "publicMissingDocstrings": 8
+      "publicMissingDocstrings": 7
     },
     "python/openclaw/guards/host_python_doc_guard.py": {
       "moduleHasChineseDocstring": true,
-      "publicChineseDocstrings": 1,
+      "publicChineseDocstrings": 2,
       "publicEnglishOnlyDocstrings": 0,
       "publicItemBaselines": {
         "class:DocPythonCommand": {
-          "hasChineseDocstring": false,
-          "hasDocstring": false,
+          "hasChineseDocstring": true,
+          "hasDocstring": true,
           "kind": "class",
           "qualname": "DocPythonCommand"
         },
@@ -306,7 +306,7 @@
           "qualname": "<module>"
         }
       },
-      "publicMissingDocstrings": 9
+      "publicMissingDocstrings": 8
     },
     "python/openclaw/guards/host_python_shell_guard.py": {
       "moduleHasChineseDocstring": true,

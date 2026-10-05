@@ -92,62 +92,50 @@ FINAL_EXIT_CODE=0
 BASIC_CURRENT_STAGE='control_plane_defaults'
 BASIC_SUMMARY_EMITTED=0
 RESULT_LINES_FILE=''
-
 usage() {
   one_click_test_basic_static_help_text
 }
-
 explain() {
   one_click_test_basic_static_explain_text
 }
-
 log() {
   [[ "$QUIET" == "1" ]] && return 0
   echo "[one_click_test_basic] $*"
 }
-
 die() {
   local msg="$1"
   local code="${2:-3}"
   echo "[one_click_test_basic][FAIL] $msg" >&2
   exit "$code"
 }
-
 reject_root_runtime_user() {
   [[ "$(id -u)" != "0" ]] && return 0
   die "one_click_test_basic 拒绝以 root 执行部署前门禁；root 仅用于 prepare_docker_host、prepare_deploy_user、apply_ingress_boundary_rules、fix_permissions 等宿主机步骤。请切换到固定部署用户后重试；若当前保留 root SSH 会话，可执行：runuser -u openclaw -- bash -lc 'cd $ROOT_DIR && bash ./scripts/setup/one_click_test_basic.sh'。" 2
 }
-
 record_pass() { basic_test_record_pass "$@"; }
 record_fail() { basic_test_record_fail "$@"; }
 record_warn() { basic_test_record_warn "$@"; }
 record_skip() { basic_test_record_skip "$@"; }
-
 run_and_capture() {
   setup_gate_run_and_capture "$@"
 }
-
 run_and_capture_with_env() {
   local __outvar="$1"
   shift
   setup_gate_run_and_capture_with_env "$__outvar" "$ENV_FILE" "$DEFAULT_ENV_FILE" "$@"
 }
-
 missing_required_keys() {
   setup_gate_missing_required_keys "$1"
 }
-
 load_one_click_test_basic_control_plane_defaults() {
   DEFAULT_ENV_FILE="$ROOT_DIR/$(one_click_test_cp basic-env-file-path)"
   [[ -n "$ENV_FILE" ]] || ENV_FILE="$DEFAULT_ENV_FILE"
   CHECK_OPENCLAW_RELEASE_SCRIPT="$ROOT_DIR/$(one_click_test_cp basic-check-openclaw-release-script-path)"
 }
-
 basic_test_cleanup() {
   [[ -n "$RESULT_LINES_FILE" && -f "$RESULT_LINES_FILE" ]] && rm -f "$RESULT_LINES_FILE"
   return 0
 }
-
 basic_test_write_result_lines_file() {
   if [[ -z "$RESULT_LINES_FILE" ]]; then
     local tmp_dir="$ROOT_DIR/state/openclaw/control_plane/tmp"
@@ -156,11 +144,9 @@ basic_test_write_result_lines_file() {
   fi
   printf '%s\n' "${RESULT_LINES[@]+"${RESULT_LINES[@]}"}" >"$RESULT_LINES_FILE"
 }
-
 basic_test_result_lines_count() {
   [[ ${RESULT_LINES+x} ]] && printf '%s\n' "${#RESULT_LINES[@]}" || printf '0\n'
 }
-
 basic_test_emit_surface_summary() {
   local format="$1"
   local exit_code="$2"
@@ -185,7 +171,6 @@ basic_test_emit_surface_summary() {
   fi
   one_click_test_basic_summary_command "${args[@]}"
 }
-
 basic_test_write_gate_proof() {
   local -a args=(
     write-proof
@@ -205,7 +190,6 @@ basic_test_write_gate_proof() {
   fi
   one_click_test_basic_summary_command "${args[@]}"
 }
-
 basic_test_on_error() {
   local exit_code="$1"
   local helper_output=''
@@ -232,7 +216,6 @@ basic_test_on_error() {
   fi
   exit "$exit_code"
 }
-
 main() {
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -285,7 +268,6 @@ trap basic_test_cleanup EXIT
 
 BASIC_CURRENT_STAGE='control_plane_defaults'
 flow_preflight_run_and_load load_one_click_test_basic_control_plane_defaults "$OPENCLAW_PYTHON_TOOL" setup flow one-click-test preflight-basic
-
 check_env_exists() {
   if [[ -f "$ENV_FILE" ]]; then
     record_pass "env_file_exists" "$ENV_FILE" "config"
@@ -294,7 +276,6 @@ check_env_exists() {
     CONFIG_FAILURE=1
   fi
 }
-
 check_required_placeholders() {
   [[ -f "$ENV_FILE" ]] || { record_skip "env_required_placeholders" "env 文件不存在，跳过 __REQUIRED__ 检查" "config"; return; }
   local missing_output=''
@@ -309,7 +290,6 @@ check_required_placeholders() {
     record_pass "env_required_placeholders" "" "config"
   fi
 }
-
 check_verify_required_env() {
   [[ -f "$ENV_FILE" ]] || { record_skip "verify_required_deploy_env" "env 文件不存在，跳过" "config"; return; }
   local out=""
@@ -320,7 +300,6 @@ check_verify_required_env() {
     CONFIG_FAILURE=1
   fi
 }
-
 check_deployment_image_contract() {
   if [[ "$CONFIG_FAILURE" == "1" ]]; then
     record_skip "deploy_image_coverage" "配置阶段未通过，跳过部署镜像覆盖合同检查" "config"
@@ -334,7 +313,6 @@ check_deployment_image_contract() {
     CONFIG_FAILURE=1
   fi
 }
-
 check_runtime_compose_contract() {
   if [[ "$CONFIG_FAILURE" == "1" ]]; then
     record_skip "runtime_compose_contract" "配置阶段未通过，跳过 compose 合同检查" "config"
@@ -348,7 +326,6 @@ check_runtime_compose_contract() {
     CONFIG_FAILURE=1
   fi
 }
-
 check_ingress_boundary_evidence_preflight() {
   if [[ "$CONFIG_FAILURE" == "1" ]]; then
     record_skip "ingress_boundary_evidence_preflight" "配置阶段未通过，跳过 ingress 边界语义预检" "config"
@@ -370,7 +347,6 @@ check_ingress_boundary_evidence_preflight() {
     CONFIG_FAILURE=1
   fi
 }
-
 check_local_runtime_fs_contract() {
   if [[ "$CONFIG_FAILURE" == "1" ]]; then
     record_skip "local_runtime_fs_contract" "配置阶段未通过，跳过本地文件系统合同检查" "host"
@@ -392,7 +368,6 @@ check_local_runtime_fs_contract() {
     record_fail "local_runtime_fs_contract" "$out" "host"
   fi
 }
-
 check_deployment_image_readiness() {
   if [[ "$CONFIG_FAILURE" == "1" ]]; then
     record_skip "deployment_image_readiness" "配置阶段未通过，跳过镜像就绪性检查" "host"
@@ -417,7 +392,6 @@ check_deployment_image_readiness() {
     record_fail "deployment_image_readiness" "$out" "host"
   fi
 }
-
 check_docker_host() {
   if [[ "$CONFIG_FAILURE" == "1" ]]; then
     record_skip "check_docker_host_readiness" "配置阶段未通过，跳过 Docker 宿主机检查" "host"
@@ -448,8 +422,6 @@ check_docker_host() {
     record_fail "check_docker_host_readiness" "$out" "host"
   fi
 }
-
-
 check_runtime_bind_user_contract() {
   if [[ "$CONFIG_FAILURE" == "1" ]]; then
     record_skip "runtime_bind_user_contract" "配置阶段未通过，跳过 runtime bind mount UID/GID 合同检查" "host"
@@ -470,7 +442,6 @@ check_runtime_bind_user_contract() {
     record_fail "runtime_bind_user_contract" "$out" "host"
   fi
 }
-
 check_openclaw_release_alignment() {
   if [[ "$CONFIG_FAILURE" == "1" ]]; then
     record_skip "openclaw_release_alignment" "配置阶段未通过，跳过版本对齐检查" "release"

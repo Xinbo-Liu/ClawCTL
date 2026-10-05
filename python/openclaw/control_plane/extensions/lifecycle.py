@@ -33,22 +33,18 @@ class ExtensionLifecycleError(RuntimeError):
 
 
 def repo_root_from(start_path: Path | None = None) -> Path:
-    """从给定路径解析仓库根目录；未提供时以当前模块位置为起点。"""
     return resolve_repo_root(Path(__file__) if start_path is None else start_path)
 
 
 def extension_lock_path(repo_root: Path) -> Path:
-    """返回受管扩展 lock 文件路径。"""
     return (repo_root / EXTENSIONS_LOCK_REL_PATH).resolve()
 
 
 def migration_state_path(repo_root: Path) -> Path:
-    """返回扩展迁移运行态状态文件路径。"""
     return (repo_root / MIGRATION_STATE_REL_PATH).resolve()
 
 
 def read_json_object(path: Path, default: dict[str, Any] | None = None) -> dict[str, Any]:
-    """读取 JSON 对象；文件缺失时返回 default，非对象或解析失败时抛出生命周期错误。"""
     try:
         payload = json.loads(path.read_text(encoding='utf-8-sig'))
     except FileNotFoundError:
@@ -61,12 +57,10 @@ def read_json_object(path: Path, default: dict[str, Any] | None = None) -> dict[
 
 
 def write_json_object(path: Path, payload: dict[str, Any]) -> None:
-    """以原子写方式保存 JSON 对象，避免 lock 或 profile 写半截。"""
     write_json_atomic(path, payload)
 
 
 def repo_rel(repo_root: Path, path: Path) -> str:
-    """返回仓库相对路径，并拒绝扩展路径越过仓库边界。"""
     resolved_repo = repo_root.resolve()
     resolved_path = path.resolve()
     try:
@@ -117,7 +111,6 @@ def _managed_row_payload(
 
 
 def normalize_manifest_from_path(path: Path) -> dict[str, Any]:
-    """读取并标准化单个扩展 manifest，返回控制面可消费的规范对象。"""
     payload = read_json_object(path)
     return _normalize_manifest(path.resolve(), payload)
 
@@ -130,22 +123,21 @@ def _content_hash_file_bytes(path: Path) -> bytes:
 
 
 def content_hash(root: Path) -> str:
-    """计算扩展目录内容 hash，排除运行态缓存、extension.env 与离线 wheel 文件。"""
     hasher = hashlib.sha256()
-    resolved_root = root.resolve()
-    paths = []
+    paths: list[tuple[Path, Path]] = []
     for path in root.rglob('*'):
-        if path.is_file():
-            paths.append(path)
-    for path in sorted(paths, key=lambda item: item.resolve().relative_to(resolved_root).as_posix()):
-        rel_path = path.resolve().relative_to(resolved_root)
+        if not path.is_file():
+            continue
+        rel_path = path.relative_to(root)
         parts = set(rel_path.parts)
-        if '__pycache__' in parts or '.git' in parts or 'tests' in parts:
+        if parts.intersection({'__pycache__', '.pytest_cache', '.ruff_cache', '.git', 'tests'}):
             continue
         if len(rel_path.parts) >= 2 and rel_path.parts[-2:] == ('deploy', 'extension.env'):
             continue
         if len(rel_path.parts) >= 2 and rel_path.parts[0] == 'offline_wheelhouse' and path.suffix == '.whl':
             continue
+        paths.append((rel_path, path))
+    for rel_path, path in sorted(paths, key=lambda item: item[0].as_posix()):
         hasher.update(rel_path.as_posix().encode('utf-8'))
         hasher.update(b'\0')
         hasher.update(_content_hash_file_bytes(path))
@@ -154,7 +146,6 @@ def content_hash(root: Path) -> str:
 
 
 def managed_rows_by_id(repo_root: Path) -> dict[str, ManagedExtensionRow]:
-    """读取受管扩展索引，并按 extension id 建立映射。"""
     return {row.id: row for row in load_managed_extensions_index(repo_root)}
 
 
@@ -194,22 +185,18 @@ def _managed_row_from_payload(repo_root: Path, payload: dict[str, Any]) -> Manag
 
 
 def manifest_for_row(row: ManagedExtensionRow) -> dict[str, Any]:
-    """读取单个受管扩展行对应的标准化 manifest。"""
     return normalize_manifest_from_path(managed_extension_manifest_path(row))
 
 
 def known_manifests_by_id(config_path: Path) -> dict[str, dict[str, Any]]:
-    """读取某个 service config 可见的扩展 manifest 集合。"""
     return {str(row.get('id') or '').strip(): row for row in known_extensions_from_config(config_path)}
 
 
 def dependency_rows(manifest: dict[str, Any]) -> list[dict[str, Any]]:
-    """返回 manifest 中声明的依赖行列表。"""
     return [dict(item) for item in manifest.get('dependencies') or [] if isinstance(item, dict)]
 
 
 def migration_rows(manifest: dict[str, Any]) -> list[dict[str, Any]]:
-    """返回 manifest 中声明的迁移行列表。"""
     return [dict(item) for item in manifest.get('migrations') or [] if isinstance(item, dict)]
 
 
@@ -220,7 +207,6 @@ def build_lock_payload(
     manifests_by_id: dict[str, dict[str, Any]] | None = None,
     visible_manifests_by_id: dict[str, dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    """生成扩展 lock payload，记录版本、来源 hash、依赖解析结果和已应用迁移。"""
     rows = [
         row
         for row in (list(rows) if rows is not None else list(load_managed_extensions_index(repo_root)))
@@ -266,14 +252,12 @@ def build_lock_payload(
 
 
 def write_lock(repo_root: Path) -> dict[str, Any]:
-    """重新生成并写出 agent/extensions/lock.json，返回写出的 lock payload。"""
     payload = build_lock_payload(repo_root)
     write_json_object(extension_lock_path(repo_root), payload)
     return payload
 
 
 def lock_drift_issues(repo_root: Path, *, expected: dict[str, Any] | None = None) -> list[str]:
-    """比较当前 lock 与期望 payload，返回版本、来源、hash 或依赖漂移问题。"""
     expected = expected or build_lock_payload(repo_root)
     actual = read_json_object(extension_lock_path(repo_root), {})
     if not actual:
@@ -292,7 +276,6 @@ def lock_drift_issues(repo_root: Path, *, expected: dict[str, Any] | None = None
 
 
 def lifecycle_doctor_issues(repo_root: Path) -> list[str]:
-    """执行扩展生命周期 doctor，检查 manifest、依赖、lock 和迁移状态。"""
     issues: list[str] = []
     rows = [row for row in load_managed_extensions_index(repo_root) if row.status == MANAGED_EXPLICIT_EXTENSION_STATUS]
     manifests: dict[str, dict[str, Any]] = {}
@@ -378,7 +361,6 @@ def _dependency_cycle_issues(manifests: dict[str, dict[str, Any]]) -> list[str]:
 
 
 def resolve_profile_path(repo_root: Path, profile: str) -> Path:
-    """解析 profile 参数；既支持 profile id，也支持仓库内 JSON 配置路径。"""
     text = str(profile or '').strip()
     if not text:
         raise ExtensionLifecycleError('--profile 不能为空')
@@ -395,7 +377,6 @@ def resolve_profile_path(repo_root: Path, profile: str) -> Path:
 
 
 def profile_enabled_ids(path: Path) -> list[str]:
-    """读取 control plane profile 当前显式启用的扩展 id 列表。"""
     payload = read_json_object(path)
     extensions = payload.setdefault('extensions', {})
     if not isinstance(extensions, dict):
@@ -405,7 +386,6 @@ def profile_enabled_ids(path: Path) -> list[str]:
 
 
 def write_profile_enabled_ids(path: Path, enabled_ids: list[str]) -> dict[str, Any]:
-    """把去重后的 enabledExtensionIds 写回 profile，并返回完整 profile payload。"""
     payload = read_json_object(path)
     extensions = payload.get('extensions') if isinstance(payload.get('extensions'), dict) else {}
     extensions['enabledExtensionIds'] = list(dict.fromkeys(enabled_ids))
@@ -426,7 +406,6 @@ def _profile_payload_with_enabled_ids(path: Path, enabled_ids: list[str]) -> dic
 
 
 def validate_profile_enabled_ids(path: Path, enabled_ids: list[str]) -> None:
-    """用控制面扩展加载器校验启用集合，失败时抛出生命周期错误。"""
     payload = _profile_payload_with_enabled_ids(path, enabled_ids)
     try:
         load_enabled_extensions(payload, service_base_dir=path.parent)
@@ -435,7 +414,6 @@ def validate_profile_enabled_ids(path: Path, enabled_ids: list[str]) -> None:
 
 
 def enable_extension(repo_root: Path, *, profile: str, extension_id: str, dry_run: bool = False) -> dict[str, Any]:
-    """把扩展 id 加入指定 profile；dry_run 为真时只返回将写入的启用集合。"""
     profile_path = resolve_profile_path(repo_root, profile)
     enabled_ids = profile_enabled_ids(profile_path)
     if extension_id not in enabled_ids:
@@ -447,7 +425,6 @@ def enable_extension(repo_root: Path, *, profile: str, extension_id: str, dry_ru
 
 
 def reverse_dependencies(repo_root: Path, extension_id: str) -> list[str]:
-    """返回依赖指定 extension_id 的受管扩展 id 列表。"""
     dependents: list[str] = []
     for row in load_managed_extensions_index(repo_root):
         if row.status != MANAGED_EXPLICIT_EXTENSION_STATUS or row.id == extension_id:
@@ -467,7 +444,6 @@ def disable_extension(
     cascade_disable: bool = False,
     dry_run: bool = False,
 ) -> dict[str, Any]:
-    """从 profile 中禁用扩展；有反向依赖时需 cascade_disable 才会联动移除。"""
     profile_path = resolve_profile_path(repo_root, profile)
     enabled_ids = profile_enabled_ids(profile_path)
     dependents = [item for item in reverse_dependencies(repo_root, extension_id) if item in enabled_ids]
@@ -482,7 +458,6 @@ def disable_extension(
 
 
 def find_source_manifest(source: Path, extension_id: str = '') -> tuple[str, Path, Path, dict[str, Any]]:
-    """从文件或目录定位扩展 manifest，返回扩展 id、根目录、manifest 路径和标准化 manifest。"""
     resolved = source.resolve()
     if resolved.is_file():
         manifest_path = resolved
@@ -513,7 +488,6 @@ def install_extension(
     enable_profile: str = '',
     dry_run: bool = False,
 ) -> dict[str, Any]:
-    """安装扩展到 agent/extensions 或登记 in-place 扩展，并刷新 index、lock 与可选 profile。"""
     actual_id, source_root, _manifest_path, manifest = find_source_manifest(source, extension_id)
     target_root = (repo_root / 'agent' / 'extensions' / actual_id).resolve()
     default_mode = 'in-place' if source_root == target_root else 'copy'
@@ -602,7 +576,6 @@ def uninstall_extension(
     cascade_disable: bool = False,
     dry_run: bool = False,
 ) -> dict[str, Any]:
-    """从受管扩展索引移除扩展；remove_files 为真时只允许删除 agent/extensions 下目录。"""
     rows = managed_rows_by_id(repo_root)
     row = rows.get(extension_id)
     if row is None:
@@ -658,7 +631,6 @@ def _call_migration(callable_ref: str, *, repo_root: Path, extension_id: str, dr
 
 
 def migrate_extension(repo_root: Path, *, extension_id: str, dry_run: bool = False) -> dict[str, Any]:
-    """执行扩展 manifest 中尚未应用的迁移，并把迁移 id 写回 lock。"""
     rows = managed_rows_by_id(repo_root)
     row = rows.get(extension_id)
     if row is None:

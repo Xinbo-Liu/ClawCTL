@@ -12,6 +12,7 @@ from uuid import uuid4
 from openclaw.lib.repo.layout import resolve_repo_root
 from openclaw.tests.support.helpers import isolated_test_root
 from openclaw.tests.support.lightweight_repo import materialize_local_workspace_shell_repo
+from openclaw.tests.support.managed_probe import managed_probe_repo
 from openclaw.tests.support.static_text_assertions import assert_static_text_absent
 
 ROOT_DIR = resolve_repo_root(Path(__file__))
@@ -177,6 +178,17 @@ class LocalWorkspacePolicyScriptsTest(unittest.TestCase):
         policy_shell = (ROOT_DIR / 'scripts' / 'lib' / 'local_workspace_policy.sh').read_text(encoding='utf-8')
         assert_static_text_absent(self, 'openclaw_repo_default_python_bin', policy_shell)
         assert_static_text_absent(self, 'openclaw.lib.repo.local_workspace_policy', policy_shell)
+
+    def test_export_check_only_does_not_create_default_output_dir(self) -> None:
+        export_text = EXPORT_SCRIPT.read_text(encoding='utf-8')
+
+        check_only_index = export_text.index('if [[ "$CHECK_ONLY" == \'1\' ]]; then')
+        default_output_index = export_text.index('default_name="$(default_output_name "$BUNDLE_ID")"')
+        mkdir_output_index = export_text.index('mkdir -p "$(dirname "$OUTPUT_PATH")"')
+
+        self.assertLess(check_only_index, default_output_index)
+        self.assertLess(check_only_index, mkdir_output_index)
+        self.assertIn('run_bundle_python -m openclaw.release.bundle_governance validate --bundle "$BUNDLE_ID"', export_text)
 
     def test_local_workspace_policy_shell_awk_fallback_is_self_contained(self) -> None:
         source = (ROOT_DIR / 'scripts' / 'lib' / 'local_workspace_policy.sh').read_text(encoding='utf-8')
@@ -352,22 +364,28 @@ class LocalWorkspacePolicyScriptsTest(unittest.TestCase):
         assert_static_text_absent(self, "add_parser('sync-wheelhouse'", registration_source)
 
     def test_runtime_permissions_collects_extension_script_exec_candidates(self) -> None:
-        extension_scripts = sorted((ROOT_DIR / 'agent' / 'extensions').glob('*/scripts/**/*.sh'))
-        if not extension_scripts:
-            self.skipTest('base release surface has no repo-managed extension scripts')
+        with managed_probe_repo('extension-script-exec-candidates') as fixture:
+            materialize_local_workspace_shell_repo(fixture.repo_root)
+            extension_scripts = [
+                fixture.package_root / 'scripts' / 'check_probe.sh',
+                fixture.package_root / 'scripts' / 'nested' / 'run_probe.sh',
+            ]
+            for path in extension_scripts:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text('#!/usr/bin/env bash\nexit 0\n', encoding='utf-8')
+            self.assertGreater(len(extension_scripts), 0)
+            result = run_bash_command(
+                fixture.repo_root,
+                'source scripts/setup/lib/runtime_permissions.sh; '
+                'runtime_permissions_collect_repo_exec_candidates "$PWD" | tr "\\0" "\\n"',
+            )
 
-        result = run_bash_command(
-            ROOT_DIR,
-            'source scripts/setup/lib/runtime_permissions.sh; '
-            'runtime_permissions_collect_repo_exec_candidates "$PWD" | tr "\\0" "\\n"',
-        )
-
-        self.assertEqual(result.returncode, 0, msg=result.stderr)
-        candidates = {line.strip().replace('\\', '/') for line in result.stdout.splitlines() if line.strip()}
-        for script_path in extension_scripts:
-            rel_path = script_path.relative_to(ROOT_DIR).as_posix()
-            with self.subTest(script=rel_path):
-                self.assertTrue(any(item.endswith(rel_path) for item in candidates), msg=sorted(candidates))
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            candidates = {line.strip().replace('\\', '/') for line in result.stdout.splitlines() if line.strip()}
+            for script_path in extension_scripts:
+                rel_path = script_path.relative_to(fixture.repo_root).as_posix()
+                with self.subTest(script=rel_path):
+                    self.assertTrue(any(item.endswith(rel_path) for item in candidates), msg=sorted(candidates))
 
     def test_runtime_permissions_resolves_host_runtime_path_placeholders(self) -> None:
         repo_copy = self._clone_template_repo('runtime-path-placeholders')

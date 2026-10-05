@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 # 用途：为镜像 pin 更新脚本提供共享的 env 回写与本地 deploy/.env 生成逻辑，避免 update_openclaw_pin / update_runtime_pin 各自维护一套 awk 与生成流程。
 set -euo pipefail
-
 pin_env_upsert_key() {
   local file_path="$1"
   local key="$2"
@@ -27,7 +26,6 @@ pin_env_upsert_key() {
   cp "$tmp_file" "$file_path"
   rm -f "$tmp_file"
 }
-
 pin_env_ensure_local_env() {
   local root_dir="$1"
   local deploy_env="$2"

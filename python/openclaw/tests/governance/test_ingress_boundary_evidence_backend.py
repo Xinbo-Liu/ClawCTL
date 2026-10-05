@@ -34,13 +34,19 @@ class IngressBoundaryEvidenceBackendTest(unittest.TestCase):
         )
         return allowed_sources_path
 
-    def test_normalize_source_cidrs_rejects_public_and_duplicate_ranges(self) -> None:
-        payload, exit_code = backend.normalize_source_cidrs('10.0.0.0/24, 10.0.0.0/24, 8.8.8.0/24')
+    def test_normalize_source_cidrs_accepts_precise_public_host_and_rejects_public_ranges(self) -> None:
+        payload, exit_code = backend.normalize_source_cidrs('10.0.0.0/24, 10.0.0.0/24, 8.8.8.8/32, 8.8.8.0/24')
 
         self.assertEqual(exit_code, 2)
         self.assertFalse(payload['accepted'])
+        self.assertIn('8.8.8.8/32', payload['source_cidrs'])
         self.assertIn('CIDR 重复：10.0.0.0/24', payload['issues'])
-        self.assertIn('只允许私网或 loopback CIDR：8.8.8.0/24', payload['issues'])
+        self.assertIn('只允许私网、loopback 或精确公网主机 CIDR：8.8.8.0/24', payload['issues'])
+
+    def test_policy_declares_current_ingress_source_cidr_format(self) -> None:
+        payload = json.loads(POLICY_PATH.read_text(encoding='utf-8'))
+
+        self.assertEqual(payload['allowed_source_cidrs_format'], 'comma_separated_ingress_source_cidrs')
 
     def test_compose_contract_summary_reads_truth_from_rendered_compose(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

@@ -16,7 +16,7 @@ from openclaw.control_plane.registry import load_registry_from_path
 from openclaw.lib.repo.control_plane_config_surface import main
 from openclaw.doctor.agent_modules.managed_probe_fixture import materialize_managed_probe_extension
 from openclaw.doctor.agent_modules.managed_probe_fixture_repo_markers import ensure_repo_markers
-from openclaw.doctor.agent_modules.managed_probe_fixture_scaffold import PROBE_GROUP_REF, PROBE_MODEL_REF, PROBE_PACKAGE_NAME, write_control_plane_manifests
+from openclaw.doctor.agent_modules.managed_probe_fixture_scaffold import PROBE_GROUP_REF, PROBE_MODEL_REF, PROBE_PACKAGE_NAME, PROBE_PRIMARY_MODULE_REF, write_control_plane_manifests
 from openclaw.doctor.agent_modules.managed_probe_fixture_repo_markers import write_json, write_text
 from openclaw.lib.repo.layout import (
     CONTROL_PLANE_CONFIG_ENV,
@@ -29,19 +29,10 @@ from openclaw.lib.repo.layout import (
 )
 from openclaw.lib.repo.managed_extensions import load_managed_extensions_index, managed_explicit_extensions
 from openclaw.tests.support.helpers import isolated_test_root
-from openclaw.tests.support.managed_extensions import managed_extensions
+from openclaw.tests.support.managed_probe import managed_probe_repo
 
 
 ROOT_DIR = resolve_repo_root(Path(__file__))
-MANAGED_EXTENSIONS = tuple(sorted(managed_extensions(ROOT_DIR), key=lambda row: row.id))
-MANAGED_EXTENSION = MANAGED_EXTENSIONS[0] if MANAGED_EXTENSIONS else None
-EXTENSION_CONFIG_PATH = MANAGED_EXTENSION.default_service_config_path if MANAGED_EXTENSION is not None else None
-EXTENSION_CONFIG_REL = EXTENSION_CONFIG_PATH.relative_to(ROOT_DIR).as_posix() if EXTENSION_CONFIG_PATH is not None else ''
-MANAGED_AGENT_REF = (
-    sorted(path.name for path in (MANAGED_EXTENSION.root_dir / 'agent' / 'modules').iterdir() if path.is_dir())[0]
-    if MANAGED_EXTENSION is not None
-    else ''
-)
 
 
 def run_surface(*args: str) -> str:
@@ -104,7 +95,7 @@ def make_lightweight_discovery_candidate(repo_root: Path, extension_id: str):
         'agent/modules',
     ):
         (package_root / rel_path).mkdir(parents=True, exist_ok=True)
-    write_json(package_root / 'agent' / 'control_plane' / 'registries' / 'dispatch_targets.json', {'version': 7, 'targets': []})
+    write_json(package_root / 'agent' / 'control_plane' / 'registries' / 'dispatch_targets.json', {'version': 8, 'targets': []})
     write_text(package_root / 'python' / PROBE_PACKAGE_NAME / '__init__.py', '')
     return SimpleNamespace(
         extension_id=extension_id,
@@ -122,19 +113,14 @@ def row_by_id(rows: tuple[dict[str, object], ...], profile_id: str, *, source: s
 
 
 class ControlPlaneConfigSurfaceTest(unittest.TestCase):
-    _REPO_EXTENSION_REQUIRED_TESTS = {
-        'test_profile_rel_path_helper_matches_repo_profiles',
-        'test_profile_resolution_supports_managed_extension_profile',
-        'test_container_path_maps_extension_profile_inside_repo_mount',
-        'test_container_path_prefers_explicit_config_path_over_internal_container_override',
-        'test_profile_id_reports_extension_when_given_extension_config_path',
-        'test_agent_host_path_uses_managed_extension_default_config',
-        'test_agent_host_path_uses_managed_extension_default_config_for_qualified_ref',
-    }
-
-    def setUp(self) -> None:
-        if self._testMethodName in self._REPO_EXTENSION_REQUIRED_TESTS and MANAGED_EXTENSION is None:
-            self.skipTest('base release surface has no repo-managed extension')
+    @classmethod
+    def setUpClass(cls) -> None:
+        """用真实登记的探针 profile 检验选择入口，不依赖仓库安装的业务扩展。"""
+        super().setUpClass()
+        context = managed_probe_repo('config-surface-contract', base_repo_root=ROOT_DIR)
+        cls._probe = context.__enter__()
+        cls.addClassCleanup(context.__exit__, None, None, None)
+        cls._config_rel = cls._probe.service_path.relative_to(cls._probe.repo_root).as_posix()
 
     def test_profile_rel_path_helper_matches_repo_profiles(self) -> None:
         self.assertEqual(
@@ -146,14 +132,14 @@ class ControlPlaneConfigSurfaceTest(unittest.TestCase):
             'config/control_plane/service.json',
         )
         self.assertEqual(
-            control_plane_profile_config_rel_path(MANAGED_EXTENSION.id, ROOT_DIR),
-            EXTENSION_CONFIG_REL,
+            control_plane_profile_config_rel_path(self._probe.extension_id, self._probe.repo_root),
+            self._config_rel,
         )
 
     def test_profile_resolution_supports_managed_extension_profile(self) -> None:
         self.assertEqual(
-            resolve_control_plane_profile_service_config_path(MANAGED_EXTENSION.id, start_path=ROOT_DIR),
-            EXTENSION_CONFIG_PATH,
+            resolve_control_plane_profile_service_config_path(self._probe.extension_id, start_path=self._probe.repo_root),
+            self._probe.service_path,
         )
 
     def test_host_path_defaults_to_runtime_profile(self) -> None:
@@ -161,18 +147,18 @@ class ControlPlaneConfigSurfaceTest(unittest.TestCase):
         self.assertEqual(result, str((ROOT_DIR / control_plane_profile_config_rel_path('agent_platform')).resolve()))
 
     def test_container_path_maps_extension_profile_inside_repo_mount(self) -> None:
-        result = run_surface('container-path', '--config-path', str(EXTENSION_CONFIG_PATH))
+        result = run_surface('container-path', '--config-path', str(self._probe.service_path), '--repo-root', str(self._probe.repo_root))
         self.assertEqual(
             result,
-            f'/opt/openclaw-tools/{EXTENSION_CONFIG_REL}',
+            f'/opt/openclaw-tools/{self._config_rel}',
         )
 
     def test_container_path_prefers_explicit_config_path_over_internal_container_override(self) -> None:
         with mock.patch.dict(os.environ, {'CONTROL_PLANE_CONTAINER_CONFIG_PATH': '/tmp/custom-container-config.json'}, clear=False):
-            result = run_surface('container-path', '--config-path', str(EXTENSION_CONFIG_PATH))
+            result = run_surface('container-path', '--config-path', str(self._probe.service_path), '--repo-root', str(self._probe.repo_root))
         self.assertEqual(
             result,
-            f'/opt/openclaw-tools/{EXTENSION_CONFIG_REL}',
+            f'/opt/openclaw-tools/{self._config_rel}',
         )
 
     def test_container_path_uses_internal_container_override_when_public_selection_is_absent(self) -> None:
@@ -181,8 +167,8 @@ class ControlPlaneConfigSurfaceTest(unittest.TestCase):
         self.assertEqual(result, '/tmp/custom-container-config.json')
 
     def test_profile_id_reports_extension_when_given_extension_config_path(self) -> None:
-        result = run_surface('profile-id', '--config-path', str(EXTENSION_CONFIG_PATH))
-        self.assertEqual(result, MANAGED_EXTENSION.id)
+        result = run_surface('profile-id', '--config-path', str(self._probe.service_path), '--repo-root', str(self._probe.repo_root))
+        self.assertEqual(result, self._probe.extension_id)
 
     def test_profile_id_reports_custom_for_unregistered_config_path(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -192,12 +178,12 @@ class ControlPlaneConfigSurfaceTest(unittest.TestCase):
         self.assertEqual(result, 'custom')
 
     def test_agent_host_path_uses_managed_extension_default_config(self) -> None:
-        result = run_surface('agent-host-path', '--agent-ref', MANAGED_AGENT_REF)
-        self.assertEqual(result, str(EXTENSION_CONFIG_PATH))
+        result = run_surface('agent-host-path', '--agent-ref', PROBE_PRIMARY_MODULE_REF, '--repo-root', str(self._probe.repo_root))
+        self.assertEqual(result, str(self._probe.service_path))
 
     def test_agent_host_path_uses_managed_extension_default_config_for_qualified_ref(self) -> None:
-        result = run_surface('agent-host-path', '--agent-ref', f'{MANAGED_EXTENSION.id}:{MANAGED_AGENT_REF}')
-        self.assertEqual(result, str(EXTENSION_CONFIG_PATH))
+        result = run_surface('agent-host-path', '--agent-ref', f'{self._probe.extension_id}:{PROBE_PRIMARY_MODULE_REF}', '--repo-root', str(self._probe.repo_root))
+        self.assertEqual(result, str(self._probe.service_path))
 
     def test_agent_host_path_falls_back_to_runtime_profile_when_agent_is_not_managed_extension(self) -> None:
         result = run_surface('agent-host-path', '--agent-ref', 'missing_agent')
@@ -414,8 +400,8 @@ class ControlPlaneConfigSurfaceTest(unittest.TestCase):
             'no_self': 'service profile must enable extension id',
             'path_escape': 'escapes extension root',
             'manifest_source': 'service profile must load own manifest from convention path',
-            'extra_enabled': 'may only enable agent_platform and extension id',
-            'extra_manifest_dir': 'may only load platform and own manifest dirs',
+            'extra_enabled': 'may only enable agent_platform, required dependencies, and extension id',
+            'extra_manifest_dir': 'may only load platform, required dependency, and own manifest dirs',
             'registry_file_escape': 'manifest registry.dispatchTargetRegistryPaths[0] escapes extension root',
             'surface_escape': 'manifest surfaceFragments.runtimePathsPath escapes extension root',
             'unknown_manifest_field': 'unsupported manifest field(s): sampleContract',

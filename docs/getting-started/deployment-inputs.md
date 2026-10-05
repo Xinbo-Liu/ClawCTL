@@ -1,15 +1,19 @@
 # 部署输入说明
 
-本文用于补齐 `deploy/site.env`、启用扩展时的扩展内部 `agent/extensions/<extension-id>/deploy/extension.env`，并说明 `deploy/.env` 中自动生成字段的来源。默认路径是 `self_signed + host_firewall`；切换 `provided_files` 或 `external_acl` 时，仅填写对应条件字段。
+本页说明三类部署输入的填写位置与约束：`deploy/site.env`、启用扩展的 `agent/extensions/<extension-id>/deploy/extension.env` 与 `deploy/targets.d/<target_id>.env`，以及 `deploy/.env` 中自动生成字段的来源。
 
-正式默认运行配置不要求额外模型/API provider 密钥。
+部署输入文件使用 `apply_deploy_input_values.sh --profile <profile_id> --input <owner-only-env> --init` 按 active profile 自动路由；`--input-env-file <path>` 与 `--input <path>` 等价。写入前可用 `--validate-only` 检查脱敏路由、未知键和错位键；单项维护使用 site / extension / target 专用脚本。
+
+默认使用 `self_signed + host_firewall`；切换 `provided_files` 或 `external_acl` 时，填写对应条件字段。
+
+所选运行配置不要求额外模型/API provider 密钥。
 
 ## 最小填写片段
 
 以下片段适用于 **self_signed + host_firewall** 的首轮引导：
 
 ```text
-OPENCLAW_INGRESS_ALLOWED_SOURCE_CIDRS=<目标机实际看到的访问端来源 CIDR>,<目标机本机 full test 来源 CIDR>
+OPENCLAW_INGRESS_ALLOWED_SOURCE_CIDRS=<目标机或上游记录实际观测来源 CIDR>,<目标机本机 full test 来源 CIDR>
 OPENCLAW_INGRESS_LISTEN_IP=<目标机 private ingress 绑定私网或 loopback IP>
 OPENCLAW_TLS_CN=<访问端真实使用的唯一主机名>
 OPENCLAW_TLS_MODE=self_signed
@@ -35,10 +39,13 @@ bash ./scripts/setup/init_private_ingress.sh
 bash ./scripts/setup/init_private_ingress.sh --platform windows -- 192.168.50.10 openclaw.internal.example
 ```
 
-2. 打开 `deploy/site.env`，按“第 2 步最小闭环”和下方字段说明补齐平台输入；启用扩展时，扩展字段只写入对应扩展内部 `agent/extensions/<extension-id>/deploy/extension.env`。
+2. 部署输入文件按 active profile 自动路由；单项维护时，先补齐 `deploy/site.env` 平台输入，再用输出命令维护 extension 与 target 输入。
 
 ```bash
 vim deploy/site.env
+bash ./scripts/setup/prepare_control_plane_medium.sh
+bash ./scripts/setup/apply_deploy_input_values.sh --validate-only --profile <profile_id> --input <owner-only-env>
+bash ./scripts/setup/apply_deploy_input_values.sh --profile <profile_id> --input <owner-only-env> --init
 ```
 
 ## 第 2 步最小闭环
@@ -50,29 +57,29 @@ vim deploy/site.env
 
 ## 跨 OS / 跨网络实例访问场景
 
-- 适用条件：访问端与目标机分处不同 OS 实例、不同网络实例、VPN、NAT 或上游代理链路。
+- 适用条件：访问端与目标机分处不同 OS 实例、不同网络实例、TUN、VPN、NAT 或上游代理链路。
 - `OPENCLAW_INGRESS_LISTEN_IP` 固定填写目标机对访问端可达的私网 IP；不要填写访问端地址、上游网关地址，也不要误写成 loopback。
 - `OPENCLAW_TLS_CN` 在访问端 DNS / hosts 中必须解析到目标机 ingress 地址；不要解析到访问端地址。
 - `OPENCLAW_INGRESS_ALLOWED_SOURCE_CIDRS` 优先收窄为目标机实际看到的访问端源 IP `/32`；若网络层把访问端流量翻译成网关地址，则填写该翻译后地址 `/32`；只有链路以网段呈现时，才填写对应链路网段；同时加入目标机本机 full test 来源，即 `OPENCLAW_INGRESS_LISTEN_IP/32` 或 IPv6 `/128`。
-- 常见误填：访问端网卡地址或网段、本地 Wi-Fi 网段、Docker bridge 网段，以及遗漏目标机本机 full test 来源。
+- 常见误填：访问端网卡地址或网段、本地 Wi-Fi 私网段、api.ipify/TUN 出口推断值、Docker bridge 网段，以及遗漏目标机本机 full test 来源；公网 EIP 场景应填写目标机实际看到的公网出口 `/32` 或 `/128`。
 
 ```text
 OPENCLAW_INGRESS_LISTEN_IP=<目标机对访问端可达的私网 IP>
 OPENCLAW_TLS_CN=<访问端用于访问目标机的唯一主机名>
-OPENCLAW_INGRESS_ALLOWED_SOURCE_CIDRS=<目标机实际看到的访问端源 IP>/32,<OPENCLAW_INGRESS_LISTEN_IP>/32
+OPENCLAW_INGRESS_ALLOWED_SOURCE_CIDRS=<目标机或上游记录实际观测源 IP>/32,<OPENCLAW_INGRESS_LISTEN_IP>/32
 ```
 
 ## 公网来源经上游 ACL 接入
 
-- OpenClaw 本机 ingress 只接受私网或 loopback 来源 CIDR，不把公网客户端 CIDR 写入 `OPENCLAW_INGRESS_ALLOWED_SOURCE_CIDRS`。
-- 公网访问必须先经过上游 ACL、NAT、VPN、堡垒机或反向代理；OpenClaw 只配置目标机实际看到的私网来源。
-- 公网客户 IP 白名单写入上游 ACL 或安全组，并在 evidence JSON 中体现该上游策略；OpenClaw allowlist 只记录目标机可见的私网来源。
-- 访问端验收时，先确认目标机日志或上游转发记录中的实际来源地址，再执行 `check_client_access_acceptance.sh`。
+- OpenClaw 本机 ingress 接受私网、loopback 或精确公网主机 CIDR；公网来源只允许 `/32` IPv4 或 `/128` IPv6。
+- 公网访问必须以目标机实际看到的来源为准；若目标机看到的是公网出口地址，只填写该精确主机段；若由上游 ACL、TUN、NAT、VPN、堡垒机或反向代理转为私网来源，则填写转换后的私网来源。
+- 需要放行公网网段时，不写入 OpenClaw 本机 allowlist；应写入上游 ACL 或安全组，并在 external_acl evidence JSON 中体现该上游策略。
+- 访问端验收时，先确认目标机日志或上游转发记录中的实际来源地址，再执行 `check_client_access_acceptance.sh --observed-source-cidr <cidr[,cidr]>`。
 
 ```text
 OPENCLAW_INGRESS_BOUNDARY_MODE=external_acl
 OPENCLAW_INGRESS_LISTEN_IP=<目标机私网IP>
-OPENCLAW_INGRESS_ALLOWED_SOURCE_CIDRS=<目标机自检IP/32>,<上游设备私网IP/32或私网段>
+OPENCLAW_INGRESS_ALLOWED_SOURCE_CIDRS=<目标机自检IP/32>,<目标机或上游记录实际观测来源CIDR>
 OPENCLAW_INGRESS_BOUNDARY_EVIDENCE_PATH=<目标机可读取的external_acl证据JSON>
 ```
 
@@ -82,7 +89,7 @@ OPENCLAW_INGRESS_BOUNDARY_EVIDENCE_PATH=<目标机可读取的external_acl证据
 
 - `OPENCLAW_INGRESS_LISTEN_IP`：private ingress 在目标机绑定的唯一私网或 loopback IP（填写位置：`deploy/site.env`）
 - `OPENCLAW_TLS_CN`：唯一访问主机名、证书主机名与 Gateway Control UI origin（填写位置：`deploy/site.env`）
-- `OPENCLAW_INGRESS_ALLOWED_SOURCE_CIDRS`：允许访问 private ingress 80/443 的来源网段（逗号分隔，仅接受私网或 loopback IPv4/IPv6 CIDR）（填写位置：`deploy/site.env`）
+- `OPENCLAW_INGRESS_ALLOWED_SOURCE_CIDRS`：允许访问 private ingress 80/443 的实际观测来源 CIDR（逗号分隔，接受私网、loopback 或精确公网主机 CIDR）（填写位置：`deploy/site.env`）
 
 ## 条件必填
 
@@ -171,27 +178,27 @@ hostname -I | tr ' ' '\n' | grep -E '^(10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.|192\.1
 - 填写时机：第 2 步必须人工确认；这是 private ingress 来源限制的固定输入项。
 - 含义：该字段定义“谁可以访问 ingress”，描述的是流量来源面，而不是目标机绑定地址。
 - 填写：
-  - 直连办公网或堡垒机访问时，未确认目标机实际看到的来源地址就填写访问端所在网段。
-  - 通过 VPN 访问时，填写 VPN 地址池或 VPN 出口 NAT 网段；不要机械填写用户电脑本地 Wi-Fi 网段。
-  - 通过上游 ACL、安全组、负载均衡或代理访问时，填写目标机最终看到、且被上游放行到目标机的源地址网段。
+  - 直连办公网或堡垒机访问时，先通过目标机日志、抓包或上游转发记录确认实际来源，再填写该来源的最小 CIDR。
+  - 通过 TUN/VPN 访问时，填写目标机实际看到的 TUN/VPN 出口、地址池或出口 NAT 网段；公网 EIP 场景填写目标机实际看到的公网出口 `/32` 或 `/128`，不要机械填写用户电脑本地 Wi-Fi 私网段。
+  - 通过上游 ACL、安全组、负载均衡或代理访问时，填写目标机最终看到、且被上游放行到目标机的实际观测来源 CIDR。
   - 同时加入目标机本机执行 full test 时的来源地址：通常就是 `OPENCLAW_INGRESS_LISTEN_IP/32`（IPv4）或 `/128`（IPv6）。
   - 始终按最小必要来源面填写；没有业务必要时，不要把整个 10.0.0.0/8、192.168.0.0/16 或泛化虚拟交换机大网段直接写入。
   - 跨 OS / 跨网络实例访问时，优先收窄为目标机实际看到的访问端源 IP `/32`；若网络层只暴露链路网段或网关翻译地址，再填写该链路网段或翻译后 `/32`。
-- 约束：只允许逗号分隔的私网或 loopback IPv4/IPv6 CIDR；系统会归一化网络前缀、拒绝重复项，并要求输入值按最小必要范围填写。
+- 约束：只允许逗号分隔的私网、loopback 或精确公网主机 IPv4/IPv6 CIDR；公网 IPv4 必须是 `/32`，公网 IPv6 必须是 `/128`；系统会归一化网络前缀、拒绝重复项，并要求输入值按最小必要范围填写。
 - 避免：
   - 遗漏目标机本机验收来源，导致 one_click_deploy 的 `/healthz` / `/readyz` 检查在目标机本机返回 403。
-  - 把 Docker bridge 网段、容器网段或任意公网 CIDR 写进该字段。
-  - VPN / NAT 场景只按终端本机网段填写，忽略目标机实际看到的源地址面。
+  - 把 Docker bridge 网段、容器网段、公网网段或非精确公网主机 CIDR 写进该字段。
+  - TUN / VPN / NAT 场景只按终端本机网段、api.ipify 出口或 Wi-Fi 网段填写，忽略目标机实际看到的源地址面。
   - 为了图省事直接放开整个办公私网、虚拟交换机大网段或超出当前业务所需的泛化私网段。
   - 字段值与 Nginx 渲染 allowlist、host_firewall 或 external_acl 证据中的 `source_cidrs` / `ip_families` 不一致。
-  - 把访问端本地网卡整段、目标机所在大网段、本地 Wi-Fi 网段或未实际命中的 NAT 前地址写进该字段，而不是目标机实际看到的来源地址面。
+  - 把访问端本地网卡整段、目标机所在大网段、本地 Wi-Fi 私网段、api.ipify/TUN 出口推断值或未实际命中的 NAT 前地址写进该字段，而不是目标机实际看到的来源地址面。
 - 验证：
   - 执行 `bash ./scripts/setup/one_click_config.sh` 后，先执行 `bash ./scripts/runtime/run_openclaw_python_tool.sh setup env validate --env-file deploy/.env`。
   - 配置校验会确认 `OPENCLAW_INGRESS_ALLOWED_SOURCE_CIDRS` 包含目标机本机验收来源；缺失时不要继续到 full test。
   - 再立即执行 `sudo bash ./scripts/setup/apply_ingress_boundary_rules.sh --env-file deploy/.env` 与 `sudo bash ./scripts/doctor/check_ingress_boundary_evidence.sh --env-file deploy/.env`，不要等到 full test 才发现来源限制口径错误。
   - 部署渲染 `nginx.gateway.conf` 后，部署用户会复用 root 侧基础 evidence，对当前 Nginx allowlist 做本地校验，并把 `nginx_policy` 合并回 evidence；只有基础 evidence 缺失、env 漂移或本地 Nginx 校验失败时，才补跑 `sudo bash ./scripts/doctor/check_ingress_boundary_evidence.sh --env-file deploy/.env --require-nginx-policy`。
   - external_acl 模式下，证据文件中的 `source_cidrs` 必须与该字段归一化后集合一致。
-  - 跨 OS / 跨网络实例访问时，先确认浏览器访问目标机时目标机实际看到的来源地址，再让 host_firewall 或 external_acl 证据与该地址面精确一致。
+  - 跨 OS / 跨网络实例访问时，先确认浏览器访问目标机时目标机实际看到的来源地址；若访问端使用 TUN/VPN，必须以目标机或上游记录看到的出口地址为准，再让 host_firewall 或 external_acl 证据与该地址面精确一致。
 - 命令示例：
 
 ```text
@@ -235,13 +242,13 @@ ip route get <OPENCLAW_INGRESS_LISTEN_IP>  # 在 Linux 宿主机读取 src，优
 
 ### `OPENCLAW_CONTROL_PLANE_PROFILE`
 
-- 填写时机：默认使用 agent_platform；启用业务扩展或受控组合 profile 时填写对应 profile id。
+- 填写时机：默认使用 agent_platform；启用业务扩展或仓内组合 profile 时填写对应 profile id。
 - 含义：该字段选择 active control-plane service profile，并驱动扩展 deploy env schema、扩展内部 agent/extensions/<extension-id>/deploy/extension.env、dispatch target registry、模型输入与运行态路径合并。
 - 填写：
   - 先执行 profile 列表命令，确认要启用的 profile id。
   - 默认保留 agent_platform。
   - 启用单个业务扩展时，填写 profile 列表中登记或有效发现的扩展 profile id。
-  - 启用仓内受控组合 profile 时，填写 profile_registry.tsv 中登记的组合 profile id。
+  - 启用仓内组合 profile 时，填写 profile_registry.tsv 中登记的组合 profile id。
   - 组合 profile 中 OLLAMA_BASE_URL 与 OLLAMA_MODEL_REF 是共享模型输入，写入 deploy/site.env；扩展专属 provider、角色、通知目标与功能开关变量写入对应 agent/extensions/<extension-id>/deploy/extension.env。
   - 不要填写 /opt/openclaw-tools/.../*.service.json 路径。
 - 约束：只允许已登记或有效发现的 profile id；例如 agent_platform、扩展 profile id 或组合 profile id。
@@ -264,8 +271,8 @@ bash ./scripts/runtime/run_openclaw_python_tool.sh control-plane config profiles
 1. `OPENCLAW_TLS_CN` 是唯一访问主机名、证书主机名与 Gateway Control UI origin。
 2. `OPENCLAW_INGRESS_LISTEN_IP` 只用于私有 HTTPS ingress 绑定；Gateway 容器内 bind 固定遵循容器侧网络合同。
 3. `OPENCLAW_INGRESS_LISTEN_IP` 仅接受 RFC1918/loopback IPv4 或 ULA/loopback IPv6 字面量；拒绝 hostname、0.0.0.0/:: 与公网地址。
-4. 只有浏览器与目标服务位于同一操作系统实例时，`OPENCLAW_INGRESS_LISTEN_IP` 才允许使用 loopback；跨机器、跨 OS / 跨网络实例、VPN 或上游代理场景都不属于该例外。
-5. `OPENCLAW_INGRESS_ALLOWED_SOURCE_CIDRS` 用于定义 ingress 允许来源段；host_firewall 模式下 root 侧基础 evidence 必须把它与宿主机防火墙规则逐项对齐，部署用户侧会把当前 Nginx allowlist 校验结果合并回 evidence；external_acl 模式必须把它与结构化证据逐项对齐，并按最小必要来源面填写。
+4. 只有浏览器与目标服务位于同一操作系统实例时，`OPENCLAW_INGRESS_LISTEN_IP` 才允许使用 loopback；跨机器、跨 OS / 跨网络实例、TUN、VPN 或上游代理场景都不属于该例外。
+5. `OPENCLAW_INGRESS_ALLOWED_SOURCE_CIDRS` 用于定义 ingress 允许的实际观测来源 CIDR；host_firewall 模式下 root 侧基础 evidence 必须把它与宿主机防火墙规则逐项对齐，部署用户侧会把当前 Nginx allowlist 校验结果合并回 evidence；external_acl 模式必须把它与结构化证据逐项对齐，并按最小必要来源面填写。
 6. `OPENCLAW_INGRESS_ALLOWED_SOURCE_CIDRS` 必须包含目标机本机 full test 来源；默认 one_click_deploy 会在目标机本机通过 ingress 验证 `/healthz` 与 `/readyz`。
 7. 当前部署输入不接受未登记的 `OPENCLAW_*` 键。
 8. 当前部署输入只接受单一官方 Gateway token auth 所需字段。
@@ -275,7 +282,7 @@ bash ./scripts/runtime/run_openclaw_python_tool.sh control-plane config profiles
 12. `OPENCLAW_TLS_MODE` 只允许 `self_signed` 或 `provided_files`；切换到 `provided_files` 时，必须同时提供 `OPENCLAW_TLS_CERT_SOURCE_PATH` / `OPENCLAW_TLS_KEY_SOURCE_PATH`。
 13. `provided_files` 模式要求外部 PEM 证书包含精确 `dNSName:OPENCLAW_TLS_CN` SAN、未过期，并与未加密 PEM 私钥匹配；目标机与访问端必须已信任签发链。
 14. `OPENCLAW_INGRESS_BOUNDARY_MODE` 只允许 `host_firewall` 或 `external_acl`；切换到 `external_acl` 时，必须同时提供 `OPENCLAW_INGRESS_BOUNDARY_EVIDENCE_PATH`。
-15. `OPENCLAW_INGRESS_ALLOWED_SOURCE_CIDRS` 只允许逗号分隔的私网或 loopback IPv4/IPv6 CIDR，并作为 ingress 来源限制的固定输入项；没有业务必要时不得放开泛化私网大网段，公网客户端 CIDR 只能写在上游 ACL 或安全组策略中。
+15. `OPENCLAW_INGRESS_ALLOWED_SOURCE_CIDRS` 只允许逗号分隔的私网、loopback 或精确公网主机 IPv4/IPv6 CIDR，并作为 ingress 来源限制的固定输入项；没有业务必要时不得放开泛化私网大网段，公网网段只能写在上游 ACL 或安全组策略中。
 16. root 侧 `apply_ingress_boundary_rules.sh` 会写出与当前 env 对齐的基础 evidence；部署阶段渲染 Nginx 后，部署用户会本地校验 allowlist 并把 `nginx_policy` 合并到 `<current-host-state-root>/control_plane/setup/ingress_boundary_evidence.json`。只有基础 evidence 缺失、env 漂移或本地 Nginx 校验失败时，才补跑 root 侧 `check_ingress_boundary_evidence.sh --require-nginx-policy`。
 17. `external_acl` 模式下，证据文件必须是结构化 JSON，并且其中 `source_cidrs`、`allowed_ports`、`default_deny`、`ip_families`、`enforcement_plane` 与目标信息必须能证明和当前部署输入一致。
 18. 模型/API provider 输入只有在当前 active profile 的 deploy env schema 明确声明时才可填写；未声明时不要向 deploy/site.env 增加额外 provider 字段。

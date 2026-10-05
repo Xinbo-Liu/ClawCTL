@@ -15,18 +15,18 @@
       "publicMissingDocstrings": 0
     },
     "python/openclaw/docs/renderers/__init__.py": {
-      "moduleHasChineseDocstring": false,
-      "publicChineseDocstrings": 0,
+      "moduleHasChineseDocstring": true,
+      "publicChineseDocstrings": 1,
       "publicEnglishOnlyDocstrings": 0,
       "publicItemBaselines": {
         "module:<module>": {
-          "hasChineseDocstring": false,
-          "hasDocstring": false,
+          "hasChineseDocstring": true,
+          "hasDocstring": true,
           "kind": "module",
           "qualname": "<module>"
         }
       },
-      "publicMissingDocstrings": 1
+      "publicMissingDocstrings": 0
     },
     "python/openclaw/docs/renderers/getting_started.py": {
       "moduleHasChineseDocstring": true,
@@ -87,8 +87,8 @@
       "publicMissingDocstrings": 0
     },
     "python/openclaw/docs/renderers/getting_started_support/fragments.py": {
-      "moduleHasChineseDocstring": false,
-      "publicChineseDocstrings": 0,
+      "moduleHasChineseDocstring": true,
+      "publicChineseDocstrings": 1,
       "publicEnglishOnlyDocstrings": 0,
       "publicItemBaselines": {
         "function:default_flow_steps": {
@@ -152,17 +152,17 @@
           "qualname": "render_text_block"
         },
         "module:<module>": {
-          "hasChineseDocstring": false,
-          "hasDocstring": false,
+          "hasChineseDocstring": true,
+          "hasDocstring": true,
           "kind": "module",
           "qualname": "<module>"
         }
       },
-      "publicMissingDocstrings": 11
+      "publicMissingDocstrings": 10
     },
     "python/openclaw/docs/renderers/getting_started_support/loaders.py": {
-      "moduleHasChineseDocstring": false,
-      "publicChineseDocstrings": 0,
+      "moduleHasChineseDocstring": true,
+      "publicChineseDocstrings": 1,
       "publicEnglishOnlyDocstrings": 0,
       "publicItemBaselines": {
         "function:conditional_manual_field_lines": {
@@ -220,17 +220,17 @@
           "qualname": "sorted_fields"
         },
         "module:<module>": {
-          "hasChineseDocstring": false,
-          "hasDocstring": false,
+          "hasChineseDocstring": true,
+          "hasDocstring": true,
           "kind": "module",
           "qualname": "<module>"
         }
       },
-      "publicMissingDocstrings": 10
+      "publicMissingDocstrings": 9
     },
     "python/openclaw/docs/renderers/getting_started_support/pages.py": {
-      "moduleHasChineseDocstring": false,
-      "publicChineseDocstrings": 0,
+      "moduleHasChineseDocstring": true,
+      "publicChineseDocstrings": 1,
       "publicEnglishOnlyDocstrings": 0,
       "publicItemBaselines": {
         "function:environment_setup_doc": {
@@ -252,13 +252,13 @@
           "qualname": "render_docs"
         },
         "module:<module>": {
-          "hasChineseDocstring": false,
-          "hasDocstring": false,
+          "hasChineseDocstring": true,
+          "hasDocstring": true,
           "kind": "module",
           "qualname": "<module>"
         }
       },
-      "publicMissingDocstrings": 4
+      "publicMissingDocstrings": 3
     },
     "python/openclaw/docs/renderers/maintenance_map.py": {
       "moduleHasChineseDocstring": true,
@@ -361,12 +361,12 @@
       "publicMissingDocstrings": 8
     },
     "python/openclaw/docs/renderers/runtime_surface_support/__init__.py": {
-      "moduleHasChineseDocstring": false,
-      "publicChineseDocstrings": 0,
-      "publicEnglishOnlyDocstrings": 1,
+      "moduleHasChineseDocstring": true,
+      "publicChineseDocstrings": 1,
+      "publicEnglishOnlyDocstrings": 0,
       "publicItemBaselines": {
         "module:<module>": {
-          "hasChineseDocstring": false,
+          "hasChineseDocstring": true,
           "hasDocstring": true,
           "kind": "module",
           "qualname": "<module>"
@@ -375,9 +375,9 @@
       "publicMissingDocstrings": 0
     },
     "python/openclaw/docs/renderers/runtime_surface_support/loaders.py": {
-      "moduleHasChineseDocstring": false,
-      "publicChineseDocstrings": 0,
-      "publicEnglishOnlyDocstrings": 1,
+      "moduleHasChineseDocstring": true,
+      "publicChineseDocstrings": 1,
+      "publicEnglishOnlyDocstrings": 0,
       "publicItemBaselines": {
         "function:load_json_object": {
           "hasChineseDocstring": false,
@@ -404,7 +404,7 @@
           "qualname": "read_manifest"
         },
         "module:<module>": {
-          "hasChineseDocstring": false,
+          "hasChineseDocstring": true,
           "hasDocstring": true,
           "kind": "module",
           "qualname": "<module>"
@@ -413,9 +413,9 @@
       "publicMissingDocstrings": 4
     },
     "python/openclaw/docs/renderers/runtime_surface_support/pages.py": {
-      "moduleHasChineseDocstring": false,
-      "publicChineseDocstrings": 0,
-      "publicEnglishOnlyDocstrings": 1,
+      "moduleHasChineseDocstring": true,
+      "publicChineseDocstrings": 1,
+      "publicEnglishOnlyDocstrings": 0,
       "publicItemBaselines": {
         "function:render_doc": {
           "hasChineseDocstring": false,
@@ -424,7 +424,7 @@
           "qualname": "render_doc"
         },
         "module:<module>": {
-          "hasChineseDocstring": false,
+          "hasChineseDocstring": true,
           "hasDocstring": true,
           "kind": "module",
           "qualname": "<module>"
@@ -433,9 +433,9 @@
       "publicMissingDocstrings": 1
     },
     "python/openclaw/docs/renderers/runtime_surface_support/sections.py": {
-      "moduleHasChineseDocstring": false,
-      "publicChineseDocstrings": 0,
-      "publicEnglishOnlyDocstrings": 1,
+      "moduleHasChineseDocstring": true,
+      "publicChineseDocstrings": 1,
+      "publicEnglishOnlyDocstrings": 0,
       "publicItemBaselines": {
         "function:append_steps": {
           "hasChineseDocstring": false,
@@ -462,7 +462,7 @@
           "qualname": "runtime_source_rows"
         },
         "module:<module>": {
-          "hasChineseDocstring": false,
+          "hasChineseDocstring": true,
           "hasDocstring": true,
           "kind": "module",
           "qualname": "<module>"
@@ -472,7 +472,7 @@
     },
     "python/openclaw/docs/renderers/script_catalog.py": {
       "moduleHasChineseDocstring": true,
-      "publicChineseDocstrings": 1,
+      "publicChineseDocstrings": 2,
       "publicEnglishOnlyDocstrings": 0,
       "publicItemBaselines": {
         "function:collect_script_files": {
@@ -493,6 +493,12 @@
           "kind": "function",
           "qualname": "render_entry"
         },
+        "function:usage": {
+          "hasChineseDocstring": true,
+          "hasDocstring": true,
+          "kind": "function",
+          "qualname": "usage"
+        },
         "function:validate_catalog_against_filesystem": {
           "hasChineseDocstring": false,
           "hasDocstring": false,
@@ -509,8 +515,8 @@
       "publicMissingDocstrings": 4
     },
     "python/openclaw/docs/renderers/workspace_user_sections.py": {
-      "moduleHasChineseDocstring": false,
-      "publicChineseDocstrings": 0,
+      "moduleHasChineseDocstring": true,
+      "publicChineseDocstrings": 1,
       "publicEnglishOnlyDocstrings": 0,
       "publicItemBaselines": {
         "function:main": {
@@ -526,27 +532,27 @@
           "qualname": "render_entry"
         },
         "module:<module>": {
-          "hasChineseDocstring": false,
-          "hasDocstring": false,
+          "hasChineseDocstring": true,
+          "hasDocstring": true,
           "kind": "module",
           "qualname": "<module>"
         }
       },
-      "publicMissingDocstrings": 3
+      "publicMissingDocstrings": 2
     },
     "python/openclaw/docs/support/__init__.py": {
-      "moduleHasChineseDocstring": false,
-      "publicChineseDocstrings": 0,
+      "moduleHasChineseDocstring": true,
+      "publicChineseDocstrings": 1,
       "publicEnglishOnlyDocstrings": 0,
       "publicItemBaselines": {
         "module:<module>": {
-          "hasChineseDocstring": false,
-          "hasDocstring": false,
+          "hasChineseDocstring": true,
+          "hasDocstring": true,
           "kind": "module",
           "qualname": "<module>"
         }
       },
-      "publicMissingDocstrings": 1
+      "publicMissingDocstrings": 0
     },
     "python/openclaw/docs/support/doc_targets.py": {
       "moduleHasChineseDocstring": true,
@@ -649,8 +655,8 @@
       "publicMissingDocstrings": 7
     },
     "python/openclaw/docs/support/markdown_tables.py": {
-      "moduleHasChineseDocstring": false,
-      "publicChineseDocstrings": 0,
+      "moduleHasChineseDocstring": true,
+      "publicChineseDocstrings": 1,
       "publicEnglishOnlyDocstrings": 0,
       "publicItemBaselines": {
         "function:format_markdown_tables": {
@@ -660,13 +666,13 @@
           "qualname": "format_markdown_tables"
         },
         "module:<module>": {
-          "hasChineseDocstring": false,
-          "hasDocstring": false,
+          "hasChineseDocstring": true,
+          "hasDocstring": true,
           "kind": "module",
           "qualname": "<module>"
         }
       },
-      "publicMissingDocstrings": 2
+      "publicMissingDocstrings": 1
     },
     "python/openclaw/docs/support/reference_specs.py": {
       "moduleHasChineseDocstring": true,
@@ -857,12 +863,12 @@
       "publicMissingDocstrings": 29
     },
     "python/openclaw/docs/support/reference_specs_support/__init__.py": {
-      "moduleHasChineseDocstring": false,
-      "publicChineseDocstrings": 0,
-      "publicEnglishOnlyDocstrings": 1,
+      "moduleHasChineseDocstring": true,
+      "publicChineseDocstrings": 1,
+      "publicEnglishOnlyDocstrings": 0,
       "publicItemBaselines": {
         "module:<module>": {
-          "hasChineseDocstring": false,
+          "hasChineseDocstring": true,
           "hasDocstring": true,
           "kind": "module",
           "qualname": "<module>"
@@ -871,9 +877,9 @@
       "publicMissingDocstrings": 0
     },
     "python/openclaw/docs/support/reference_specs_support/io.py": {
-      "moduleHasChineseDocstring": false,
-      "publicChineseDocstrings": 0,
-      "publicEnglishOnlyDocstrings": 1,
+      "moduleHasChineseDocstring": true,
+      "publicChineseDocstrings": 1,
+      "publicEnglishOnlyDocstrings": 0,
       "publicItemBaselines": {
         "function:escape_regexp": {
           "hasChineseDocstring": false,
@@ -900,7 +906,7 @@
           "qualname": "read_json"
         },
         "module:<module>": {
-          "hasChineseDocstring": false,
+          "hasChineseDocstring": true,
           "hasDocstring": true,
           "kind": "module",
           "qualname": "<module>"
@@ -909,9 +915,9 @@
       "publicMissingDocstrings": 4
     },
     "python/openclaw/docs/support/reference_specs_support/router.py": {
-      "moduleHasChineseDocstring": false,
-      "publicChineseDocstrings": 0,
-      "publicEnglishOnlyDocstrings": 1,
+      "moduleHasChineseDocstring": true,
+      "publicChineseDocstrings": 1,
+      "publicEnglishOnlyDocstrings": 0,
       "publicItemBaselines": {
         "function:render_automatic_route_list": {
           "hasChineseDocstring": false,
@@ -950,7 +956,7 @@
           "qualname": "router_route_specs"
         },
         "module:<module>": {
-          "hasChineseDocstring": false,
+          "hasChineseDocstring": true,
           "hasDocstring": true,
           "kind": "module",
           "qualname": "<module>"
@@ -959,9 +965,9 @@
       "publicMissingDocstrings": 6
     },
     "python/openclaw/docs/support/reference_specs_support/scripts.py": {
-      "moduleHasChineseDocstring": false,
-      "publicChineseDocstrings": 0,
-      "publicEnglishOnlyDocstrings": 1,
+      "moduleHasChineseDocstring": true,
+      "publicChineseDocstrings": 1,
+      "publicEnglishOnlyDocstrings": 0,
       "publicItemBaselines": {
         "function:get_all_script_entries": {
           "hasChineseDocstring": false,
@@ -1054,7 +1060,7 @@
           "qualname": "validate_script_surface_manifest"
         },
         "module:<module>": {
-          "hasChineseDocstring": false,
+          "hasChineseDocstring": true,
           "hasDocstring": true,
           "kind": "module",
           "qualname": "<module>"
@@ -1063,9 +1069,9 @@
       "publicMissingDocstrings": 15
     },
     "python/openclaw/docs/support/reference_specs_support/workspace.py": {
-      "moduleHasChineseDocstring": false,
-      "publicChineseDocstrings": 0,
-      "publicEnglishOnlyDocstrings": 1,
+      "moduleHasChineseDocstring": true,
+      "publicChineseDocstrings": 1,
+      "publicEnglishOnlyDocstrings": 0,
       "publicItemBaselines": {
         "function:begin_marker": {
           "hasChineseDocstring": false,
@@ -1110,7 +1116,7 @@
           "qualname": "replace_workspace_managed_block"
         },
         "module:<module>": {
-          "hasChineseDocstring": false,
+          "hasChineseDocstring": true,
           "hasDocstring": true,
           "kind": "module",
           "qualname": "<module>"
@@ -1119,12 +1125,12 @@
       "publicMissingDocstrings": 7
     },
     "python/openclaw/docs/support/text_contracts.py": {
-      "moduleHasChineseDocstring": false,
-      "publicChineseDocstrings": 0,
-      "publicEnglishOnlyDocstrings": 2,
+      "moduleHasChineseDocstring": true,
+      "publicChineseDocstrings": 2,
+      "publicEnglishOnlyDocstrings": 0,
       "publicItemBaselines": {
         "class:TextContractError": {
-          "hasChineseDocstring": false,
+          "hasChineseDocstring": true,
           "hasDocstring": true,
           "kind": "class",
           "qualname": "TextContractError"
@@ -1160,7 +1166,7 @@
           "qualname": "resolve_text_refs"
         },
         "module:<module>": {
-          "hasChineseDocstring": false,
+          "hasChineseDocstring": true,
           "hasDocstring": true,
           "kind": "module",
           "qualname": "<module>"
@@ -1169,18 +1175,18 @@
       "publicMissingDocstrings": 5
     },
     "python/openclaw/docs/validators/__init__.py": {
-      "moduleHasChineseDocstring": false,
-      "publicChineseDocstrings": 0,
+      "moduleHasChineseDocstring": true,
+      "publicChineseDocstrings": 1,
       "publicEnglishOnlyDocstrings": 0,
       "publicItemBaselines": {
         "module:<module>": {
-          "hasChineseDocstring": false,
-          "hasDocstring": false,
+          "hasChineseDocstring": true,
+          "hasDocstring": true,
           "kind": "module",
           "qualname": "<module>"
         }
       },
-      "publicMissingDocstrings": 1
+      "publicMissingDocstrings": 0
     },
     "python/openclaw/docs/validators/boundaries.py": {
       "moduleHasChineseDocstring": true,

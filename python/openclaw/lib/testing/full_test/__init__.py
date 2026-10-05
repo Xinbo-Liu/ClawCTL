@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Full-test control-plane public exports."""
+"""提供OpenClaw lib子系统的生产实现。"""
 from __future__ import annotations
 
 from openclaw.lib.testing.full_test.acceptance import (

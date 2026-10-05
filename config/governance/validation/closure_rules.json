@@ -490,10 +490,10 @@
           ],
           "lookup_match_value": "docs/operations/README.md",
           "key_path": [
-            "entrypointContract",
+            "boundaryContract",
             "requiredRefs"
           ],
-          "label": "documentation_entrypoints.operations_readme.requiredRefs",
+          "label": "documentation_boundaries.operations_readme.requiredRefs",
           "item_key_path": [
             "path"
           ]

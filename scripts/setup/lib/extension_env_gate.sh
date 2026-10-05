@@ -7,7 +7,6 @@ EXTENSION_ENV_GATE_REPO_ROOT="$(cd "$EXTENSION_ENV_GATE_LIB_DIR/.." && cd .. && 
 # shellcheck source=scripts/lib/control_plane_config_paths.sh
 source "$EXTENSION_ENV_GATE_REPO_ROOT/scripts/lib/control_plane_config_paths.sh"
 unset EXTENSION_ENV_GATE_LIB_DIR EXTENSION_ENV_GATE_REPO_ROOT
-
 extension_env_gate_deploy_env_value() {
   local root_dir="$1"
   local key="$2"
@@ -30,7 +29,6 @@ extension_env_gate_deploy_env_value() {
     }
   ' "$env_file"
 }
-
 extension_env_gate_scheduler_state_host_dir() {
   local root_dir="$1"
   local host_state_root="${HOST_STATE_DIR:-}"
@@ -43,7 +41,6 @@ extension_env_gate_scheduler_state_host_dir() {
     *) printf '%s/%s/control_plane\n' "$root_dir" "${host_state_root%/}" ;;
   esac
 }
-
 extension_env_gate_resolve_host_config_path() {
   local root_dir="$1"
   local config_path="$2"
@@ -72,7 +69,6 @@ extension_env_gate_resolve_host_config_path() {
   fi
   printf '%s\n' "$resolved"
 }
-
 extension_env_gate_verify_lifecycle_lock() {
   local root_dir="$1"
   local label="${2:-extension_env}"
@@ -85,7 +81,6 @@ extension_env_gate_verify_lifecycle_lock() {
     return 2
   fi
 }
-
 extension_env_gate_verify_active_profile() {
   local root_dir="$1"
   local config_path="$2"
@@ -110,7 +105,6 @@ extension_env_gate_verify_active_profile() {
     return 2
   fi
 }
-
 extension_env_gate_ensure_active_profile() {
   local root_dir="$1"
   local config_path="$2"

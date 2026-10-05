@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 # 用途：为 deploy / release / full test 主链提供统一的摘要写出与终端摘要输出桥接，避免各自维护同类 shell 循环。
 set -euo pipefail
-
 summary_run_prefix() {
   local prefix_name="$1"
   shift
@@ -18,14 +17,12 @@ summary_run_prefix() {
       ;;
   esac
 }
-
 summary_write() {
   local prefix_name="$1"
   local command="$2"
   shift 2
   summary_run_prefix "$prefix_name" "$command" "$@"
 }
-
 summary_note_paths() {
   local log_func="$1"
   local summary_md_path="$2"
@@ -33,7 +30,6 @@ summary_note_paths() {
   "$log_func" "[INFO] 摘要文件：$summary_md_path"
   "$log_func" "[INFO] 机器摘要：$summary_json_path"
 }
-
 summary_emit() {
   local log_func="$1"
   local helper="$2"

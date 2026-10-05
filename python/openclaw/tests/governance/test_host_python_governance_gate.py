@@ -111,15 +111,12 @@ class HostPythonGovernanceGateTest(unittest.TestCase):
                     'pattern': '(^|[[:space:]])(exec[[:space:]]+)?\\\"?\\$\\{?PYTHON_BIN\\}?\\\"?[[:space:]]+-B([[:space:]]|$)',
                 }
             ],
-            'doc_command_policy': {
-                'allowed_families': ['repo_host', 'unittest_openclaw'],
-            },
         }
 
-    def test_observe_mode_allows_supported_repo_root_unittest_example_without_baseline_hit(self) -> None:
+    def test_observe_mode_reports_repo_root_unittest_example(self) -> None:
         line = 'python -m unittest openclaw.tests.governance.test_package_layout -q'
 
-        self.assertFalse(_has_uncovered_doc_pattern_match(line))
+        self.assertTrue(_has_uncovered_doc_pattern_match(line))
 
     def test_observe_mode_fails_for_new_doc_hit(self) -> None:
         line = 'python -m openclaw.doctor.platform.architecture_import_guards'
@@ -132,7 +129,7 @@ class HostPythonGovernanceGateTest(unittest.TestCase):
         self.assertTrue(_has_uncovered_doc_pattern_match(line))
 
     def test_observe_mode_fails_for_wrong_python_namespace_doc_hit(self) -> None:
-        line = 'python -m unittest python.openclaw.tests.governance.test_delivery_cleanliness -q'
+        line = 'python -m unittest python.openclaw.tests.doctor.test_release_gate -q'
 
         self.assertTrue(_has_uncovered_doc_pattern_match(line))
 
@@ -143,6 +140,34 @@ class HostPythonGovernanceGateTest(unittest.TestCase):
         pattern = next(item['pattern'] for item in patterns if item['id'] == 'python_bin_exec_upper')
 
         self.assertTrue(self._posix_ere_search(str(pattern), 'exec "$PYTHON_BIN" -B -m openclaw.demo'))
+
+    def test_runtime_state_shell_files_are_excluded_from_source_scan(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repo_root = Path(tmpdir)
+            target = repo_root / 'state' / 'openclaw' / 'control_plane' / 'upgrade' / 'source-sync.x' / 'source' / 'scripts' / 'demo.sh'
+            target.parent.mkdir(parents=True)
+            target.write_text('exec "$PYTHON_BIN" -B -m openclaw.demo\n', encoding='utf-8')
+            config_path = repo_root / 'config' / 'governance' / 'support' / 'host_python_governance.json'
+            baseline_path = repo_root / 'config' / 'governance' / 'validation' / 'host_python_baseline.json'
+            _write_json(config_path, self._config_payload(mode='enforce'))
+            _write_json(
+                baseline_path,
+                {
+                    'schemaVersion': 1,
+                    'categories': {
+                        'shell_exec': [],
+                        'shell_indirect_exec': [],
+                        'doc_example': [],
+                        'generated_doc_example': [],
+                        'extension_doc_example': [],
+                    },
+                },
+            )
+
+            report = host_python_governance.build_report(repo_root, config_path=config_path)
+
+        self.assertEqual(report['status'], 'ok')
+        self.assertEqual(report['summary']['currentCount'], 0)
 
     def test_enforce_mode_fails_even_for_baseline_hit(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -172,37 +197,6 @@ class HostPythonGovernanceGateTest(unittest.TestCase):
 
         self.assertEqual(payload['status'], 'fail')
         self.assertEqual(payload['summary']['newCount'], 1)
-
-    def test_doc_scan_uses_command_family_policy(self) -> None:
-        with tempfile.TemporaryDirectory() as tmpdir:
-            repo_root = Path(tmpdir)
-            target = repo_root / 'docs' / 'guide.md'
-            target.parent.mkdir(parents=True)
-            line = 'python -m unittest openclaw.tests.governance.test_package_layout -q'
-            target.write_text(line + '\n', encoding='utf-8')
-            config_path = repo_root / 'config' / 'governance' / 'support' / 'host_python_governance.json'
-            baseline_path = repo_root / 'config' / 'governance' / 'validation' / 'host_python_baseline.json'
-            payload = self._config_payload(mode='enforce')
-            payload['doc_command_policy'] = {'allowed_families': ['repo_host']}
-            _write_json(config_path, payload)
-            _write_json(
-                baseline_path,
-                {
-                    'schemaVersion': 1,
-                    'categories': {
-                        'shell_exec': [],
-                        'shell_indirect_exec': [],
-                        'doc_example': [],
-                        'generated_doc_example': [],
-                        'extension_doc_example': [],
-                    },
-                },
-            )
-
-            report = host_python_governance.build_report(repo_root, config_path=config_path)
-
-        self.assertEqual(report['status'], 'fail')
-        self.assertEqual(report['newViolations'][0]['text'], 'python -m unittest openclaw.tests.governance.test_package_layout')
 
 
 if __name__ == '__main__':

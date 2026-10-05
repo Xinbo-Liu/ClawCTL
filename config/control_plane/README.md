@@ -7,9 +7,10 @@
 - `service.json`：base service 装配入口
 - `profiles/*.service.json`：仓库内正式 profile
 - `profile_registry.tsv`：control-plane profile id 到正式 service 配置路径的显式登记真源
-- `extensions.d/*.json`：仓库内正式 extension manifest
+- `extensions.d/`：平台 extension manifest 及其声明的 fragment 真源
 - `schemas/`：base control-plane 与 extension 装配合同
 - `object_families.json`：base 全局对象族与路径规则
+- [jobs/README.md](jobs/README.md)、[models/README.md](models/README.md)、[targets/README.md](targets/README.md)：空集合职责与对象合同说明。
 
 ## 边界
 
@@ -28,4 +29,10 @@
 
 启用任何非平台 extension 的 profile 必须先启用 `agent_platform`。profile 继承链、base registry 路径、schema 路径与 manifest 目录都必须留在同一仓库内；业务 extension 暴露的 callable 入口必须来自自身扩展包 Python root。
 
-base 全局对象族继续直接读取；extension owner 的对象族、诊断面、router / dispatch / recovery surface 在同名冲突时必须显式传 `--extension <id>`。
+base 全局对象族按 base service 声明直接读取；extension owner 的对象族、诊断面、router / dispatch / recovery surface 在同名冲突时必须显式传 `--extension <id>`。
+
+## 阅读入口
+
+- [平台主路径](../../docs/architecture/platform-main-path.md)：配置如何进入部署和运行。
+- [Agent 共享对象](../../agent/control_plane/README.md)：registry、runtime adapter 和产物策略。
+- [扩展挂载合同](../../docs/architecture/explicit-extension-packages.md)：profile、required dependencies 与对象归属。

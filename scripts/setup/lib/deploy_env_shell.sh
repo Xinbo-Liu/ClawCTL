@@ -8,11 +8,9 @@ source "$DEPLOY_ENV_SHELL_LIB_DIR/repo_root_bootstrap.sh"
 openclaw_setup_lib_source_repo_root "$DEPLOY_ENV_SHELL_LIB_DIR" || return 2 2>/dev/null || exit 2
 unset -f openclaw_setup_lib_source_repo_root
 DEPLOY_ENV_SHELL_ROOT="$(openclaw_repo_root_from "$DEPLOY_ENV_SHELL_LIB_DIR")"
-
 deploy_env_shell_repo_root() {
   printf '%s\n' "$DEPLOY_ENV_SHELL_ROOT"
 }
-
 deploy_env_shell_load_keys() {
   local env_file="$1"
   shift

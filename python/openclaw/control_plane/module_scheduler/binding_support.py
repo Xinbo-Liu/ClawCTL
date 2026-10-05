@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Agent module scheduler binding shared helpers."""
+"""提供OpenClaw 控制平面子系统的生产实现。"""
 from __future__ import annotations
 
 from pathlib import Path
@@ -21,7 +21,6 @@ _COLLECTION_KEY_TO_EXTENSION_REGISTRY_KEY = {
 
 
 def ensure_known_module(registry: dict[str, Any], module_ref: str) -> dict[str, Any]:
-    """确认 moduleRef 在 registry 中已注册。"""
     module = json_object(registry.get('agentModulesById')).get(module_ref)
     if not isinstance(module, dict):
         raise CliError(f'未注册的 moduleRef：{module_ref}', 2)
@@ -29,7 +28,6 @@ def ensure_known_module(registry: dict[str, Any], module_ref: str) -> dict[str, 
 
 
 def ensure_known_operation(module_payload: dict[str, Any], *, module_ref: str, operation_ref: str) -> dict[str, Any]:
-    """确认 operationRef 在 module 中已注册。"""
     operations = json_object(module_payload.get('operations'))
     operation = operations.get(operation_ref)
     if not isinstance(operation, dict):
@@ -38,7 +36,6 @@ def ensure_known_operation(module_payload: dict[str, Any], *, module_ref: str, o
 
 
 def module_agent_ref(module_payload: dict[str, Any], *, module_ref: str) -> str:
-    """解析 module 对应的 agentRef。"""
     agent_ref = str(module_payload.get('agentRef') or module_ref).strip()
     if not agent_ref:
         raise CliError(f'module {module_ref} 缺少 agentRef', 2)
@@ -46,7 +43,6 @@ def module_agent_ref(module_payload: dict[str, Any], *, module_ref: str) -> str:
 
 
 def module_capabilities(module_payload: dict[str, Any]) -> dict[str, Any]:
-    """提取 module 的 agent capabilities。"""
     control_plane = json_object(module_payload.get('controlPlane'))
     agent_cfg = json_object(control_plane.get('agent'))
     return {
@@ -56,7 +52,6 @@ def module_capabilities(module_payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def module_binding_refs(module_payload: dict[str, Any]) -> tuple[list[str], list[str]]:
-    """汇总 module operations 中引用的 job / target 绑定。"""
     operations = json_object(module_payload.get('operations'))
     job_refs: list[str] = []
     target_refs: list[str] = []
@@ -76,7 +71,6 @@ def module_binding_refs(module_payload: dict[str, Any]) -> tuple[list[str], list
 
 
 def path_is_relative_to(path: Path, base: Path) -> bool:
-    """判断路径是否位于指定基目录之下。"""
     try:
         path.resolve().relative_to(base.resolve())
         return True
@@ -85,12 +79,10 @@ def path_is_relative_to(path: Path, base: Path) -> bool:
 
 
 def configured_registry_collection_dirs(registry: dict[str, Any], *, key: str) -> list[Path]:
-    """读取配置中的 registry collection 目录列表。"""
     return [Path(str(item)).resolve() for item in list(json_object(registry.get('registryPaths')).get(key) or []) if str(item).strip()]
 
 
 def single_registry_collection_dir(registry: dict[str, Any], *, key: str, label: str) -> Path:
-    """断言指定 collection 只有唯一写入目录。"""
     rows = configured_registry_collection_dirs(registry, key=key)
     if not rows:
         raise CliError(f'{label} 注册目录未配置', 2)
@@ -111,7 +103,6 @@ def extension_owned_registry_collection_dir(
     source_path: Path,
     source_payload: dict[str, Any] | None = None,
 ) -> Path | None:
-    """按 sourcePath 推断 extension 归属的写入目录。"""
     registry_key = _COLLECTION_KEY_TO_EXTENSION_REGISTRY_KEY.get(key)
     if not registry_key:
         return None
@@ -186,7 +177,6 @@ def registry_collection_dir_for_write(
     source_path: Path | None = None,
     source_payload: dict[str, Any] | None = None,
 ) -> Path:
-    """解析 attach/detach 写入时应使用的 registry 目录。"""
     rows = configured_registry_collection_dirs(registry, key=key)
     if not rows:
         raise CliError(f'{label} 注册目录未配置', 2)
@@ -216,7 +206,6 @@ def validate_attach_group_options(
     recovery_after_minutes: int | None,
     recovery_action_kind: str,
 ) -> tuple[str, str]:
-    """校验 attach 时的 group 选项组合。"""
     normalized_group_ref = str(group_ref or '').strip()
     normalized_group_placement = str(group_placement or 'none').strip() or 'none'
     if normalized_group_placement not in {'none', 'ordered', 'recovery'}:
@@ -238,7 +227,6 @@ def resolve_attach_module_state(
     module_ref: str,
     operation_ref: str,
 ) -> tuple[Path, dict[str, Any], dict[str, Any]]:
-    """解析 attach 操作所需的 module 上下文。"""
     module_row = ensure_known_module(registry, module_ref)
     module_path = Path(str(module_row.get('sourcePath') or '')).resolve()
     module_payload = read_json_object(module_path)
@@ -247,7 +235,6 @@ def resolve_attach_module_state(
 
 
 def collect_existing_job_bindings(registry: dict[str, Any]) -> dict[str, str]:
-    """收集当前 registry 中已有的 job 绑定。"""
     all_job_bindings: dict[str, str] = {}
     for current_module_ref, current_module in json_object(registry.get('agentModulesById')).items():
         if not isinstance(current_module, dict):
@@ -266,7 +253,6 @@ def collect_existing_job_bindings(registry: dict[str, Any]) -> dict[str, str]:
 
 
 def ensure_attach_job_available(registry: dict[str, Any], *, job_id: str) -> None:
-    """确保待写入的 jobId 当前可用。"""
     if job_id in json_object(registry.get('jobsById')):
         raise CliError(f'jobId 已存在，attach 当前仅支持创建新 job：{job_id}', 2)
     all_job_bindings = collect_existing_job_bindings(registry)

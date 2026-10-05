@@ -15,7 +15,6 @@ ENV_FILE="$ROOT_DIR/deploy/.env"
 COMPOSE_FILE=""
 WARNINGS=0
 FAILURES=0
-
 usage() {
   cat <<'USAGE'
 用法：
@@ -33,11 +32,9 @@ usage() {
   -h, --help               显示帮助
 USAGE
 }
-
 note() { printf '[INFO] %s\n' "$*"; }
 warn() { WARNINGS=1; printf '[WARN] %s\n' "$*"; }
 fail() { FAILURES=1; printf '[FAIL] %s\n' "$*" >&2; }
-
 require_docker_ready() {
   command -v docker >/dev/null 2>&1 || { fail '未检测到 docker；无法检查 bind mount UID/GID 合同。'; return 1; }
   if ! docker info >/dev/null 2>&1; then
@@ -52,13 +49,11 @@ require_docker_ready() {
   fi
   return 0
 }
-
 load_env_context() {
   IMAGE_ENV_DEPLOY_ENV_PATH="$ENV_FILE"
   export IMAGE_ENV_DEPLOY_ENV_PATH
   image_env_load
 }
-
 trim_compose_scalar() {
   local value="${1-}"
   # Windows 主机同步到 Linux 服务器时 compose/env 可能保留 CRLF；Docker inspect 必须使用去掉回车后的镜像引用。
@@ -67,7 +62,6 @@ trim_compose_scalar() {
   value="${value%"${value##*[![:space:]]}"}"
   printf '%s\n' "$value"
 }
-
 compose_iter_service_entries() {
   local mode="$1"
   local file="$COMPOSE_FILE"
@@ -111,17 +105,14 @@ compose_iter_service_entries() {
     }
   ' "$file"
 }
-
 compose_find_service_image_template() {
   local target_service="$1"
   compose_iter_service_entries images | awk -F '\t' -v target="$target_service" '$1 == target { print $2; exit }'
 }
-
 compose_find_service_user_spec() {
   local target_service="$1"
   compose_iter_service_entries users | awk -F '\t' -v target="$target_service" '$1 == target { print $2; exit }'
 }
-
 resolve_compose_template() {
   local template="$1"
   local result=""
@@ -155,7 +146,6 @@ resolve_compose_template() {
   result="$(trim_compose_scalar "$result")"
   printf '%s\n' "$result"
 }
-
 service_effective_image() {
   local service="$1"
   local raw=""
@@ -163,7 +153,6 @@ service_effective_image() {
   [[ -n "$raw" ]] || return 1
   resolve_compose_template "$raw"
 }
-
 service_effective_user_spec() {
   local service="$1"
   local raw=""
@@ -171,7 +160,6 @@ service_effective_user_spec() {
   [[ -n "$raw" ]] || return 1
   resolve_compose_template "$raw"
 }
-
 volume_options_imply_read_only() {
   local options="${1:-}"
   local option=""
@@ -187,12 +175,10 @@ volume_options_imply_read_only() {
   done
   return 1
 }
-
 image_present() {
   local ref="$1"
   docker image inspect "$ref" >/dev/null 2>&1
 }
-
 resolve_uid_gid_via_docker_run() {
   local image="$1"
   local user_spec="${2:-}"
@@ -229,12 +215,10 @@ resolve_uid_gid_via_docker_run() {
   fi
   return 1
 }
-
 resolve_image_config_user() {
   local image="$1"
   docker image inspect --format '{{.Config.User}}' "$image" 2>/dev/null || true
 }
-
 resolve_service_uid_gid() {
   local service="$1"
   local image="$2"
@@ -271,7 +255,6 @@ resolve_service_uid_gid() {
   fi
   return 1
 }
-
 mode_digit_for_identity() {
   local mode="$1"
   local owner_uid="$2"
@@ -291,7 +274,6 @@ mode_digit_for_identity() {
     printf '%s\n' "$other_digit"
   fi
 }
-
 permission_digit_allows() {
   local digit="$1"
   local need="$2"
@@ -303,7 +285,6 @@ permission_digit_allows() {
     *) return 1 ;;
   esac
 }
-
 check_bind_path_access() {
   local service="$1" image="$2" uid_gid="$3" host_path="$4" entry_type="$5"
   local need_uid="${uid_gid%%:*}"
@@ -353,7 +334,6 @@ check_bind_path_access() {
 
   fail "$service 可写 bind mount 合同不满足：$host_path 对容器 UID:GID ${need_uid}:${need_gid} 不可写；当前 effective mode digit=$digit，owner=$owner_uid:$owner_gid。请先收口宿主机 owner/UID/GID 合同，或调整运行时用户配置。"
 }
-
 check_service_bind_contract() {
   local service="$1"
   local image=''

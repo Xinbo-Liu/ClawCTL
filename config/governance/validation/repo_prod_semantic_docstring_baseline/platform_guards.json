@@ -1,0 +1,377 @@
+{
+  "fileBaselines": {
+    "python/openclaw/guards/__init__.py": {
+      "itemBaselines": {
+        "module:<module>": {
+          "issues": [],
+          "kind": "module",
+          "qualname": "<module>"
+        }
+      },
+      "moduleHasChineseDocstring": true,
+      "semanticIssueItems": 0,
+      "semanticIssues": 0
+    },
+    "python/openclaw/guards/host_python/__init__.py": {
+      "itemBaselines": {
+        "module:<module>": {
+          "issues": [],
+          "kind": "module",
+          "qualname": "<module>"
+        }
+      },
+      "moduleHasChineseDocstring": true,
+      "semanticIssueItems": 0,
+      "semanticIssues": 0
+    },
+    "python/openclaw/guards/host_python/matching.py": {
+      "itemBaselines": {
+        "function:contains_host_python_command": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "contains_host_python_command"
+        },
+        "function:contains_host_python_wrapped_command": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "contains_host_python_wrapped_command"
+        },
+        "function:is_python_shell_command_string": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "is_python_shell_command_string"
+        },
+        "function:resolve_static_command_string": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "resolve_static_command_string"
+        },
+        "module:<module>": {
+          "issues": [],
+          "kind": "module",
+          "qualname": "<module>"
+        }
+      },
+      "moduleHasChineseDocstring": true,
+      "semanticIssueItems": 4,
+      "semanticIssues": 4
+    },
+    "python/openclaw/guards/host_python/scanner.py": {
+      "itemBaselines": {
+        "function:collect_shell_files": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "collect_shell_files"
+        },
+        "function:display_path": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "display_path"
+        },
+        "function:scan_shell_source": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "scan_shell_source"
+        },
+        "module:<module>": {
+          "issues": [],
+          "kind": "module",
+          "qualname": "<module>"
+        }
+      },
+      "moduleHasChineseDocstring": true,
+      "semanticIssueItems": 3,
+      "semanticIssues": 3
+    },
+    "python/openclaw/guards/host_python/syntax.py": {
+      "itemBaselines": {
+        "function:append_logical_line": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "append_logical_line"
+        },
+        "function:drop_trailing_continuation": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "drop_trailing_continuation"
+        },
+        "function:ends_with_line_continuation": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "ends_with_line_continuation"
+        },
+        "function:left_trim_tabs": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "left_trim_tabs"
+        },
+        "function:mask_command_substitution": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "mask_command_substitution"
+        },
+        "function:mask_non_command_contexts": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "mask_non_command_contexts"
+        },
+        "function:mask_non_command_quotes": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "mask_non_command_quotes"
+        },
+        "function:read_command_substitution": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "read_command_substitution"
+        },
+        "function:register_heredocs": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "register_heredocs"
+        },
+        "function:should_start_comment": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "should_start_comment"
+        },
+        "function:strip_shell_comments": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "strip_shell_comments"
+        },
+        "function:trim_tokens": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "trim_tokens"
+        },
+        "module:<module>": {
+          "issues": [],
+          "kind": "module",
+          "qualname": "<module>"
+        }
+      },
+      "moduleHasChineseDocstring": true,
+      "semanticIssueItems": 12,
+      "semanticIssues": 12
+    },
+    "python/openclaw/guards/host_python/variables.py": {
+      "itemBaselines": {
+        "function:expand_shell_variables": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "expand_shell_variables"
+        },
+        "function:parse_simple_assignment_value": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "parse_simple_assignment_value"
+        },
+        "function:parse_standalone_assignments": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "parse_standalone_assignments"
+        },
+        "function:read_quoted_value": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "read_quoted_value"
+        },
+        "function:read_variable_reference": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "read_variable_reference"
+        },
+        "function:strip_outer_quotes": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "strip_outer_quotes"
+        },
+        "function:update_shell_variable_env": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "update_shell_variable_env"
+        },
+        "module:<module>": {
+          "issues": [],
+          "kind": "module",
+          "qualname": "<module>"
+        }
+      },
+      "moduleHasChineseDocstring": true,
+      "semanticIssueItems": 7,
+      "semanticIssues": 7
+    },
+    "python/openclaw/guards/host_python_doc_guard.py": {
+      "itemBaselines": {
+        "class:DocPythonCommand": {
+          "issues": [],
+          "kind": "class",
+          "qualname": "DocPythonCommand"
+        },
+        "function:_has_uncovered_doc_pattern_match": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_has_uncovered_doc_pattern_match"
+        },
+        "function:collect_files": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "collect_files"
+        },
+        "function:default_scan_roots": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "default_scan_roots"
+        },
+        "function:is_text_candidate": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "is_text_candidate"
+        },
+        "function:iter_doc_python_commands": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "iter_doc_python_commands"
+        },
+        "function:main": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "main"
+        },
+        "function:parse_args": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "parse_args"
+        },
+        "function:scan_file": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "scan_file"
+        },
+        "function:uncovered_doc_python_commands": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "uncovered_doc_python_commands"
+        },
+        "module:<module>": {
+          "issues": [],
+          "kind": "module",
+          "qualname": "<module>"
+        }
+      },
+      "moduleHasChineseDocstring": true,
+      "semanticIssueItems": 9,
+      "semanticIssues": 9
+    },
+    "python/openclaw/guards/host_python_shell_guard.py": {
+      "itemBaselines": {
+        "function:main": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "main"
+        },
+        "function:parse_args": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "parse_args"
+        },
+        "module:<module>": {
+          "issues": [],
+          "kind": "module",
+          "qualname": "<module>"
+        }
+      },
+      "moduleHasChineseDocstring": true,
+      "semanticIssueItems": 2,
+      "semanticIssues": 2
+    }
+  },
+  "kind": "openclaw_repo_prod_semantic_docstring_baseline_shard",
+  "policy": {
+    "mode": "semantic-baseline-ratchet",
+    "newFilesRequireZeroSemanticIssues": true,
+    "scope": "repo-prod",
+    "trackedItemKinds": [
+      "module",
+      "class",
+      "function"
+    ]
+  },
+  "schemaVersion": 2,
+  "shardKey": "platform_guards"
+}

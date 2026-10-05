@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Audit payload writing helpers for dispatch runtime audit surfaces."""
+"""提供OpenClaw 控制平面子系统的生产实现。"""
 from __future__ import annotations
 
 import json
@@ -9,7 +9,7 @@ from typing import Any
 
 from openclaw.lib.control_plane.object_families import get_entry
 
-from openclaw.control_plane.dispatch.audit.context import payload_extension_selector
+DISPATCH_GOVERNANCE_EXTENSION_ID = 'agent_platform'
 
 
 def select_audit_dir(
@@ -17,7 +17,6 @@ def select_audit_dir(
     *,
     root_dir: Path,
     config_path: Path,
-    extension_id: str | None = None,
     explicit_dir: str = '',
 ) -> Path:
     if explicit_dir:
@@ -27,7 +26,7 @@ def select_audit_dir(
         entry_id,
         root_dir,
         config_path=config_path,
-        extension_id=extension_id,
+        extension_id=DISPATCH_GOVERNANCE_EXTENSION_ID,
     )
     return Path(str(entry.get('resolved_path') or '')).resolve()
 
@@ -53,7 +52,6 @@ def maybe_write_target_acceptance_audit(
             'dispatch_target_acceptance_audit_dir',
             root_dir=root_dir,
             config_path=config_path,
-            extension_id=payload_extension_selector(payload),
             explicit_dir=audit_dir,
         ),
         prefix=f"target_{str(payload.get('target_id') or 'unknown').strip() or 'unknown'}",
@@ -73,7 +71,6 @@ def maybe_write_batch_acceptance_audit(
             'dispatch_target_batch_acceptance_audit_dir',
             root_dir=root_dir,
             config_path=config_path,
-            extension_id=payload_extension_selector(payload),
             explicit_dir=audit_dir,
         ),
         prefix=f"batch_{str(payload.get('batch_id') or 'custom').strip() or 'custom'}",
@@ -93,7 +90,6 @@ def maybe_write_rotation_sequence_audit(
             'dispatch_target_rotation_sequence_audit_dir',
             root_dir=root_dir,
             config_path=config_path,
-            extension_id=payload_extension_selector(payload),
             explicit_dir=audit_dir,
         ),
         prefix=f"rotation_{str(payload.get('batch_id') or 'custom').strip() or 'custom'}",
@@ -113,7 +109,6 @@ def maybe_write_governance_audit(
             'dispatch_governance_audit_dir',
             root_dir=root_dir,
             config_path=config_path,
-            extension_id=payload_extension_selector(payload),
             explicit_dir=audit_dir,
         ),
         prefix=f"governance_{str(payload.get('batch_id') or 'default').strip() or 'default'}",

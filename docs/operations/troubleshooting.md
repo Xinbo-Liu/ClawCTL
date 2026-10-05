@@ -2,9 +2,9 @@
 
 ## 本页解决什么问题
 
-本页只负责先把故障路由到正确阶段，再给出对应阶段的首个定位命令与下一跳文档。
+本页先将故障分流到对应阶段，再提供该阶段的首个定位命令与下一跳文档。
 
-它覆盖宿主机准备、配置生成、部署主链、runtime / ingress、deployment acceptance、交付导出与 dispatch。setup first-hop、full test、dispatch 恢复与 control-plane 对象事实分别查看本页、`runtime-service-reference.md`、`dispatch-targets.md` 与 `agent/README.md`。
+它覆盖宿主机准备、配置生成、部署主链、runtime / ingress、deployment acceptance、交付导出与 dispatch。setup first-hop、full test、dispatch 恢复与 control-plane 对象事实分别查看本页、`runtime-service-reference.md`、`dispatch-targets.md` 与 [运行产物参考](runtime-artifacts-reference.md)。
 
 ## 适用范围
 
@@ -35,31 +35,33 @@ printf 'TLS_MODE=%s\nTLS_CN=%s\nLISTEN_IP=%s\nCIDRS=%s\nRUNTIME_UID=%s\nRUNTIME_
 
 ## 先判断故障落在哪一段
 
-| 现象                                                         | 所在阶段              | 首个定位命令                                                                                                           |
-|------------------------------------------------------------|-------------------|------------------------------------------------------------------------------------------------------------------|
-| `Cannot find a valid baseurl for repo: base/7/x86_64`      | 宿主机准备             | `sudo bash ./scripts/setup/prepare_docker_host.sh --repair-centos7-vault-repos`                                  |
-| `CERT_NOT_YET_VALID`、证书时间错误、系统时间漂移或 `check_system_time` 失败 | 宿主机准备 / readiness | `sudo bash ./scripts/setup/update_system_time.sh`                                                                |
-| `docker: command not found`、`docker info` 失败               | 宿主机准备             | `sudo bash ./scripts/setup/prepare_docker_host.sh --install-docker --install-compose`                            |
-| Docker bridge / NAT 报 `INVALID_ZONE: docker`               | 宿主机准备 / compose   | `sudo bash ./scripts/setup/prepare_docker_host.sh --open-firewall`                                               |
-| Docker Yum repo 或 GHCR 拉取在国内网络下超时 / 403 / 连接失败             | 宿主机准备 / 镜像准备      | `sudo bash ./scripts/setup/prepare_docker_host.sh --all --network-profile cn`                                    |
-| Gateway candidate 已拉取，但 compose up 仍引用 canonical 或 final image 本地不存在 | 镜像准备 / 部署主链        | `bash ./scripts/images/check_deployment_image_contract.sh --env-file deploy/.env --compose-file state/openclaw/control_plane/setup/docker-compose.effective.yml --require-local` |
-| `deploy/.env` 里还有 `__REQUIRED__`                           | 配置生成              | `bash ./scripts/setup/one_click_config.sh`                                                                       |
-| 扩展 env required/manual_required 字段缺失                         | 配置生成              | `bash ./scripts/setup/check_extension_env_values.sh --profile <profile_id>`                                      |
-| 当前 pin 可用但上游 latest 更高导致发布检查提示                         | basic gate / release | `bash ./scripts/setup/one_click_test_basic.sh --strict-release-check`                                            |
-| `one_click_test_basic.sh` 失败                               | basic gate        | `bash ./scripts/setup/one_click_test_basic.sh --help`                                                            |
-| `one_click_deploy.sh` 失败                                   | 部署主链              | `bash ./scripts/setup/one_click_deploy.sh --explain`                                                             |
-| `one_click_test_full.sh` 失败                                | full test / 验收    | `bash ./scripts/setup/one_click_test_full.sh --explain`                                                          |
-| UI 打不开、`/healthz` 异常、service unhealthy                     | runtime / ingress | `bash ./scripts/runtime/show_runtime_service_status.sh --target gateway --target ingress`                        |
-| evidence export / clean delivery 失败                        | 归档导出              | `bash ./scripts/runtime/check_runtime_evidence_prereqs.sh --scope evidence-export`                               |
-| dispatch target 配置不生效或 dry-run 失败                          | dispatch          | `bash ./scripts/runtime/run_openclaw_python_tool.sh setup env validate-dispatch-registry --env-file deploy/.env` |
+| 现象                                                                               | 所在阶段               | 首个定位命令                                                                                                                                                                     |
+|------------------------------------------------------------------------------------|------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `Cannot find a valid baseurl for repo: base/7/x86_64`                              | 宿主机准备             | `sudo bash ./scripts/setup/prepare_docker_host.sh --os centos7 --repair-centos7-vault-repos`                                                                                     |
+| `CERT_NOT_YET_VALID`、证书时间错误、系统时间漂移或 `check_system_time` 失败        | 宿主机准备 / readiness | `sudo bash ./scripts/setup/update_system_time.sh`                                                                                                                                |
+| `docker: command not found`、`docker info` 失败                                    | 宿主机准备             | `sudo bash ./scripts/setup/prepare_docker_host.sh --os auto --install-docker --install-compose`                                                                                  |
+| Docker MTU 高于宿主默认路由 MTU、容器内 HTTPS/TLS handshake timeout                | 宿主机准备 / compose   | `sudo OPENCLAW_DOCKER_NETWORK_MTU=auto bash ./scripts/setup/prepare_docker_host.sh --os auto --configure-daemon`                                                                 |
+| Docker bridge / NAT 报 `INVALID_ZONE: docker`                                      | 宿主机准备 / compose   | `sudo bash ./scripts/setup/prepare_docker_host.sh --os auto --open-firewall`                                                                                                     |
+| Docker / Compose / MTU / GHCR 拉取在国内网络下超时 / 403 / 连接失败                | 宿主机准备 / 镜像准备  | `sudo bash ./scripts/setup/prepare_docker_host.sh --os auto --all --network-profile cn`                                                                                          |
+| Gateway candidate 已拉取，但 compose up 仍引用 canonical 或 final image 本地不存在 | 镜像准备 / 部署主链    | `bash ./scripts/images/check_deployment_image_contract.sh --env-file deploy/.env --compose-file state/openclaw/control_plane/setup/docker-compose.effective.yml --require-local` |
+| `deploy/.env` 里还有 `__REQUIRED__`                                                | 配置生成               | `bash ./scripts/setup/one_click_config.sh`                                                                                                                                       |
+| 扩展 env required/manual_required 字段缺失                                         | 配置生成               | `bash ./scripts/setup/check_extension_env_values.sh --profile <profile_id>`                                                                                                      |
+| 当前 pin 可用但上游 latest 更高导致发布检查提示                                    | basic gate / release   | `bash ./scripts/setup/one_click_test_basic.sh --strict-release-check`                                                                                                            |
+| `one_click_test_basic.sh` 失败                                                     | basic gate             | `bash ./scripts/setup/one_click_test_basic.sh --help`                                                                                                                            |
+| `one_click_deploy.sh` 失败                                                         | 部署主链               | `bash ./scripts/setup/one_click_deploy.sh --explain`                                                                                                                             |
+| `one_click_test_full.sh` 失败                                                      | full test / 验收       | `bash ./scripts/setup/one_click_test_full.sh --explain`                                                                                                                          |
+| UI 打不开、`/healthz` 异常、service unhealthy                                      | runtime / ingress      | `bash ./scripts/runtime/show_runtime_service_status.sh --target gateway --target ingress`                                                                                        |
+| evidence export / clean delivery 失败                                              | 归档导出               | `bash ./scripts/runtime/check_runtime_evidence_prereqs.sh --scope evidence-export`                                                                                               |
+| dispatch target 配置不生效或 dry-run 失败                                          | dispatch               | `bash ./scripts/runtime/run_openclaw_python_tool.sh setup env validate-dispatch-registry --env-file deploy/.env`                                                                 |
+| 投递进程退出码为 0、存在 latest，但正式目标未送达                                  | dispatch contract      | `bash ./scripts/runtime/run_openclaw_python_tool.sh control-plane runtime run-ledger-summary`                                                                                    |
 
 ## 宿主机准备问题
 
 ### CentOS 7 仓库不可用
 
 ```bash
-sudo bash ./scripts/setup/prepare_docker_host.sh --repair-centos7-vault-repos
-sudo bash ./scripts/setup/prepare_docker_host.sh --repair-centos7-vault-repos --network-profile cn
+sudo bash ./scripts/setup/prepare_docker_host.sh --os centos7 --repair-centos7-vault-repos
+sudo bash ./scripts/setup/prepare_docker_host.sh --os centos7 --repair-centos7-vault-repos --network-profile cn
 sudo yum clean all
 sudo yum makecache fast
 ```
@@ -67,7 +69,7 @@ sudo yum makecache fast
 国内网络优先使用 `--network-profile cn`；企业内网镜像源和 `--centos7-vault-source` 细节回 `../getting-started/environment-setup.md`。若还需要补基础工具或 Docker，继续执行：
 
 ```bash
-sudo bash ./scripts/setup/prepare_docker_host.sh --all --network-profile cn
+sudo bash ./scripts/setup/prepare_docker_host.sh --os auto --all --network-profile cn
 ```
 
 下一跳：`../getting-started/environment-setup.md`
@@ -85,7 +87,7 @@ bash ./scripts/doctor/check_docker_host_readiness.sh
 ### Docker / Compose 未安装或 daemon 没起来
 
 ```bash
-sudo bash ./scripts/setup/prepare_docker_host.sh --install-docker --install-compose --configure-daemon
+sudo bash ./scripts/setup/prepare_docker_host.sh --os auto --install-docker --install-compose --configure-daemon
 docker info
 docker compose version
 ```
@@ -93,7 +95,7 @@ docker compose version
 国内网络和企业内网 Docker repo / registry mirror 细节回 `environment-setup.md`。若 compose up 或 Docker bridge 网络创建报 `INVALID_ZONE: docker`，先只修复宿主机 firewalld / Docker zone 合同：
 
 ```bash
-sudo bash ./scripts/setup/prepare_docker_host.sh --open-firewall
+sudo bash ./scripts/setup/prepare_docker_host.sh --os auto --open-firewall
 ```
 
 Docker / firewalld 修复后重跑 readiness；已有 ingress 边界证据的环境再补跑 `sudo bash ./scripts/setup/apply_ingress_boundary_rules.sh --env-file deploy/.env`。
@@ -107,7 +109,7 @@ bash ./scripts/doctor/check_docker_host_readiness.sh
 bash ./scripts/doctor/check_deployment_image_readiness.sh
 ```
 
-中国国内网络先确认宿主机已经执行 `prepare_docker_host.sh --all --network-profile cn`。在线补齐执行 `pull_images.sh`；受限网络或离线目标机走 `export_deployment_images.sh`、`load_deployment_images.sh` 与 `prepare_control_plane_medium.sh --offline --image-archive <local-path>`。
+中国国内网络先确认宿主机已经执行 `prepare_docker_host.sh --os auto --all --network-profile cn`。在线补齐执行 `pull_images.sh`；拉取完成后默认移除未被当前部署选用的 Gateway 来源标签。受限网络或离线目标机走 `export_deployment_images.sh`、`load_deployment_images.sh` 与 `prepare_control_plane_medium.sh --offline --image-archive <local-path>`。
 
 若 `gateway_source_selection.json` 显示 `envRewritten=true`，但部署日志或 effective compose 仍引用 canonical GHCR，说明 `pull_images` 之后没有重新加载镜像 env 或重渲染 effective compose。默认 `one_click_deploy.sh` 会自动重新加载镜像 env、重渲染 effective compose 并刷新 proof；手工分步执行时执行：
 
@@ -116,7 +118,7 @@ bash ./scripts/runtime/run_openclaw_python_tool.sh runtime mounts sync-compose -
 bash ./scripts/images/check_deployment_image_contract.sh --env-file deploy/.env --compose-file state/openclaw/control_plane/setup/docker-compose.effective.yml --require-local
 ```
 
-`check_deployment_image_contract.sh` 会在 `docker_compose_up` 前区分 candidate 已拉取但 compose 仍指 canonical、selected ref 未拉取、digest 不一致和 registry 不可达；不要通过手改 compose 绕过 selected ref。
+`check_deployment_image_contract.sh` 会在 `docker_compose_up` 前区分 candidate 已拉取但 compose 仍指 canonical、当前选定镜像引用未拉取、digest 不一致和 registry 不可达；不要通过手改 compose 绕过当前选定镜像引用。
 
 ### 当前用户无权访问 `/var/run/docker.sock`
 
@@ -160,7 +162,7 @@ bash ./scripts/setup/one_click_config.sh
 bash ./scripts/runtime/run_openclaw_python_tool.sh setup env validate --env-file deploy/.env
 ```
 
-规则：`deploy/.env` 只读不手改；人工维护入口固定在 `deploy/site.env`、启用扩展内部 `agent/extensions/<extension-id>/deploy/extension.env` 与 `deploy/targets.d/<target_id>.env`。
+规则：`deploy/.env` 只读不手改；人工维护入口固定在 `deploy/site.env`、启用扩展内部 `agent/extensions/<extension-id>/deploy/extension.env` 与 `deploy/targets.d/<target_id>.env`。部署输入文件先使用 `apply_deploy_input_values.sh --validate-only --profile <profile_id> --input <owner-only-env>` 输出脱敏路由、未知键、错位键和 required/manual_required 缺项提示；命令也接受 `--input-env-file <path>`，语义与 `--input <path>` 相同；确认后再用 `--init` 按 active profile 路由写入对应真源。
 
 启用业务扩展 profile 时，使用 schema 工具定位缺项并写入字段：
 
@@ -171,7 +173,7 @@ export SECRET_KEY=<secret>
 bash ./scripts/setup/apply_extension_env_values.sh --profile <profile_id> --set-secret-from-env SECRET_KEY
 ```
 
-`check_extension_env_values.sh` 的 text 输出会按 group 列出字段与修复命令；JSON 输出只记录字段是否存在，不输出 secret 明文。`one_click_config.sh` 在扩展缺项时会打印同一组修复命令。
+`check_extension_env_values.sh` 的 text 输出会按 group 列出字段与修复命令；JSON 输出只记录字段是否存在，不输出 secret 明文。组合 profile 的共享 `OLLAMA_BASE_URL` / `OLLAMA_MODEL_REF` 会检查 `deploy/site.env` 并给出 `apply_site_env_values.sh` 修复命令，扩展自有字段才写入 `extension.env`。`one_click_config.sh` 在扩展缺项时会打印同一组修复命令。
 
 下一跳：`../getting-started/deployment-inputs.md`、`troubleshooting.md`
 
@@ -243,12 +245,12 @@ host_firewall 模式下，iptables / firewalld 语义应由 root 侧检查并写
 ### 外部访问端未闭合
 
 ```bash
-bash ./scripts/setup/check_client_access_acceptance.sh --env-file deploy/.env --client-cidr '<目标机实际看到的访问端私网CIDR[,CIDR]>' --tls-cn <OPENCLAW_TLS_CN>
+bash ./scripts/setup/check_client_access_acceptance.sh --env-file deploy/.env --observed-source-cidr '<目标机或上游记录实际观测来源CIDR[,CIDR]>' --tls-cn <OPENCLAW_TLS_CN>
 ```
 
 `deployment_acceptance` 是目标机本机验收，默认 full test 覆盖；`client_access_acceptance` 是访问端 DNS/hosts、证书信任、来源 CIDR、浏览器/HTTP 验证的独立闭环。若 `OPENCLAW_INGRESS_ALLOWED_SOURCE_CIDRS` 只包含目标机本机 `/32`，目标机自验可以通过，但外部浏览器仍未放行。
 
-脚本拒绝公网、非私网或过宽 client CIDR。遇到 VPN、NAT、堡垒机或安全组时，先确认目标机实际看到的访问来源，再选择外部 ACL 证据、VPN/NAT 后私网来源或更精确的 `/32`。不要把访问端本地 Wi-Fi 网段、公网地址或覆盖范围过大的私网段直接写入来源合同。
+脚本拒绝公网网段、非私网且非精确公网主机的实际观测来源 CIDR。遇到 TUN、VPN、NAT、堡垒机、安全组或公网 EIP 时，先确认目标机或上游转发记录实际看到的访问来源；公网来源只能写精确 `/32` IPv4 或 `/128` IPv6，公网网段应放到上游 ACL 并用 external_acl evidence 证明。不要把访问端本地 Wi-Fi 私网段、`api.ipify`/TUN 出口推断值或覆盖范围过大的私网段直接写入来源合同，除非该地址面就是目标机实际看到的来源。
 
 <a id="control-ui-origin-not-allowed"></a>
 <a id="control-ui-gateway-token-missing"></a>
@@ -266,7 +268,7 @@ bash ./scripts/setup/check_client_access_acceptance.sh --env-file deploy/.env --
 <a id="control-ui-token-recovery"></a>
 ### 浏览器凭据恢复或敏感项复核
 
-`deploy/site.env` 是人工输入真源，`deploy/.env` 是 `one_click_config.sh` 渲染后的运行态 env；两者仍然有用，且都不提交到 git。`600` 权限是正常状态，不要为了排查改成 group/world 可读。
+`deploy/site.env` 是人工输入真源，`deploy/.env` 是 `one_click_config.sh` 渲染后的运行态 env；两者分别用于维护输入和读取有效配置，都不提交到 git。`600` 权限是正常状态，不要为了排查改成 group/world 可读。
 
 默认只检查配置闭合和 secret 存在性，不打印明文：
 
@@ -310,19 +312,19 @@ sudo bash ./scripts/doctor/check_ingress_boundary_evidence.sh --env-file deploy/
 
 ```bash
 cat <current-host-state-root>/control_plane/setup/one_click_test_full.latest.summary.json
-bash ./scripts/runtime/run_openclaw_python_tool.sh runtime acceptance acceptance-summary
+bash ./scripts/runtime/run_openclaw_python_tool.sh runtime acceptance acceptance-summary --format json --strict true
 ```
 
-下一跳：`runtime-service-reference.md#deployment-acceptance-pass-criteria`、`agent/README.md`
+下一跳：`runtime-service-reference.md#deployment-acceptance-pass-criteria`、[运行产物参考](runtime-artifacts-reference.md)
 
-### run ledger 因 source health 阻塞
+### 扩展业务验收因来源健康或人工核验阻塞
 
 ```bash
-bash ./agent/extensions/<extension-id>/agent/modules/<module-id>/bin/<module-bin> manual-verify-results --limit 10
+bash ./scripts/runtime/run_openclaw_python_tool.sh runtime acceptance acceptance-summary --format json --strict true
 bash ./scripts/setup/one_click_deploy.sh --resume-from post_deploy_acceptance
 ```
 
-`source_health_high`、`pending_high_manual_verify` 或 `manual_verify_blocking` 表示运行事实还未被 ledger 接受，不是 Docker / ingress 问题。先看 latest summary 中的 blocked source 与 manual verify 列表，再按对应扩展 runbook 补人工校验；不要直接改 acceptance JSON。
+先从 acceptance summary 确定阻断项归属，再按所选扩展的运行手册处理来源健康和人工核验，处理后恢复部署验收。扩展可以声明自身失败分类和核验命令；`manual-verify-results` 等业务命令只有对应扩展模块提供，不能作为所有模块的通用操作。不要直接修改 acceptance JSON 来绕过验收。
 
 ## 验收归档与交付导出问题
 
@@ -359,10 +361,10 @@ PowerShell 中调用 OpenSSH 时使用显式可执行文件路径和参数数组
 
 ```bash
 bash ./scripts/runtime/run_openclaw_python_tool.sh setup env validate-dispatch-registry --env-file deploy/.env
-bash ./scripts/runtime/run_openclaw_python_tool.sh setup env query-dispatch-registry --env-file deploy/.env
+bash ./scripts/runtime/run_openclaw_python_tool.sh setup env query-dispatch-registry summary --env-file deploy/.env
 ```
 
-下一跳：首次接入、变量填写、晨检与 provider 操作看 `dispatch-targets.md`；运行态字段与审计对象看 `agent/README.md`。
+下一跳：首次接入、变量填写、晨检与 provider 操作看 `dispatch-targets.md`；运行态字段与审计对象看 [运行产物参考](runtime-artifacts-reference.md)。
 
 ## 下一步
 部署主链：`../getting-started/quickstart.md`；运行态统一入口：`runtime-service-reference.md`；dispatch 运维承接页：`dispatch-targets.md`。

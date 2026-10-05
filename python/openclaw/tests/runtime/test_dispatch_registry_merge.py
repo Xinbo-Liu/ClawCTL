@@ -158,6 +158,7 @@ class DispatchRegistryMergeContractTest(unittest.TestCase):
                 'boundary': {
                     'dispatchLane': 'integration_validation',
                     'payloadScope': 'validation_digest',
+                    'completionRole': 'advisory',
                     'publishLatestDefault': False,
                     'description': 'Validation target',
                 },
@@ -182,6 +183,7 @@ class DispatchRegistryMergeContractTest(unittest.TestCase):
                 boundary={
                     'dispatchLane': 'operations_monitoring',
                     'payloadScope': 'ops_summary',
+                    'completionRole': 'required',
                     'publishLatestDefault': False,
                     'description': 'Ops monitoring target',
                 },
@@ -190,7 +192,7 @@ class DispatchRegistryMergeContractTest(unittest.TestCase):
             registry_a = base / 'dispatch_a.json'
             registry_b = base / 'dispatch_b.json'
             registry_a.write_text(json.dumps({
-                'version': 7,
+                'version': 8,
                 'defaults': shared_defaults,
                 'releasePolicies': release_policies,
                 'lifecycleStates': lifecycle_states,
@@ -198,7 +200,7 @@ class DispatchRegistryMergeContractTest(unittest.TestCase):
                 'targets': [target_a],
             }), encoding='utf-8')
             registry_b.write_text(json.dumps({
-                'version': 7,
+                'version': 8,
                 'defaults': shared_defaults,
                 'releasePolicies': release_policies,
                 'lifecycleStates': lifecycle_states,

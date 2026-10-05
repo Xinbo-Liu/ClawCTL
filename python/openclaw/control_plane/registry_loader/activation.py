@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Helpers for extension-owned shared object activation filtering."""
+"""提供OpenClaw 控制平面子系统的生产实现。"""
 from __future__ import annotations
 
 from typing import Any, Iterable

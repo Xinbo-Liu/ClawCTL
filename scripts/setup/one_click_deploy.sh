@@ -13,7 +13,6 @@ source "$__openclaw_script_dir/../lib/repo_root.sh"
 ROOT_DIR="$(openclaw_repo_root_from "$__openclaw_script_dir")"
 unset __openclaw_script_dir
 OPENCLAW_PYTHON_TOOL="$ROOT_DIR/scripts/runtime/run_openclaw_python_tool.sh"
-
 prevalidate_image_archive_args() {
   local -a args=("$@")
   local has_offline=0
@@ -67,6 +66,8 @@ source "$ROOT_DIR/scripts/setup/lib/deploy_flow_summary_shell.sh"
 source "$ROOT_DIR/scripts/setup/lib/extension_env_gate.sh"
 source "$ROOT_DIR/scripts/setup/lib/runtime_permissions.sh"
 source "$ROOT_DIR/scripts/setup/lib/host_install_defaults.sh"
+# shellcheck source=scripts/lib/docker_mtu_contract.sh
+source "$ROOT_DIR/scripts/lib/docker_mtu_contract.sh"
 one_click_deploy_cp() {
   bash "$OPENCLAW_PYTHON_TOOL" setup flow one-click-deploy "$@"
 }
@@ -110,11 +111,9 @@ declare -A EFFECTIVE_STAGE_INDEX=()
 log() {
   printf '%s\n' "$*" | flow_redact_sensitive_stream | tee -a "$LOG_PATH"
 }
-
 init_runtime_context() {
   deploy_init_runtime_context
 }
-
 deploy_prime_control_plane_value() {
   local __out_var="$1"
   shift
@@ -127,7 +126,6 @@ deploy_prime_control_plane_value() {
   printf -v "$__out_var" '%s' "$output"
   return "$status"
 }
-
 deploy_prime_summary_context_minimal_defaults() {
   local host_state_root=''
   host_state_root="$(host_install_defaults_state_root_default 2>/dev/null || true)"
@@ -147,7 +145,6 @@ deploy_prime_summary_context_minimal_defaults() {
   mkdir -p "$LOG_DIR"
   : > "$LOG_PATH"
 }
-
 deploy_prime_fail_control_plane_defaults() {
   local output="$1"
   local status="${2:-2}"
@@ -168,6 +165,10 @@ deploy_prime_fail_control_plane_defaults() {
   exit "$status"
 }
 
+# 职责：判断 CLI 覆盖 env 是否仍指向默认 deploy/.env。
+deploy_env_override_points_to_default_env() {
+  [[ "$(openclaw_repo_abs_path_for_compare "$ROOT_DIR" "$ENV_FILE_OVERRIDE")" == "$(openclaw_repo_abs_path_for_compare "$ROOT_DIR" "$ROOT_DIR/deploy/.env")" ]]
+}
 deploy_prime_summary_context() {
   local runtime_host_env_rel=''
   local default_log_dir_rel=''
@@ -193,17 +194,14 @@ deploy_prime_summary_context() {
   mkdir -p "$LOG_DIR"
   : > "$LOG_PATH"
 }
-
 deploy_repair_repo_exec_bits() {
   bash "$ROOT_DIR/scripts/setup/fix_permissions.sh"
 }
-
 deploy_reject_root_runtime_user() {
   [[ "$(id -u)" != "0" ]] && return 0
   echo "[FAIL] one_click_deploy 拒绝以 root 执行正式部署主链；root 仅用于 prepare_docker_host、prepare_deploy_user、apply_ingress_boundary_rules、fix_permissions 等宿主机步骤。请切换到固定部署用户后重试；若当前保留 root SSH 会话，可执行：runuser -u openclaw -- bash -lc 'cd $ROOT_DIR && bash ./scripts/setup/one_click_deploy.sh'。" >&2
   exit 2
 }
-
 deploy_assert_access_mode() {
   local path="$1"
   local mode="$2"
@@ -233,7 +231,6 @@ deploy_assert_access_mode() {
       ;;
   esac
 }
-
 deploy_assert_dir_manageable_or_creatable() {
   local dir="$1"
   local label="$2"
@@ -249,7 +246,6 @@ deploy_assert_dir_manageable_or_creatable() {
   }
   deploy_assert_access_mode "$parent_dir" rwx "$label 的父目录"
 }
-
 deploy_check_local_permission_prereqs() {
   local args=(
     bash "$ROOT_DIR/scripts/doctor/check_local_runtime_fs_contract.sh"
@@ -260,7 +256,6 @@ deploy_check_local_permission_prereqs() {
   )
   "${args[@]}"
 }
-
 deploy_check_deployment_image_readiness_prereqs() {
   local args=(bash "$ROOT_DIR/scripts/doctor/check_deployment_image_readiness.sh" --env-file "$ENV_FILE")
   if [[ "$DEPLOY_MODE" == "offline" ]]; then
@@ -269,13 +264,10 @@ deploy_check_deployment_image_readiness_prereqs() {
   fi
   "${args[@]}"
 }
-
-
 deploy_check_runtime_bind_user_contract_prereqs() {
   local args=(bash "$ROOT_DIR/scripts/doctor/check_runtime_bind_user_contract.sh" --env-file "$ENV_FILE" --compose-file "$COMPOSE_FILE")
   "${args[@]}"
 }
-
 deploy_check_extension_env_prereqs() {
   local config_path=''
   local report_path=''
@@ -283,7 +275,6 @@ deploy_check_extension_env_prereqs() {
   report_path="$(runtime_permissions_host_control_plane_file "$ROOT_DIR" setup/extension_env_preflight.json)"
   extension_env_gate_ensure_active_profile "$ROOT_DIR" "$config_path" "one_click_deploy" scheduler "$report_path"
 }
-
 deploy_render_effective_compose() {
   local config_path=''
   local effective_compose_path=''
@@ -291,26 +282,29 @@ deploy_render_effective_compose() {
   config_path="$(deploy_active_control_plane_config_path_for_env "$ENV_FILE")" || return $?
   effective_compose_path="$(runtime_permissions_host_control_plane_file "$ROOT_DIR" setup/docker-compose.effective.yml)"
   mkdir -p "$(dirname "$effective_compose_path")"
+  openclaw_docker_mtu_export_for_compose_render || {
+    echo "[one_click_deploy][FAIL] OPENCLAW_DOCKER_NETWORK_MTU 无效：${OPENCLAW_DOCKER_NETWORK_MTU:-auto}" >&2
+    return 2
+  }
   args=(bash "$OPENCLAW_PYTHON_TOOL" runtime mounts sync-compose --output "$effective_compose_path")
   args+=(--config-path "$config_path")
   "${args[@]}"
   COMPOSE_FILE="$effective_compose_path"
 }
-
 deploy_gateway_selection_env_rewritten() {
-  local selection_file="$ROOT_DIR/state/image_pull/gateway_source_selection.json"
+  local selection_file=''
+  # shellcheck source=scripts/lib/deployment_images.sh
+  source "$ROOT_DIR/scripts/lib/deployment_images.sh"
+  selection_file="$(deployment_images_gateway_source_selection_file)"
   [[ -f "$selection_file" && -r "$selection_file" ]] || return 1
-  command -v jq >/dev/null 2>&1 || return 1
-  [[ "$(jq -r '.envRewritten // false' "$selection_file" 2>/dev/null || printf false)" == 'true' ]]
+  [[ "$(deployment_images_gateway_source_selection_value envRewritten "$selection_file")" == 'true' ]]
 }
-
 deploy_reload_image_env_after_source_selection() {
   IMAGE_ENV_DEPLOY_ENV_PATH="$ENV_FILE"
   export IMAGE_ENV_DEPLOY_ENV_PATH
   IMAGE_ENV_LOADED=0
   image_env_load
 }
-
 deploy_refresh_after_pull_images() {
   if ! deploy_gateway_selection_env_rewritten; then
     return 0
@@ -329,7 +323,6 @@ deploy_refresh_after_pull_images() {
   deploy_run_basic_gate_refresh
   deploy_verify_basic_gate_proof
 }
-
 deploy_validate_cli_options() {
   if [[ -n "$IMAGE_ARCHIVE_PATH" && "$DEPLOY_MODE" != "offline" ]]; then
     echo "[FAIL] --image-archive 仅在 --offline 下有效；在线模式请移除该参数，避免 basic gate proof 与离线镜像归档状态不一致。" >&2
@@ -343,6 +336,10 @@ deploy_validate_cli_options() {
       fi
       ;;
   esac
+  if [[ -n "$ENV_FILE_OVERRIDE" && "$START_SERVICES" == "1" ]] && ! deploy_env_override_points_to_default_env; then
+    echo "[FAIL] 完整部署启动 runtime 服务需要默认 deploy/.env；非默认 --env-file 仅用于 --prepare-only 检查/准备。请将配置写入 deploy/site.env、agent/extensions/<extension-id>/deploy/extension.env 或 deploy/targets.d，执行 one_click_config.sh 后再执行 one_click_deploy.sh。" >&2
+    exit 2
+  fi
 }
 
 

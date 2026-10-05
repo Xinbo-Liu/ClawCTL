@@ -12,7 +12,6 @@ ROOT_DIR="$(openclaw_repo_root_from "$__openclaw_script_dir")"
 unset __openclaw_script_dir
 ENV_FILE="$ROOT_DIR/deploy/.env"
 source "$ROOT_DIR/scripts/setup/lib/runtime_permissions.sh"
-
 usage() {
   cat <<'USAGE'
 用法：
@@ -37,12 +36,10 @@ if [[ $# -gt 0 ]]; then
       ;;
   esac
 fi
-
 fail() {
   echo "[gen_cert][FAIL] $*" >&2
   exit 2
 }
-
 read_env_value() {
   local key="$1"
   local line value

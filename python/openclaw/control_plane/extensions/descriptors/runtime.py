@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Runtime and config fragment descriptors."""
+"""提供OpenClaw 控制平面子系统的生产实现。"""
 from __future__ import annotations
 
 from copy import deepcopy
@@ -76,6 +76,14 @@ def _shared_owner_sets_for_item(item_id: str) -> tuple[frozenset[str], ...]:
 
 
 def _assert_allowed_shared_model_owners(existing: dict[str, Any], incoming: dict[str, Any], *, label: str, item_id: str) -> None:
+    """assertallowedshared模型owners。
+
+    参数：
+        existing（dict[str, Any]）：existing。
+        incoming（dict[str, Any]）：incoming。
+        label（str）：label。
+        item_id（str）：条目标识。
+    """
     owners = {_extension_owner(existing), _extension_owner(incoming)}
     for allowed_owners in _shared_owner_sets_for_item(item_id):
         if owners == set(allowed_owners):
@@ -246,20 +254,6 @@ TESTING_MANIFEST_DESCRIPTOR = FragmentDescriptor(
     label='testing_manifest',
     fields=(
         FragmentFieldDescriptor(
-            path=('groups',),
-            label='testing_manifest.groups',
-            merge_kind='unique_rows',
-            key_name='id',
-            materialize=_materialize_rows(label='testing_manifest.groups'),
-        ),
-        FragmentFieldDescriptor(
-            path=('checks',),
-            label='testing_manifest.checks',
-            merge_kind='unique_rows',
-            key_name='id',
-            materialize=_materialize_rows(label='testing_manifest.checks'),
-        ),
-        FragmentFieldDescriptor(
             path=('release_gate_checks',),
             label='testing_manifest.release_gate_checks',
             merge_kind='unique_rows',
@@ -267,60 +261,11 @@ TESTING_MANIFEST_DESCRIPTOR = FragmentDescriptor(
             materialize=_materialize_rows(label='testing_manifest.release_gate_checks'),
         ),
         FragmentFieldDescriptor(
-            path=('valid_groups',),
-            label='testing_manifest.valid_groups',
-            merge_kind='unique_values',
-        ),
-        FragmentFieldDescriptor(
-            path=('execution_order',),
-            label='testing_manifest.execution_order',
-            merge_kind='unique_values',
-        ),
-        FragmentFieldDescriptor(
-            path=('acceptance_reference', 'title'),
-            label='testing_manifest.acceptance_reference.title',
-            merge_kind='last_nonempty',
-        ),
-        FragmentFieldDescriptor(
-            path=('acceptance_reference', 'generated_doc'),
-            label='testing_manifest.acceptance_reference.generated_doc',
-            merge_kind='last_nonempty',
-        ),
-        FragmentFieldDescriptor(
-            path=('acceptance_reference', 'entrypoints'),
-            label='testing_manifest.acceptance_reference.entrypoints',
+            path=('live_acceptance_checks',),
+            label='testing_manifest.live_acceptance_checks',
             merge_kind='unique_rows',
-            key_name='title',
-            materialize=_materialize_rows(label='testing_manifest.acceptance_reference.entrypoints'),
-        ),
-        FragmentFieldDescriptor(
-            path=('acceptance_reference', 'artifacts'),
-            label='testing_manifest.acceptance_reference.artifacts',
-            merge_kind='unique_rows',
-            key_name='path',
-            materialize=_materialize_rows(label='testing_manifest.acceptance_reference.artifacts'),
-        ),
-        FragmentFieldDescriptor(
-            path=('acceptance_reference', 'scenarios'),
-            label='testing_manifest.acceptance_reference.scenarios',
-            merge_kind='unique_rows',
-            key_name='title',
-            materialize=_materialize_rows(label='testing_manifest.acceptance_reference.scenarios'),
-        ),
-        FragmentFieldDescriptor(
-            path=('acceptance_reference', 'required_checks'),
-            label='testing_manifest.acceptance_reference.required_checks',
-            merge_kind='unique_values',
-        ),
-        FragmentFieldDescriptor(
-            path=('acceptance_reference', 'required_run_ledger_jobs'),
-            label='testing_manifest.acceptance_reference.required_run_ledger_jobs',
-            merge_kind='unique_values',
-        ),
-        FragmentFieldDescriptor(
-            path=('acceptance_contract',),
-            label='testing_manifest.acceptance_contract',
-            merge_kind='overlay_dict',
+            key_name='id',
+            materialize=_materialize_rows(label='testing_manifest.live_acceptance_checks'),
         ),
     ),
 )

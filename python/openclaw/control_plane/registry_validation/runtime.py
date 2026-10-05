@@ -14,7 +14,6 @@ from openclaw.control_plane.registry.support import (
 from openclaw.control_plane.registry_validation.groups import (
     _materialize_group_resolved_fields,
     _resolve_group_release_policy,
-    _runtime_acceptance_truth,
     _validate_group_topology_and_members,
 )
 from openclaw.control_plane.registry_validation.jobs import (
@@ -51,8 +50,19 @@ def _validate_agent_group_rows(
     extensions: list[dict[str, Any]] | None = None,
     collections: dict[str, Any] | None = None,
 ) -> None:
-    """校验 agent group 行及其运行态约束。"""
-    acceptance_truth = _runtime_acceptance_truth(repo_root, config_path=config_path, extensions=extensions)
+    """校验 agent group 行及其运行态约束。
+
+    参数：
+        groups（list[dict[str, Any]]）：group 集合。
+        agents_by_id（dict[str, dict[str, Any]]）：agentsby标识。
+        jobs_by_id（dict[str, dict[str, Any]]）：job 集合by标识。
+        job_bindings_by_job_id（dict[str, dict[str, Any]]）：jobbindingsbyjob标识。
+        group_topologies_by_group_id（dict[str, dict[str, Any]]）：grouptopologiesbygroup标识。
+        repo_root（Path）：仓库根目录。
+        config_path（Path | None）：配置路径。
+        extensions（list[dict[str, Any]] | None）：扩展集合。
+        collections（dict[str, Any] | None）：collections。
+    """
     for group in groups:
         topology_state = _validate_group_topology_and_members(
             group,
@@ -66,8 +76,6 @@ def _validate_agent_group_rows(
             topology_state['groupId'],
             group,
             repo_root=repo_root,
-            acceptance_truth=acceptance_truth,
-            schedule_job_refs=topology_state.get('localScheduleJobRefs') or topology_state['scheduleJobRefs'],
         )
         _materialize_group_resolved_fields(
             group,
@@ -83,7 +91,15 @@ def _validate_agent_rows(
     implementations_by_id: dict[str, dict[str, Any]],
     groups_by_id: dict[str, dict[str, Any]],
 ) -> None:
-    """校验 agent 行及其绑定关系。"""
+    """校验 agent 行及其绑定关系。
+
+    参数：
+        agents（list[dict[str, Any]]）：agents。
+        models_by_id（dict[str, dict[str, Any]]）：模型集合by标识。
+        modules_by_id（dict[str, dict[str, Any]]）：modulesby标识。
+        implementations_by_id（dict[str, dict[str, Any]]）：implementationsby标识。
+        groups_by_id（dict[str, dict[str, Any]]）：group 集合by标识。
+    """
     for agent in agents:
         agent_id = str(agent.get('id') or '')
         entrypoint = _normalize_entrypoint(agent.get('entrypoint'), label=f'agent {agent_id} entrypoint')
@@ -149,7 +165,11 @@ def _validate_agent_rows(
 def _validate_model_rows(
     models: list[dict[str, Any]],
 ) -> None:
-    """校验模型画像的成本治理语义。"""
+    """校验模型画像的成本治理语义。
+
+    参数：
+        models（list[dict[str, Any]]）：模型集合。
+    """
     for model in models:
         try:
             validate_model_cost_policy(model)
@@ -164,7 +184,14 @@ def _validate_target_rows(
     dispatch_target_registry_paths: list[Path],
     dispatch_provider_registry_paths: list[Path],
 ) -> None:
-    """校验 target 行及其 dispatch 约束。"""
+    """校验 target 行及其 dispatch 约束。
+
+    参数：
+        targets（list[dict[str, Any]]）：target 集合。
+        agents_by_id（dict[str, dict[str, Any]]）：agentsby标识。
+        dispatch_target_registry_paths（list[Path]）：dispatchtargetregistry路径集合。
+        dispatch_provider_registry_paths（list[Path]）：dispatchproviderregistry路径集合。
+    """
     try:
         load_dispatch_registry(
             [item.resolve() for item in dispatch_target_registry_paths],
@@ -208,7 +235,22 @@ def _validate_job_rows(
     default_timezone: str,
     config_path: Path | None = None,
 ) -> None:
-    """校验 job 行及其 schedule / dependency / execution 约束。"""
+    """校验 job 行及其 schedule / dependency / execution 约束。
+
+    参数：
+        jobs（list[dict[str, Any]]）：job 集合。
+        jobs_by_id（dict[str, dict[str, Any]]）：job 集合by标识。
+        agents_by_id（dict[str, dict[str, Any]]）：agentsby标识。
+        models_by_id（dict[str, dict[str, Any]]）：模型集合by标识。
+        targets_by_id（dict[str, dict[str, Any]]）：target 集合by标识。
+        modules_by_id（dict[str, dict[str, Any]]）：modulesby标识。
+        groups_by_id（dict[str, dict[str, Any]]）：group 集合by标识。
+        job_bindings_by_job_id（dict[str, dict[str, Any]]）：jobbindingsbyjob标识。
+        job_runners_by_id（dict[str, dict[str, Any]]）：jobrunnersby标识。
+        binding_runner_ids（list[str]）：bindingrunnerids。
+        default_timezone（str）：defaulttimezone。
+        config_path（Path | None）：配置路径。
+    """
     resolved_orders = _precompute_job_orders(jobs, groups_by_id=groups_by_id, job_bindings_by_job_id=job_bindings_by_job_id)
     for job in jobs:
         job_id = str(job.get('id') or '')

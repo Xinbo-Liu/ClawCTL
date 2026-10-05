@@ -7,50 +7,52 @@
     "dispatch_runtime_objects_default": {
       "id": "dispatch_runtime_objects_default",
       "title": "分发运行态对象默认判读顺序",
-      "purpose": "统一定义 dispatch 运行态排障时优先查看 dispatch.json / status.json / ledger.jsonl / queue / queue_done 的默认顺序，供 observability 文档统一复用。",
+      "purpose": "统一定义 dispatch 排障时读取当前状态、目标证据、调度账本和补偿队列的顺序，供 observability 文档复用。",
       "entry_command": "bash ./scripts/runtime/run_openclaw_python_tool.sh dispatch observability steps --entry dispatch_runtime_objects_default",
       "steps": [
-        "dispatch.json -> 先确认具体发给了谁、release_level 是什么、results[] 最终是否成功。",
-        "status.json -> 再确认累计 failed_by_reason / skipped_by_reason / queue 汇总 / trend_lines。",
-        "ledger.jsonl -> 继续定位最近几次失败或跳过的连续趋势。",
-        "queue/ 与 queue_done/ -> 最后确认 retry / resend backlog 是否已经真正闭合。"
+        "status.json -> 先确认 current_push_run_id、formal_dispatch、required/advisory 目标与业务完成状态。",
+        "targetOutcomes 与 deliveryContractSnapshot -> 再核对逐目标状态、完成角色、原因码和合同快照。",
+        "scheduler run ledger -> 核对 processAccepted、contractAccepted、artifactAccepted、executionAccepted 与 acceptedByLedger。",
+        "runs/ 与 ledger.jsonl -> 按 businessRunId、targetId 和 schedulerRunId 追溯不可变目标记录与证明。",
+        "queue/ 与 queue_done/ -> 最后确认 retry backlog 是否已经真实处理。"
       ],
       "references": [
         "docs/operations/dispatch-targets.md",
-        "docs/operations/dispatch-targets.md",
+        "docs/operations/delivery-recovery.md",
         "docs/operations/troubleshooting.md"
       ],
       "notes": [
-        "本顺序用于解释运行态对象判读顺序；resend / retry / rotation 等执行动作使用对应执行入口。",
-        "若已确认需要恢复动作，统一转到 docs/operations/troubleshooting.md。"
+        "latest.json 只是已接受正式发布目标产物的可变别名，不能单独证明投递或调度运行成功。",
+        "若已确认需要恢复动作，先进入 docs/operations/delivery-recovery.md，再按业务扩展手册执行。"
       ],
       "prerequisites": [
-        "dispatch latest run 与 ledger 已生成；若目录为空，先确认当天至少执行过一次 dispatch 或 dry-run。"
+        "已明确需要核对的 businessRunId 或 schedulerRunId；若状态目录为空，先确认对应 job 是否实际运行。"
       ],
       "example_commands": [
         {
-          "title": "定位最新 dispatch run 目录",
-          "command": "latest_run_dir=\"$(ls -1dt \"$(bash ./scripts/runtime/run_openclaw_python_tool.sh runtime paths resolve dispatch_runs_dir --view host)\"/* | head -n 1)\" && echo \"$latest_run_dir\""
+          "title": "查看当前正式投递状态与合同快照",
+          "command": "dispatch_root=\"$(bash ./scripts/runtime/run_openclaw_python_tool.sh runtime paths resolve dispatch_out_dir --view host)\" && jq '{current_push_run_id,formal_dispatch,required_target_ids,advisory_target_ids,targetOutcomes,deliveryContractSnapshot,businessDeliveryReady,operationalCoverageReady,advisoryAttention}' \"$dispatch_root/status.json\""
         },
         {
-          "title": "查看最新 dispatch.json 的 release_level / results / rateLimit",
-          "command": "latest_run_dir=\"$(ls -1dt \"$(bash ./scripts/runtime/run_openclaw_python_tool.sh runtime paths resolve dispatch_runs_dir --view host)\"/* | head -n 1)\" && jq \".release_level,.results,.request.rateLimit\" \"$latest_run_dir/dispatch.json\""
+          "title": "查看调度运行账本接受维度",
+          "command": "bash ./scripts/runtime/run_openclaw_python_tool.sh control-plane runtime run-ledger-summary"
         },
         {
-          "title": "查看累计 status.json 的失败/跳过/queue 摘要",
-          "command": "latest_run_dir=\"$(ls -1dt \"$(bash ./scripts/runtime/run_openclaw_python_tool.sh runtime paths resolve dispatch_runs_dir --view host)\"/* | head -n 1)\" && jq \".failed_by_reason,.skipped_by_reason,.queue_breakdown,.trend_lines\" \"$latest_run_dir/status.json\""
+          "title": "查看目标级 acceptance",
+          "command": "bash ./scripts/runtime/run_openclaw_python_tool.sh dispatch observability show-target-acceptance --target <target_id> --gate-env-file deploy/.env --json --fail-on-fail"
         },
         {
-          "title": "查看最近 20 条 ledger",
+          "title": "查看最近 20 条不可变 dispatch ledger",
           "command": "tail -n 20 \"$(bash ./scripts/runtime/run_openclaw_python_tool.sh runtime paths resolve dispatch_out_dir --view host)/ledger.jsonl\""
         }
       ],
       "result_checks": [
-        "dispatch.json 用来回答“单次分发目标、release_level 与 results[] 结果”；status.json 用来回答“累计失败/跳过趋势”；ledger.jsonl 用来回答“连续分发事件”。"
+        "status.json 的当前 businessRunId、正式目标职责与 targetOutcomes 必须一致；调度账本五个接受维度全部为 true 才表示运行被接受。",
+        "latest.json 必须指向当前正式发布目标的已接受不可变记录；别名存在但账本未接受时仍按失败处理。"
       ],
       "common_branches": [
-        "不要只看 status.json 就判断某次发送结果；单次发送必须回 dispatch.json / results[]。",
-        "不要只看 queue/ 就判定 retry 失败；必须结合 queue_done/ 与 ledger.jsonl。"
+        "不要只看 latest.json 或命令退出码判断业务成功；必须同时核对合同、证据、执行和账本接受。",
+        "不要只看 queue/ 判定 retry 失败；必须结合 queue_done/、目标记录与 ledger.jsonl。"
       ]
     },
     "dispatch_retry_backlog_judgement": {

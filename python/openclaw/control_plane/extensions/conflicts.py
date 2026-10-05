@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Extension manifest conflict validation helpers."""
+"""提供OpenClaw 控制平面子系统的生产实现。"""
 from __future__ import annotations
 
 from pathlib import Path
@@ -14,6 +14,14 @@ from openclaw.control_plane.extensions.normalization import ExtensionError
 
 
 def _register_unique(mapping: dict[str, str], key: str, *, owner: str, label: str) -> None:
+    """registerunique。
+
+    参数：
+        mapping（dict[str, str]）：mapping。
+        key（str）：键。
+        owner（str）：owner。
+        label（str）：label。
+    """
     existing_owner = mapping.get(key)
     if existing_owner is not None and existing_owner != owner:
         raise ExtensionError(f'{label} conflict: {key} ({existing_owner} vs {owner})')
@@ -39,6 +47,15 @@ def _register_fragment_row_ids(
     mapping: dict[str, str],
     label: str,
 ) -> None:
+    """registerfragment记录行ids。
+
+    参数：
+        rows（Any）：记录行集合。
+        key（str）：键。
+        owner（str）：owner。
+        mapping（dict[str, str]）：mapping。
+        label（str）：label。
+    """
     if not isinstance(rows, list):
         return
     for row in rows:
@@ -49,7 +66,51 @@ def _register_fragment_row_ids(
             _register_unique(mapping, value, owner=owner, label=label)
 
 
+def _reject_extension_testing_manifest_platform_fields(
+    payload: dict[str, Any],
+    *,
+    extension_id: str,
+) -> None:
+    """拒绝扩展 testing manifest 重新声明平台 full test 字段。
+
+    参数：
+        payload（dict[str, Any]）：扩展 testing manifest 片段内容。
+        extension_id（str）：扩展标识，用于错误信息归属。
+
+    异常：
+        当扩展声明平台 full test 分组、检查项、执行顺序或 deployment acceptance 字段时抛出 ExtensionError。
+    """
+    disallowed = [
+        key
+        for key in (
+            'groups',
+            'checks',
+            'valid_groups',
+            'execution_order',
+            'acceptance_reference',
+            'acceptance_contract',
+        )
+        if key in payload
+    ]
+    if disallowed:
+        raise ExtensionError(
+            'extension '
+            + extension_id
+            + ' testing_manifest contains platform full test field(s): '
+            + ', '.join(sorted(disallowed))
+            + '; extension testing manifests may declare release_gate_checks and live_acceptance_checks only'
+        )
+
+
 def _validate_enabled_manifest_conflicts(manifests: list[dict[str, Any]]) -> None:
+    """校验enabledmanifestconflicts。
+
+    参数：
+        manifests（list[dict[str, Any]]）：manifests。
+
+    异常：
+        当启用扩展之间出现 CLI、路由、ready check、job runner、workspace、docs、runtime service、path entrypoint、testing manifest release gate 或 live acceptance 标识冲突，或非 agent_platform 扩展声明 full test group registry 时抛出 ExtensionError。
+    """
     cli_commands: dict[str, str] = {}
     route_paths: dict[str, str] = {}
     route_ids: dict[str, str] = {}
@@ -58,12 +119,15 @@ def _validate_enabled_manifest_conflicts(manifests: list[dict[str, Any]]) -> Non
     workspace_templates: dict[str, str] = {}
     workspace_target_entries: dict[str, str] = {}
     docs_page_paths: dict[str, str] = {}
-    testing_group_ids: dict[str, str] = {}
-    testing_check_ids: dict[str, str] = {}
     runtime_service_targets: dict[str, str] = {}
     path_entrypoint_ids: dict[str, str] = {}
     for manifest in manifests:
         extension_id = str(manifest.get('id') or '').strip() or '<unknown-extension>'
+        governance_surfaces = manifest.get(GOVERNANCE_SURFACES_FIELD) if isinstance(manifest.get(GOVERNANCE_SURFACES_FIELD), dict) else {}
+        if extension_id != 'agent_platform' and isinstance(governance_surfaces.get('fullTestGroupRegistryPath'), Path):
+            raise ExtensionError(
+                f'extension {extension_id} cannot declare fullTestGroupRegistryPath; platform full test group registry is owned by agent_platform'
+            )
         for row in manifest.get('cliCommands') or []:
             if not isinstance(row, dict):
                 continue
@@ -128,20 +192,7 @@ def _validate_enabled_manifest_conflicts(manifests: list[dict[str, Any]]) -> Non
             key='testingManifestPath',
             label=f'extension {extension_id} testing_manifest',
         )
-        _register_fragment_row_ids(
-            testing_payload.get('groups'),
-            key='id',
-            owner=extension_id,
-            mapping=testing_group_ids,
-            label='extension testing manifest group id',
-        )
-        _register_fragment_row_ids(
-            testing_payload.get('checks'),
-            key='id',
-            owner=extension_id,
-            mapping=testing_check_ids,
-            label='extension testing manifest check id',
-        )
+        _reject_extension_testing_manifest_platform_fields(testing_payload, extension_id=extension_id)
 
         runtime_service_payload = _fragment_object(
             manifest,

@@ -1,1 +1,1 @@
-"""Canonical helpers for runtime_surface renderer."""
+"""组织运行态参考的真源读取、章节片段和页面拼装。"""

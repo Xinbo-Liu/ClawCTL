@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import shutil
 import subprocess
 import tempfile
 import textwrap
@@ -85,6 +86,31 @@ class RepoTestReadinessScriptTest(unittest.TestCase):
         )
         jq_script.chmod(0o755)
 
+    def _install_host_tool(self, bin_dir: Path, tool_name: str, search_dirs: tuple[Path, ...]) -> None:
+        for source_dir in search_dirs:
+            for candidate_name in (tool_name, f'{tool_name}.exe'):
+                candidate = source_dir / candidate_name
+                if not candidate.is_file():
+                    continue
+                target = bin_dir / tool_name
+                try:
+                    target.symlink_to(candidate)
+                except OSError:
+                    shutil.copy2(candidate, target)
+                    target.chmod(0o755)
+                return
+        self.fail(f'测试夹具缺少 shell 基础命令：{tool_name}')
+
+    def _install_readiness_shell_tools(self, bin_dir: Path, bash_path: Path) -> None:
+        search_dirs = (
+            bash_path.parent,
+            bash_path.parent.parent / 'usr' / 'bin',
+            Path('/usr/bin'),
+            Path('/bin'),
+        )
+        for tool_name in ('bash', 'dirname', 'awk', 'grep', 'find', 'sort', 'head', 'cut', 'tr'):
+            self._install_host_tool(bin_dir, tool_name, search_dirs)
+
     def _run_script(
         self,
         *,
@@ -100,13 +126,8 @@ class RepoTestReadinessScriptTest(unittest.TestCase):
             temp_root = Path(tmpdir)
             fake_bin = temp_root / 'bin'
             fake_bin.mkdir(parents=True)
-            minimal_path = os.pathsep.join(
-                [
-                    str(fake_bin),
-                    str(bash_path.parent),
-                    str(bash_path.parent.parent / 'usr' / 'bin'),
-                ]
-            )
+            self._install_readiness_shell_tools(fake_bin, bash_path)
+            minimal_path = str(fake_bin)
             if fake_docker_mode is not None:
                 self._write_fake_docker(fake_bin)
             if with_fake_jq:
@@ -118,6 +139,7 @@ class RepoTestReadinessScriptTest(unittest.TestCase):
                 (archive_root / 'deployment_images_fixture.tar').write_text('placeholder\n', encoding='utf-8')
 
             env = dict(os.environ)
+            env.pop('BASH_ENV', None)
             env.update(
                 {
                     'PYTHONDONTWRITEBYTECODE': '1',

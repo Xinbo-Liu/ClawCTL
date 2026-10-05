@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Runtime path governance lint."""
+"""提供OpenClaw 运行态子系统的生产实现。"""
 from __future__ import annotations
 
 import argparse

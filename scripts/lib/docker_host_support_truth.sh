@@ -10,15 +10,12 @@ unset OPENCLAW_DOCKER_HOST_SUPPORT_TRUTH_LIB_DIR
 # shellcheck source=repo_contracts.sh
 source "$OPENCLAW_DOCKER_HOST_SUPPORT_TRUTH_ROOT/scripts/lib/repo_contracts.sh"
 repo_contract_assign_relpath OPENCLAW_DOCKER_HOST_SUPPORT_TRUTH_REL_PATH governance.docker_host_support
-
 docker_host_support_truth_path() {
   printf '%s/%s\n' "$OPENCLAW_DOCKER_HOST_SUPPORT_TRUTH_ROOT" "$OPENCLAW_DOCKER_HOST_SUPPORT_TRUTH_REL_PATH"
 }
-
 docker_host_support_truth_relpath() {
   printf '%s\n' "$OPENCLAW_DOCKER_HOST_SUPPORT_TRUTH_REL_PATH"
 }
-
 docker_host_support_supported_centos7_section_value() {
   local path="$1"
   local section="$2"
@@ -48,7 +45,6 @@ docker_host_support_supported_centos7_section_value() {
     printf '%s\n' "$fallback"
   fi
 }
-
 docker_host_support_supported_centos7_scalar() {
   local path="$1"
   local key="$2"
@@ -77,7 +73,6 @@ docker_host_support_supported_centos7_scalar() {
     printf '%s\n' "$fallback"
   fi
 }
-
 docker_host_support_supported_centos7_docker_repo_candidates() {
   local path="$1"
   if command -v jq >/dev/null 2>&1 && [[ -f "$path" ]]; then
@@ -88,7 +83,6 @@ docker_host_support_supported_centos7_docker_repo_candidates() {
   printf '%s\t%s\n' 'aliyun_cn' 'https://mirrors.aliyun.com/docker-ce/linux/centos/docker-ce.repo'
   printf '%s\t%s\n' 'tuna_cn' 'https://mirrors.tuna.tsinghua.edu.cn/docker-ce/linux/centos/docker-ce.repo'
 }
-
 docker_host_support_supported_centos7_vault_repo_candidates() {
   local path="$1"
   if command -v jq >/dev/null 2>&1 && [[ -f "$path" ]]; then
@@ -99,7 +93,6 @@ docker_host_support_supported_centos7_vault_repo_candidates() {
   printf '%s\t%s\n' 'aliyun_cn' 'https://mirrors.aliyun.com/centos-vault/7.9.2009'
   printf '%s\t%s\n' 'tuna_cn' 'https://mirrors.tuna.tsinghua.edu.cn/centos-vault/7.9.2009'
 }
-
 docker_host_support_supported_centos7_registry_mirrors() {
   local path="$1"
   if command -v jq >/dev/null 2>&1 && [[ -f "$path" ]]; then
@@ -110,7 +103,6 @@ docker_host_support_supported_centos7_registry_mirrors() {
   printf '%s\n' 'https://docker.nju.edu.cn'
   printf '%s\n' 'https://docker.mirrors.ustc.edu.cn'
 }
-
 docker_host_support_supported_centos7_network_profile_value() {
   local path="$1"
   local profile="$2"
@@ -140,4 +132,42 @@ docker_host_support_supported_centos7_network_profile_value() {
   else
     printf '%s\n' "$fallback"
   fi
+}
+docker_host_support_policy_section_value() {
+  local path="$1"
+  local policy="$2"
+  local section="$3"
+  local key="$4"
+  local fallback="${5-}"
+  local value=''
+  if command -v jq >/dev/null 2>&1 && [[ -f "$path" ]]; then
+    value="$(jq -r --arg policy "$policy" --arg section "$section" --arg key "$key" '.policies[$policy][$section][$key] // empty' "$path" 2>/dev/null || true)"
+  fi
+  if [[ -n "$value" ]]; then
+    printf '%s\n' "$value"
+  else
+    printf '%s\n' "$fallback"
+  fi
+}
+docker_host_support_policy_required_commands() {
+  local path="$1"
+  local policy="$2"
+  if command -v jq >/dev/null 2>&1 && [[ -f "$path" ]]; then
+    jq -r --arg policy "$policy" '.policies[$policy].required_commands[]? // empty' "$path" 2>/dev/null || true
+  fi
+}
+docker_host_support_policy_registry_mirrors() {
+  local path="$1"
+  local policy="$2"
+  if command -v jq >/dev/null 2>&1 && [[ -f "$path" ]]; then
+    jq -r --arg policy "$policy" '.policies[$policy].docker_daemon.registry_mirrors[]? // empty' "$path" 2>/dev/null || true
+    return 0
+  fi
+  case "$policy" in
+    supported_ubuntu2204|supported_centos7)
+      printf '%s\n' 'https://docker.m.daocloud.io'
+      printf '%s\n' 'https://docker.nju.edu.cn'
+      printf '%s\n' 'https://docker.mirrors.ustc.edu.cn'
+      ;;
+  esac
 }

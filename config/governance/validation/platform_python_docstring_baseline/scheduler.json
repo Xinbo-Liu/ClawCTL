@@ -1,18 +1,18 @@
 {
   "fileBaselines": {
     "python/openclaw/scheduler/__init__.py": {
-      "moduleHasChineseDocstring": false,
-      "publicChineseDocstrings": 0,
+      "moduleHasChineseDocstring": true,
+      "publicChineseDocstrings": 1,
       "publicEnglishOnlyDocstrings": 0,
       "publicItemBaselines": {
         "module:<module>": {
-          "hasChineseDocstring": false,
-          "hasDocstring": false,
+          "hasChineseDocstring": true,
+          "hasDocstring": true,
           "kind": "module",
           "qualname": "<module>"
         }
       },
-      "publicMissingDocstrings": 1
+      "publicMissingDocstrings": 0
     },
     "python/openclaw/scheduler/cron.py": {
       "moduleHasChineseDocstring": true,
@@ -60,78 +60,90 @@
     },
     "python/openclaw/scheduler/engine.py": {
       "moduleHasChineseDocstring": true,
-      "publicChineseDocstrings": 13,
+      "publicChineseDocstrings": 3,
       "publicEnglishOnlyDocstrings": 0,
       "publicItemBaselines": {
-        "function:candidate_due": {
+        "function:active_runtime_job_keys": {
           "hasChineseDocstring": true,
           "hasDocstring": true,
+          "kind": "function",
+          "qualname": "active_runtime_job_keys"
+        },
+        "function:candidate_due": {
+          "hasChineseDocstring": false,
+          "hasDocstring": false,
           "kind": "function",
           "qualname": "candidate_due"
         },
         "function:dependency_block_reason": {
-          "hasChineseDocstring": true,
-          "hasDocstring": true,
+          "hasChineseDocstring": false,
+          "hasDocstring": false,
           "kind": "function",
           "qualname": "dependency_block_reason"
         },
         "function:ensure_job_state": {
-          "hasChineseDocstring": true,
-          "hasDocstring": true,
+          "hasChineseDocstring": false,
+          "hasDocstring": false,
           "kind": "function",
           "qualname": "ensure_job_state"
         },
         "function:execute_due_jobs": {
-          "hasChineseDocstring": true,
-          "hasDocstring": true,
+          "hasChineseDocstring": false,
+          "hasDocstring": false,
           "kind": "function",
           "qualname": "execute_due_jobs"
         },
         "function:local_job_id": {
-          "hasChineseDocstring": true,
-          "hasDocstring": true,
+          "hasChineseDocstring": false,
+          "hasDocstring": false,
           "kind": "function",
           "qualname": "local_job_id"
         },
         "function:make_due_key": {
-          "hasChineseDocstring": true,
-          "hasDocstring": true,
+          "hasChineseDocstring": false,
+          "hasDocstring": false,
           "kind": "function",
           "qualname": "make_due_key"
         },
         "function:now_utc": {
-          "hasChineseDocstring": true,
-          "hasDocstring": true,
+          "hasChineseDocstring": false,
+          "hasDocstring": false,
           "kind": "function",
           "qualname": "now_utc"
         },
         "function:now_utc_iso": {
-          "hasChineseDocstring": true,
-          "hasDocstring": true,
+          "hasChineseDocstring": false,
+          "hasDocstring": false,
           "kind": "function",
           "qualname": "now_utc_iso"
         },
-        "function:refresh_next_scheduled": {
+        "function:prune_scheduler_state_jobs": {
           "hasChineseDocstring": true,
           "hasDocstring": true,
+          "kind": "function",
+          "qualname": "prune_scheduler_state_jobs"
+        },
+        "function:refresh_next_scheduled": {
+          "hasChineseDocstring": false,
+          "hasDocstring": false,
           "kind": "function",
           "qualname": "refresh_next_scheduled"
         },
         "function:run_job": {
-          "hasChineseDocstring": true,
-          "hasDocstring": true,
+          "hasChineseDocstring": false,
+          "hasDocstring": false,
           "kind": "function",
           "qualname": "run_job"
         },
         "function:run_subprocess_job": {
-          "hasChineseDocstring": true,
-          "hasDocstring": true,
+          "hasChineseDocstring": false,
+          "hasDocstring": false,
           "kind": "function",
           "qualname": "run_subprocess_job"
         },
         "function:runtime_job_key": {
-          "hasChineseDocstring": true,
-          "hasDocstring": true,
+          "hasChineseDocstring": false,
+          "hasDocstring": false,
           "kind": "function",
           "qualname": "runtime_job_key"
         },
@@ -142,16 +154,16 @@
           "qualname": "<module>"
         }
       },
-      "publicMissingDocstrings": 0
+      "publicMissingDocstrings": 12
     },
     "python/openclaw/scheduler/evidence.py": {
       "moduleHasChineseDocstring": true,
-      "publicChineseDocstrings": 2,
+      "publicChineseDocstrings": 1,
       "publicEnglishOnlyDocstrings": 0,
       "publicItemBaselines": {
         "function:maybe_export_agent_group_evidence": {
-          "hasChineseDocstring": true,
-          "hasDocstring": true,
+          "hasChineseDocstring": false,
+          "hasDocstring": false,
           "kind": "function",
           "qualname": "maybe_export_agent_group_evidence"
         },
@@ -162,12 +174,12 @@
           "qualname": "<module>"
         }
       },
-      "publicMissingDocstrings": 0
+      "publicMissingDocstrings": 1
     },
     "python/openclaw/scheduler/locking.py": {
-      "moduleHasChineseDocstring": false,
+      "moduleHasChineseDocstring": true,
       "publicChineseDocstrings": 1,
-      "publicEnglishOnlyDocstrings": 1,
+      "publicEnglishOnlyDocstrings": 0,
       "publicItemBaselines": {
         "function:acquire_lock": {
           "hasChineseDocstring": false,
@@ -212,8 +224,8 @@
           "qualname": "release_lock"
         },
         "function:scheduler_cycle_lock_stale_after_seconds": {
-          "hasChineseDocstring": true,
-          "hasDocstring": true,
+          "hasChineseDocstring": false,
+          "hasDocstring": false,
           "kind": "function",
           "qualname": "scheduler_cycle_lock_stale_after_seconds"
         },
@@ -230,64 +242,64 @@
           "qualname": "scheduler_lock_stale_after_seconds"
         },
         "module:<module>": {
-          "hasChineseDocstring": false,
+          "hasChineseDocstring": true,
           "hasDocstring": true,
           "kind": "module",
           "qualname": "<module>"
         }
       },
-      "publicMissingDocstrings": 9
+      "publicMissingDocstrings": 10
     },
     "python/openclaw/scheduler/runtime.py": {
       "moduleHasChineseDocstring": true,
-      "publicChineseDocstrings": 9,
+      "publicChineseDocstrings": 1,
       "publicEnglishOnlyDocstrings": 0,
       "publicItemBaselines": {
         "function:build_parser": {
-          "hasChineseDocstring": true,
-          "hasDocstring": true,
+          "hasChineseDocstring": false,
+          "hasDocstring": false,
           "kind": "function",
           "qualname": "build_parser"
         },
         "function:fail": {
-          "hasChineseDocstring": true,
-          "hasDocstring": true,
+          "hasChineseDocstring": false,
+          "hasDocstring": false,
           "kind": "function",
           "qualname": "fail"
         },
         "function:main": {
-          "hasChineseDocstring": true,
-          "hasDocstring": true,
+          "hasChineseDocstring": false,
+          "hasDocstring": false,
           "kind": "function",
           "qualname": "main"
         },
         "function:maintenance_entry": {
-          "hasChineseDocstring": true,
-          "hasDocstring": true,
+          "hasChineseDocstring": false,
+          "hasDocstring": false,
           "kind": "function",
           "qualname": "maintenance_entry"
         },
         "function:read_scheduler_maintenance": {
-          "hasChineseDocstring": true,
-          "hasDocstring": true,
+          "hasChineseDocstring": false,
+          "hasDocstring": false,
           "kind": "function",
           "qualname": "read_scheduler_maintenance"
         },
         "function:run_healthcheck": {
-          "hasChineseDocstring": true,
-          "hasDocstring": true,
+          "hasChineseDocstring": false,
+          "hasDocstring": false,
           "kind": "function",
           "qualname": "run_healthcheck"
         },
         "function:scheduler_maintenance_path": {
-          "hasChineseDocstring": true,
-          "hasDocstring": true,
+          "hasChineseDocstring": false,
+          "hasDocstring": false,
           "kind": "function",
           "qualname": "scheduler_maintenance_path"
         },
         "function:write_scheduler_maintenance": {
-          "hasChineseDocstring": true,
-          "hasDocstring": true,
+          "hasChineseDocstring": false,
+          "hasDocstring": false,
           "kind": "function",
           "qualname": "write_scheduler_maintenance"
         },
@@ -298,12 +310,12 @@
           "qualname": "<module>"
         }
       },
-      "publicMissingDocstrings": 0
+      "publicMissingDocstrings": 8
     },
     "python/openclaw/scheduler/status_surface.py": {
-      "moduleHasChineseDocstring": false,
-      "publicChineseDocstrings": 0,
-      "publicEnglishOnlyDocstrings": 1,
+      "moduleHasChineseDocstring": true,
+      "publicChineseDocstrings": 1,
+      "publicEnglishOnlyDocstrings": 0,
       "publicItemBaselines": {
         "function:build_status_payload": {
           "hasChineseDocstring": false,
@@ -336,7 +348,7 @@
           "qualname": "write_json_if_dirty"
         },
         "module:<module>": {
-          "hasChineseDocstring": false,
+          "hasChineseDocstring": true,
           "hasDocstring": true,
           "kind": "module",
           "qualname": "<module>"
@@ -366,7 +378,7 @@
     },
     "python/openclaw/scheduler/subprocess_support.py": {
       "moduleHasChineseDocstring": true,
-      "publicChineseDocstrings": 4,
+      "publicChineseDocstrings": 3,
       "publicEnglishOnlyDocstrings": 0,
       "publicItemBaselines": {
         "class:SubprocessExecutionOutcome": {
@@ -388,8 +400,8 @@
           "qualname": "blocked_result"
         },
         "function:build_command": {
-          "hasChineseDocstring": true,
-          "hasDocstring": true,
+          "hasChineseDocstring": false,
+          "hasDocstring": false,
           "kind": "function",
           "qualname": "build_command"
         },
@@ -478,7 +490,7 @@
           "qualname": "<module>"
         }
       },
-      "publicMissingDocstrings": 14
+      "publicMissingDocstrings": 15
     }
   },
   "kind": "openclaw_platform_docstring_baseline_shard",

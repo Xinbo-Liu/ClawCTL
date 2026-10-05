@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Plan builders for module prune/drop lifecycle operations."""
+"""提供OpenClaw 控制平面子系统的生产实现。"""
 from __future__ import annotations
 
 import json

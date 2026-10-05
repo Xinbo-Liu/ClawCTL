@@ -12,7 +12,6 @@ ROOT_DIR = repo_contract_root()
 
 
 def load_verification_tiers(root_dir: Path = ROOT_DIR) -> dict[str, Any]:
-    """读取验证层级真源，并校验正式门禁与诊断补充的基本字段。"""
     payload = read_repo_contract_json('governance.verification_tiers', root_dir=root_dir)
     if not isinstance(payload, dict):
         raise ValueError('governance.verification_tiers 顶层必须为对象')
@@ -58,7 +57,6 @@ def load_verification_tiers(root_dir: Path = ROOT_DIR) -> dict[str, Any]:
 
 
 def verification_tier_rows(root_dir: Path = ROOT_DIR) -> list[dict[str, Any]]:
-    """返回验证层级行，供渲染器直接消费。"""
     payload = load_verification_tiers(root_dir)
     rows: list[dict[str, Any]] = []
     for tier in payload.get('tiers') or []:
@@ -77,7 +75,6 @@ def verification_tier_rows(root_dir: Path = ROOT_DIR) -> list[dict[str, Any]]:
 
 
 def release_gate_usage_lines(root_dir: Path = ROOT_DIR) -> list[str]:
-    """渲染 release gate 帮助文本中的验证层级说明。"""
     lines = ['  验证层级：']
     for row in verification_tier_rows(root_dir):
         marker = '正式门禁' if row['release_required'] else '诊断补充'

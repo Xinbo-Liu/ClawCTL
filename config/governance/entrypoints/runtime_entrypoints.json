@@ -6,9 +6,31 @@
     "本页定义 **运行态入口、deployment acceptance 默认顺序，以及 runtime acceptance 证据归档**。",
     "runtime 服务名、容器名与 target 边界由 service registry、testing manifest 与 runtime entrypoints 共同定义。",
     "当前 compose 运行治理固定显式声明为 user + cap_drop ALL + no-new-privileges + read_only + init: true + cgroup: private + pull_policy: never；镜像拉取统一前置到 one-click 的镜像阶段。",
-    "acceptance / runtime evidence / health / recovery / dispatch observability 的固定对象路径统一回 `config/control_plane/object_families.json` 与 `agent/README.md`；本页只维护运行入口与顺序。"
+    "acceptance / runtime evidence / health / recovery / dispatch observability 的固定对象路径统一回 `config/control_plane/object_families.json` 与 `docs/operations/runtime-artifacts-reference.md`；本页只维护运行入口与顺序。"
   ],
   "entrypoints": [
+    {
+      "entry_id": "deployment_status",
+      "title": "统一查看部署状态",
+      "command": "bash ./scripts/runtime/show_runtime_deployment_status.sh",
+      "when": "需要同时查看 effective compose、Docker MTU、服务状态、run ledger 与 acceptance 摘要；默认任一核心状态面缺失或查询失败即返回非 0，人工排障保留部分输出时显式追加 `--allow-partial`。",
+      "notes": [
+        "该入口只读聚合已有状态面，不写 acceptance / evidence。",
+        "默认输出 overall_status 与 failure_count；存在失败时退出码为 1，只有显式 --allow-partial 才允许 partial 状态返回 0。",
+        "用于部署后核对、skip-acceptance 后交接，以及 MTU/compose/run ledger 联合排查。"
+      ],
+      "examples": [
+        {
+          "title": "查看当前部署状态",
+          "steps": [
+            "bash ./scripts/runtime/show_runtime_deployment_status.sh"
+          ],
+          "notes": [
+            "输出包含 effective compose 路径、Docker MTU、服务状态、run ledger 与 runtime acceptance summary；自动化应使用默认严格退出码，人工排障才使用 --allow-partial。"
+          ]
+        }
+      ]
+    },
     {
       "entry_id": "service_status",
       "title": "统一查看服务状态",
@@ -104,7 +126,7 @@
             "bash ./scripts/runtime/run_runtime_service_action.sh up --target scheduler --force-recreate"
           ],
           "notes": [
-            "适合 --prepare-only 之后人工补启动单个 target，或在 bootstrap 刷新运行态 env 后让 scheduler 重新读取环境。"
+            "适合 --prepare-only 之后人工补启动单个 target；up 会先刷新运行态派生 env，再让 scheduler 重新读取环境。"
           ]
         },
         {
@@ -159,7 +181,7 @@
         "`host_firewall` 模式会按 `OPENCLAW_INGRESS_ALLOWED_SOURCE_CIDRS` 逐项核对 firewalld / nftables / iptables 规则；若使用 iptables，必须由 `DOCKER-USER` 明确覆盖允许来源与默认拒绝，INPUT 链单独放行不视为充分证据。",
         "若环境启用 IPv6，边界证据必须覆盖 IPv6；未提供 IPv6 证据时，必须在宿主机或上游网络层显式禁用 IPv6 暴露面。",
         "`external_acl` 模式要求 `OPENCLAW_INGRESS_BOUNDARY_EVIDENCE_PATH` 指向结构化 JSON 证据文件，并且其中 `source_cidrs` / `allowed_ports` / `default_deny` / `ip_families` / `enforcement_plane` / 目标信息与当前部署输入严格对齐。",
-        "更完整的 acceptance / evidence 对象族索引统一看 agent/README.md。"
+        "更完整的 acceptance / evidence 对象族索引统一看 docs/operations/runtime-artifacts-reference.md。"
       ],
       "examples": [
         {
@@ -186,9 +208,9 @@
         "执行前先通过 check_runtime_evidence_prereqs.sh --scope evidence-export；该检查与导出脚本默认从 deploy/.env 读取当前 active control-plane profile。",
         "当前脚本会把 deployment_acceptance.accepted=true、ingress_boundary_evidence.accepted=true 与 runtime_acceptance.accepted=true 作为导出硬门禁；ingress_boundary_evidence 必须包含 Nginx allowlist 与基础设施边界证据闭环，任一不满足都会直接失败。",
         "deployment acceptance 默认顺序、通过标准与证据产物就在本页下方固定章节。",
-        "delivery_adapter / dispatch 执行能力的失败信号与恢复顺序统一查看 agent/README.md。",
+        "delivery_adapter / dispatch 执行能力的失败信号与恢复顺序统一查看 docs/operations/delivery-recovery.md。",
         "当前交付包只允许保留模板，不允许把 pending_runtime_execution 占位写入 runtime evidence。",
-        "runtime evidence 各对象的固定路径与职责统一看 agent/README.md。"
+        "runtime evidence 各对象的固定路径与职责统一看 docs/operations/runtime-artifacts-reference.md。"
       ],
       "examples": [
         {
@@ -210,6 +232,28 @@
           "notes": [
             "其中 shadow verify 默认按最新 pin 候选 Gateway 的最小回归链执行 release/digest 对齐、official runtime contract、internal-api runtime、gateway status --deep 与 gateway probe。",
             "同时要求候选隔离实例与活动运行面不共享状态目录、容器名或网络。"
+          ]
+        }
+      ]
+    },
+    {
+      "entry_id": "extension_live_acceptance",
+      "title": "扩展真实外部闭环验收",
+      "command": "bash ./scripts/setup/one_click_upgrade.sh --repo-url <git-url> --ref main --require-live-verification <extension-id>",
+      "when": "需要在正式升级主链中执行扩展 testing manifest 声明的 `live_acceptance_checks`；默认 full test 不触发外部发送，live 脱敏输出和部署机可访问证据路径由升级报告目录归档。",
+      "notes": [
+        "`--require-live-verification` 只能指向当前 active profile 已启用且声明 `live_acceptance_checks` 的扩展。",
+        "基座只调度 testing manifest 声明的命令并收集脱敏证据，业务参数、外部发送与证据内容由扩展命令负责。",
+        "任一 live 验收失败都会阻断升级完成，并保留 scheduler maintenance 便于排障。"
+      ],
+      "examples": [
+        {
+          "title": "要求单个扩展完成真实外部闭环",
+          "steps": [
+            "bash ./scripts/setup/one_click_upgrade.sh --repo-url <git-url> --ref main --require-live-verification <extension-id>"
+          ],
+          "notes": [
+            "扩展所需的真实任务号、外部凭据和 owner-only env 只进入目标机运行态，不写入仓库。"
           ]
         }
       ]
@@ -358,7 +402,7 @@
     {
       "title": "输出 acceptance 统一摘要",
       "steps": [
-        "bash ./scripts/runtime/run_openclaw_python_tool.sh runtime acceptance acceptance-summary"
+        "bash ./scripts/runtime/run_openclaw_python_tool.sh runtime acceptance acceptance-summary --strict true"
       ]
     },
     {

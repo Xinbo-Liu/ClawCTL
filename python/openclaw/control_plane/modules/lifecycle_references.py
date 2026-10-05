@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Structured reference discovery for agent module lifecycle operations."""
+"""提供OpenClaw 控制平面子系统的生产实现。"""
 from __future__ import annotations
 
 from pathlib import Path
@@ -126,6 +126,13 @@ def _normalize_text(value: Any) -> str:
 
 
 def _append_unique_ref(rows: list[str], seen: set[str], value: str) -> None:
+    """追加uniqueref。
+
+    参数：
+        rows（list[str]）：记录行集合。
+        seen（set[str]）：seen。
+        value（str）：取值。
+    """
     normalized = str(value or '').strip()
     if not normalized or normalized in seen:
         return
@@ -263,14 +270,11 @@ def _group_job_ref_hits(group_row: dict[str, Any], scoped_job_refs: set[str]) ->
         return []
     dependency_policy = json_object(group_row.get('dependencyPolicy'))
     schedule_policy = json_object(group_row.get('schedulePolicy'))
-    release_policy = json_object(group_row.get('releasePolicy'))
-    acceptance_binding = json_object(release_policy.get('acceptanceBinding'))
     recovery_policy = json_object(group_row.get('recoveryPolicy'))
     hits: list[str] = []
     for field_label, values in (
         ('dependencyPolicy.orderedJobRefs', json_array(dependency_policy.get('orderedJobRefs'))),
         ('schedulePolicy.jobRefs', json_array(schedule_policy.get('jobRefs'))),
-        ('releasePolicy.acceptanceBinding.requiredRunLedgerJobRefs', json_array(acceptance_binding.get('requiredRunLedgerJobRefs'))),
     ):
         if any(_normalize_text(item) in scoped_job_refs for item in values):
             hits.append(field_label)

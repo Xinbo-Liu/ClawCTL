@@ -19,7 +19,6 @@ REPO_PYTHON_ENV_ARGS=()
 while IFS= read -r -d '' item; do
   REPO_PYTHON_ENV_ARGS+=("$item")
 done < <(openclaw_repo_python_env_args "$ROOT_DIR")
-
 resolve_dispatch_profile_for_target() {
   local target_id="$1"
 bash "$PYTHON_RUNNER" --workdir "$ROOT_DIR" "${REPO_PYTHON_ENV_ARGS[@]}" -- - "$target_id" <<'PY'
@@ -72,7 +71,6 @@ detail = f" ({'; '.join(errors[:3])})" if errors else ''
 raise SystemExit(f'[update_dispatch_target_lifecycle][FAIL] no dispatch profile contains target: {target_id}{detail}')
 PY
 }
-
 resolve_active_dispatch_config_path() {
   if [[ -n "$REQUESTED_CONFIG_PATH" ]]; then
     openclaw_control_plane_resolve_config_path agent_platform "$REQUESTED_CONFIG_PATH"
@@ -88,7 +86,6 @@ resolve_active_dispatch_config_path() {
   fi
   resolve_dispatch_profile_for_target "$TARGET_ID"
 }
-
 resolve_dispatch_target_registry_path() {
   local target_id="$1"
 bash "$PYTHON_RUNNER" --workdir "$ROOT_DIR" "${REPO_PYTHON_ENV_ARGS[@]}" -- - "$OPENCLAW_CONTROL_PLANE_SERVICE_CONFIG_PATH" "$target_id" <<'PY'
@@ -137,7 +134,6 @@ APPLY=false
 QUIET=false
 REQUESTED_CONFIG_PATH=""
 REQUESTED_PROFILE=""
-
 usage() {
   cat <<'USAGE'
 用法：  bash ./scripts/setup/update_dispatch_target_lifecycle.sh --target <target_id> --state <active|disabled|decommissioned> [--config-path <path>|--control-plane-profile <profile_id>] [--apply] [--write-audit] [--audit-dir <path>] [--quiet]
@@ -146,6 +142,7 @@ usage() {
   - 默认 dry-run，只输出拟变更摘要，不修改注册表。
   - 未显式指定 config 时，会按 profile registry 自动选择包含该 target 的 dispatch profile。
   - active -> disabled / decommissioned，disabled -> active / decommissioned 允许；decommissioned 默认不允许回退。
+  - formal_broadcast/required latest publisher 必须保持 active 且默认启用；维护窗口使用 scheduler maintenance。
   - 进入 decommissioned 时，会自动把 enabledDefault 置为 false，并清空 verificationBatchIds。
   - --write-audit 默认落到 runtime_paths -> dispatch_target_lifecycle_audit_dir。
 
@@ -205,7 +202,6 @@ while [[ $# -gt 0 ]]; do
       ;;
   esac
 done
-
 runtime_paths_abs_host_path() {
   bash "$RUNTIME_PATHS_TOOL" \
     runtime paths resolve "$1" \
@@ -295,6 +291,18 @@ if row is None:
 current_state = str(row.get('lifecycleState') or '')
 if current_state == 'decommissioned' and next_state != 'decommissioned':
     raise SystemExit('[update_dispatch_target_lifecycle][FAIL] decommissioned target 默认不允许回退；如需恢复，请先人工补齐 verificationBatchIds 与 owner/策略后再评审变更')
+
+boundary = row.get('boundary') if isinstance(row.get('boundary'), dict) else {}
+is_formal_publisher = (
+    str(boundary.get('dispatchLane') or '') == 'formal_broadcast'
+    and str(boundary.get('completionRole') or '') == 'required'
+    and boundary.get('publishLatestDefault') is True
+)
+if is_formal_publisher and next_state != 'active':
+    raise SystemExit(
+        f'[update_dispatch_target_lifecycle][FAIL] 正式 latest publisher {target_id} 必须保持 active；'
+        '维护窗口请使用 scheduler maintenance'
+    )
 
 allowed_transitions = {
     'active': {'active', 'disabled', 'decommissioned'},

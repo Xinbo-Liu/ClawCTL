@@ -19,15 +19,15 @@
     },
     {
       "id": "host_diagnostic",
-      "title": "Windows 宿主机诊断回归",
+      "title": "宿主机静态前置检查",
       "status": "diagnostic_only",
       "releaseRequired": false,
       "diagnosticOnly": true,
-      "description": "仅用于无 Docker 或本地快速定位时的宿主机诊断补充；不得替代正式 Docker / 控制面容器门禁。",
+      "description": "仅用于正式容器门禁前的只读环境检查；不得执行仓库 Python 或替代正式 Docker / 控制面容器门禁。",
       "commands": [
-        "python -B -m openclaw.testing.repo_host suite repo-check -q",
-        "python -B -m openclaw.doctor.platform.docstring_governance --mode report",
-        "bash ./scripts/runtime/run_openclaw_python_tool.sh control-plane facts overview --format json --no-local-probe"
+        "bash ./scripts/testing/check_repo_test_readiness.sh",
+        "bash ./scripts/runtime/verify_python_runtime_container.sh --static-only",
+        "bash ./scripts/doctor/check_host_python_governance.sh --json"
       ]
     }
   ]

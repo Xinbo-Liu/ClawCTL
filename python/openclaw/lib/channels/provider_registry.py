@@ -10,7 +10,9 @@ from pathlib import Path
 from openclaw.lib.repo.layout import resolve_repo_root
 from typing import Any, Callable, Sequence
 
-from openclaw.lib.repo.static_truth import dispatch_provider_registry_paths
+from openclaw.lib.repo.bootstrap import bootstrap_sys_path
+from openclaw.lib.repo.managed_extensions import managed_explicit_extensions
+from openclaw.lib.repo.static_truth import control_plane_service_config_path, dispatch_provider_registry_paths
 from openclaw.lib.runtime.execution import validate_callable_reference
 
 ROOT_DIR = resolve_repo_root(Path(__file__))
@@ -27,6 +29,7 @@ class ChannelProviderRegistryError(RuntimeError):
 
 @dataclass(frozen=True)
 class ChannelProviderAdapterSpec:
+    """通道 provider 适配器注册项。"""
     adapter_id: str
     title: str
     description: str
@@ -89,6 +92,29 @@ def _normalize_registry_paths(path: Path | Sequence[Path] | None) -> list[Path]:
     return result
 
 
+def _path_is_relative_to(path: Path, base: Path) -> bool:
+    try:
+        path.resolve().relative_to(base.resolve())
+        return True
+    except ValueError:
+        return False
+
+
+def _bootstrap_provider_registry_owner_roots(paths: list[Path]) -> None:
+    """按显式 provider registry 路径补齐所属受管扩展的 Python root。"""
+    if not paths:
+        return
+    bootstrapped_configs: set[Path] = set()
+    for row in managed_explicit_extensions(ROOT_DIR):
+        if not any(_path_is_relative_to(path, row.root_dir) for path in paths):
+            continue
+        config_path = row.default_service_config_path.resolve()
+        if config_path in bootstrapped_configs:
+            continue
+        bootstrap_sys_path(ROOT_DIR, config_path=config_path)
+        bootstrapped_configs.add(config_path)
+
+
 def _merge_channel_provider_registry_payloads(paths: list[Path]) -> dict[str, Any]:
     payloads = [_read_json(item) for item in paths]
     version = 0
@@ -126,7 +152,11 @@ def _merge_channel_provider_registry_payloads(paths: list[Path]) -> dict[str, An
 
 
 def load_channel_provider_registry(path: Path | Sequence[Path] | None = None) -> dict[str, Any]:
-    payload = _merge_channel_provider_registry_payloads(_normalize_registry_paths(path))
+    paths = _normalize_registry_paths(path)
+    if path is None:
+        bootstrap_sys_path(ROOT_DIR, config_path=control_plane_service_config_path(ROOT_DIR))
+    _bootstrap_provider_registry_owner_roots(paths)
+    payload = _merge_channel_provider_registry_payloads(paths)
     for row in payload.get('adapters') or []:
         adapter_id = str(row.get('id') or '').strip()
         transport = str(row.get('transport') or '').strip()

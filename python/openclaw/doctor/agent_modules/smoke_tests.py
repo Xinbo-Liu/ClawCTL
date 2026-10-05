@@ -71,7 +71,6 @@ def _path_is_relative_to(path: Path, base: Path) -> bool:
 
 
 def _extension_import_entries_for_path(path: Path, *, repo_root: Path | None = None) -> tuple[Path, ...]:
-    """为扩展测试注入扩展源码和仓内离线 wheel，避免模块 smoke 依赖宿主机 Python。"""
     root_dir = ROOT_DIR if repo_root is None else Path(repo_root).resolve()
     resolved = Path(path).resolve()
     entries: list[Path] = []
@@ -127,6 +126,7 @@ def load_test_module(path: Path, *, repo_root: Path | None = None) -> types.Modu
 
 
 class _ExtensionModuleSuite(unittest.TestSuite):
+    """扩展模块冒烟测试 suite。"""
     def __init__(self, path: Path, tests: unittest.TestSuite) -> None:
         super().__init__(tests)
         self._path = path

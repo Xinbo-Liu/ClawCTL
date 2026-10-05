@@ -60,7 +60,6 @@ class ControlPlaneRegistryConfigModel:
 
     @classmethod
     def from_payload(cls, payload: Any) -> 'ControlPlaneRegistryConfigModel':
-        """从未校验 JSON payload 读取 registry 配置，缺失字段按空值处理。"""
         data = payload if isinstance(payload, dict) else {}
         return cls(
             jobs_dir=_text(data.get('jobsDir')),
@@ -70,7 +69,6 @@ class ControlPlaneRegistryConfigModel:
         )
 
     def to_payload(self) -> dict[str, Any]:
-        """导出回 JSON 对象，保留未知字段以避免重写时丢失兼容信息。"""
         payload = dict(self.extra)
         if self.jobs_dir or 'jobsDir' in payload:
             payload['jobsDir'] = self.jobs_dir
@@ -91,7 +89,6 @@ class ControlPlaneExtensionsConfigModel:
 
     @classmethod
     def from_payload(cls, payload: Any) -> 'ControlPlaneExtensionsConfigModel':
-        """从 JSON payload 读取扩展目录和启用列表，非数组输入按空集合处理。"""
         data = payload if isinstance(payload, dict) else {}
         manifests_dirs = list(_text_tuple(data.get('manifestsDirs')))
         return cls(
@@ -101,7 +98,6 @@ class ControlPlaneExtensionsConfigModel:
         )
 
     def to_payload(self) -> dict[str, Any]:
-        """导出可写回 service config 的 extensions 对象。"""
         payload = dict(self.extra)
         if self.manifests_dirs or 'manifestsDirs' in payload:
             payload['manifestsDirs'] = list(self.manifests_dirs)
@@ -121,7 +117,6 @@ class ControlPlaneSchemasConfigModel:
 
     @classmethod
     def from_payload(cls, payload: Any) -> 'ControlPlaneSchemasConfigModel':
-        """从 JSON payload 读取 schema 路径，缺失项保持空字符串。"""
         data = payload if isinstance(payload, dict) else {}
         return cls(
             jobs_schema=_text(data.get('jobsSchema')),
@@ -131,7 +126,6 @@ class ControlPlaneSchemasConfigModel:
         )
 
     def to_payload(self) -> dict[str, Any]:
-        """导出 schema 配置对象，保留当前实现尚未理解的扩展字段。"""
         payload = dict(self.extra)
         if self.jobs_schema or 'jobsSchema' in payload:
             payload['jobsSchema'] = self.jobs_schema
@@ -153,7 +147,6 @@ class ControlPlaneServiceConfigModel:
 
     @classmethod
     def from_payload(cls, payload: Any) -> 'ControlPlaneServiceConfigModel':
-        """把 service config JSON 对象拆成 registry、extensions 与 schemas 三个子模型。"""
         data = payload if isinstance(payload, dict) else {}
         return cls(
             registry=ControlPlaneRegistryConfigModel.from_payload(data.get('registry')),
@@ -163,7 +156,6 @@ class ControlPlaneServiceConfigModel:
         )
 
     def to_payload(self) -> dict[str, Any]:
-        """组合子模型并导出为可序列化 JSON 对象。"""
         payload = dict(self.extra)
         registry_payload = self.registry.to_payload()
         extensions_payload = self.extensions.to_payload()
@@ -186,7 +178,6 @@ class WorkspaceTemplateBindingModel:
 
     @classmethod
     def from_payload(cls, payload: dict[str, Any], *, label: str) -> 'WorkspaceTemplateBindingModel':
-        """读取单条模板绑定；缺少 template 或 target_entry 时抛出可读错误。"""
         template = _text(payload.get('template'))
         target_entry = _text(payload.get('target_entry'))
         if not template:
@@ -196,7 +187,6 @@ class WorkspaceTemplateBindingModel:
         return cls(template=template, target_entry=target_entry)
 
     def to_payload(self) -> dict[str, str]:
-        """导出模板绑定，供 workspace manifest 重渲染使用。"""
         return {'template': self.template, 'target_entry': self.target_entry}
 
 
@@ -212,7 +202,6 @@ class WorkspaceTemplatesManifestModel:
 
     @classmethod
     def from_payload(cls, payload: Any, *, label: str) -> 'WorkspaceTemplatesManifestModel':
-        """从 manifest JSON 读取模板绑定，忽略非对象行并保留未知字段。"""
         data = payload if isinstance(payload, dict) else {}
         return cls(
             control_plane=tuple(
@@ -227,7 +216,6 @@ class WorkspaceTemplatesManifestModel:
         )
 
     def to_payload(self) -> dict[str, Any]:
-        """导出 workspace templates manifest 的 JSON 对象。"""
         payload = dict(self.extra)
         payload['control_plane'] = [row.to_payload() for row in self.control_plane]
         payload['stale_dirs'] = list(self.stale_dirs)
@@ -252,7 +240,6 @@ class ExtensionRegistryConfigModel:
     dispatch_provider_registry_paths: tuple[Path, ...] = ()
 
     def to_payload(self) -> dict[str, Any]:
-        """导出扩展 registry 路径对象，字段名保持 manifest 合同原样。"""
         return {
             'jobsDirs': list(self.jobs_dirs),
             'modelsDirs': list(self.models_dirs),
@@ -276,7 +263,6 @@ class ExtensionJobRunnerModel:
     handles_agent_bindings: bool
 
     def to_payload(self) -> dict[str, Any]:
-        """导出 job runner manifest 行。"""
         return {
             'id': self.id,
             'title': self.title,
@@ -294,7 +280,6 @@ class ExtensionCliCommandModel:
     module: str
 
     def to_payload(self) -> dict[str, str]:
-        """导出 CLI command manifest 行。"""
         return {'command': self.command, 'module': self.module}
 
 
@@ -309,7 +294,6 @@ class ExtensionInternalApiRouteModel:
     auth_required: bool
 
     def to_payload(self) -> dict[str, Any]:
-        """导出 internal-api route manifest 行。"""
         return {
             'id': self.id,
             'path': self.path,
@@ -329,7 +313,6 @@ class ExtensionReadyCheckModel:
     blocking: bool
 
     def to_payload(self) -> dict[str, Any]:
-        """导出 ready check manifest 行。"""
         return {
             'id': self.id,
             'module': self.module,
@@ -347,7 +330,6 @@ class ExtensionDependencyModel:
     optional: bool = False
 
     def to_payload(self) -> dict[str, Any]:
-        """导出 dependency manifest 行，空版本和默认 optional 不写出。"""
         payload: dict[str, Any] = {'id': self.id}
         if self.version:
             payload['version'] = self.version
@@ -366,7 +348,6 @@ class ExtensionMigrationModel:
     callable: str = ''
 
     def to_payload(self) -> dict[str, Any]:
-        """导出 migration manifest 行，空字段不写出。"""
         payload: dict[str, Any] = {'id': self.id}
         if self.from_version:
             payload['fromVersion'] = self.from_version
@@ -400,7 +381,6 @@ class ExtensionManifestModel:
 
     @classmethod
     def from_normalized_payload(cls, payload: dict[str, Any]) -> 'ExtensionManifestModel':
-        """从已标准化 payload 构造扩展模型；输入中的路径字段应已解析为 Path。"""
         registry_payload = payload.get('registry') if isinstance(payload.get('registry'), dict) else {}
         return cls(
             id=_text(payload.get('id')),
@@ -481,7 +461,6 @@ class ExtensionManifestModel:
         )
 
     def to_payload(self) -> dict[str, Any]:
-        """导出扩展 manifest JSON 对象，供锁文件、诊断和文档渲染复用。"""
         return {
             'id': self.id,
             'title': self.title,

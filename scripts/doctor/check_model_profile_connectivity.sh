@@ -118,7 +118,6 @@ if [[ "$total" == '0' ]]; then
   echo "当前 active profile 未声明需要运行态模型 env 的作业"
   exit 0
 fi
-
 accept_http_code() {
   local code="$1"
   [[ "$code" =~ ^2[0-9][0-9]$ || "$code" =~ ^3[0-9][0-9]$ || "$code" == "401" || "$code" == "403" ]]

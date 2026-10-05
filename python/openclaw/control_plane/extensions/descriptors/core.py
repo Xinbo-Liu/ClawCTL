@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Core helpers for extension-owned fragment descriptors."""
+"""提供OpenClaw 控制平面子系统的生产实现。"""
 from __future__ import annotations
 
 from copy import deepcopy
@@ -31,6 +31,7 @@ ValueMerger = Callable[[Any, Any, str], Any]
 
 @dataclass(frozen=True)
 class FragmentFieldDescriptor:
+    """扩展 fragment 合并字段声明。"""
     path: tuple[str, ...]
     label: str
     merge_kind: str
@@ -41,6 +42,7 @@ class FragmentFieldDescriptor:
 
 @dataclass(frozen=True)
 class FragmentDescriptor:
+    """扩展 fragment 合同声明。"""
     group: str
     key: str
     base_path: Path

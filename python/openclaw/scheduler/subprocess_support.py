@@ -38,13 +38,16 @@ class SubprocessRunContext:
     command: list[str]
     timeout_seconds: int
     trigger: str
+    execution_env: dict[str, str]
     started_at: str
     run_dir: Path
     log_path: Path
     artifacts_path: Path
+    outcome_path: Path
     run_manifest_path: Path
     result_manifest_path: Path
     repo_root: Path
+    runs_root: Path
 
 
 @dataclass(frozen=True)
@@ -82,7 +85,6 @@ def write_run_manifests(
 
 
 def build_command(job: dict[str, Any], config: dict[str, Any] | None = None) -> list[str]:
-    """从 job 的执行计划解析最终命令，必要时回退到 registry 命令解析。"""
     plan = execution_plan_from_job(job)
     resolved = materialized_command_from_execution_plan(plan)
     if resolved:
@@ -125,10 +127,12 @@ def build_run_context(
     force_all: bool,
     command: list[str],
     now_utc_iso: NowIsoBuilder,
+    trigger_override: str | None = None,
+    execution_env: dict[str, str] | None = None,
 ) -> SubprocessRunContext:
     timeout_seconds = max(1, int(job.get('timeoutSeconds') or 900))
     started_at = now_utc_iso()
-    trigger = 'force_all' if force_all else 'schedule'
+    trigger = str(trigger_override or ('force_all' if force_all else 'schedule'))
     run_dir = run_materialized_dir(files, runtime_job_key(job), due_key, started_at)
     log_path = run_dir / 'stdout.log'
     return SubprocessRunContext(
@@ -139,13 +143,16 @@ def build_run_context(
         command=command,
         timeout_seconds=timeout_seconds,
         trigger=trigger,
+        execution_env=dict(execution_env or {}),
         started_at=started_at,
         run_dir=run_dir,
         log_path=log_path,
         artifacts_path=run_dir / 'artifacts.json',
+        outcome_path=run_dir / 'outcome.json',
         run_manifest_path=run_dir / 'run.json',
         result_manifest_path=run_dir / 'result.json',
         repo_root=resolve_repo_root(Path(__file__)),
+        runs_root=files.runs_dir,
     )
 
 
@@ -173,6 +180,8 @@ def run_payload(context: SubprocessRunContext) -> dict[str, Any]:
         'targetBindingRef': str(job.get('targetBindingRef') or ''),
         'groupRef': str(job.get('groupRef') or ''),
         'contract': job.get('resolvedContract') if isinstance(job.get('resolvedContract'), dict) else {},
+        'deliveryContract': job.get('resolvedDeliveryContract') if isinstance(job.get('resolvedDeliveryContract'), dict) else {},
+        'retryOwnership': str(job.get('retryOwnership') or 'stage_owned'),
         'recoveryStep': job.get('resolvedRecoveryStep') if isinstance(job.get('resolvedRecoveryStep'), dict) else {},
         'inputs': job.get('resolvedInputs') if isinstance(job.get('resolvedInputs'), dict) else {},
         'outputs': job.get('resolvedOutputs') if isinstance(job.get('resolvedOutputs'), dict) else {},
@@ -180,6 +189,7 @@ def run_payload(context: SubprocessRunContext) -> dict[str, Any]:
         'runDir': str(context.run_dir),
         'stdoutLogPath': str(context.log_path),
         'artifactsPath': str(context.artifacts_path),
+        'outcomePath': str(context.outcome_path),
         'resultPath': str(context.result_manifest_path),
     }
 
@@ -303,6 +313,16 @@ def result_payload(
         'command': context.command,
         'stdoutLogPath': str(context.log_path),
         'runDir': str(context.run_dir),
+        'outcomePath': str(context.outcome_path) if context.outcome_path.exists() else None,
+        'processAccepted': result.get('process_accepted'),
+        'contractAccepted': result.get('contract_accepted'),
+        'artifactAccepted': result.get('artifact_accepted'),
+        'executionAccepted': result.get('execution_accepted'),
         'acceptedByLedger': accepted_by_ledger,
+        'businessStatus': result.get('business_status'),
+        'businessRunId': result.get('business_run_id'),
+        'failureClass': result.get('failure_class'),
+        'statusSignals': list(result.get('status_signals') or []),
+        'recoveries': list(result.get('recoveries') or []),
         'acceptance': artifacts_payload.get('acceptance') if isinstance(artifacts_payload.get('acceptance'), dict) else {},
     }

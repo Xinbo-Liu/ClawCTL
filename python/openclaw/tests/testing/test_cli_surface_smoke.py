@@ -12,6 +12,7 @@ from pathlib import Path
 from unittest import mock
 
 from openclaw.lib.repo.layout import resolve_repo_root
+from openclaw.release.bundle_manifest_support import load_manifest as load_bundle_manifest
 from openclaw.tests.support.managed_extensions import managed_extensions
 
 
@@ -87,10 +88,12 @@ class CliSurfaceSmokeTest(unittest.TestCase):
         self.assertIn('overlay contract passed', result.stdout)
 
     def test_release_bundles_list_and_manifest_smoke(self) -> None:
+        manifest = load_bundle_manifest(error_factory=RuntimeError)
         exit_code, output = self._run_cli_in_process('runtime', 'release', 'list-bundles')
         self.assertEqual(exit_code, 0, msg=output)
         bundles_payload = json.loads(output)
-        bundle_ids = {str(row.get('bundle') or '') for row in bundles_payload.get('bundles') or []}
+        bundle_ids = [str(row.get('bundle') or '') for row in bundles_payload.get('bundles') or []]
+        self.assertEqual(sorted(bundle_ids), sorted(manifest['bundles']))
         self.assertIn('runtime-core', bundle_ids)
 
         exit_code, output = self._run_cli_in_process('runtime', 'release', 'manifest', '--bundle', 'runtime-core')

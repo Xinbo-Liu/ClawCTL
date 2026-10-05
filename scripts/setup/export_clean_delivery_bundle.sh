@@ -2,6 +2,9 @@
 # 用途：导出交付包前执行本地残留洁净策略。
 set -euo pipefail
 
+# 快照只属于本次宿主导出；不能继承其他仓库或外层调用的索引。
+unset OPENCLAW_BUNDLE_GIT_INDEX_SNAPSHOT OPENCLAW_BUNDLE_GIT_INDEX_ROOT
+
 __openclaw_script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 # shellcheck source=../lib/repo_root.sh
 source "$__openclaw_script_dir/../lib/repo_root.sh"
@@ -20,7 +23,6 @@ BUNDLE_MANIFEST_PATH=''
 REPO_CONTRACTS_LOADED=0
 LOCAL_WORKSPACE_POLICY_LOADED=0
 TOOL_OVERLAY_DIR=''
-
 cleanup() {
   [[ -n "$TOOL_OVERLAY_DIR" ]] || return 0
   case "$TOOL_OVERLAY_DIR" in
@@ -33,7 +35,6 @@ cleanup() {
   esac
 }
 trap cleanup EXIT
-
 ensure_repo_contracts_loaded() {
   if [[ "$REPO_CONTRACTS_LOADED" == '1' ]]; then
     return 0
@@ -43,7 +44,6 @@ ensure_repo_contracts_loaded() {
   repo_contract_assign_path BUNDLE_MANIFEST_PATH governance.bundle_manifest
   REPO_CONTRACTS_LOADED=1
 }
-
 ensure_local_workspace_policy_loaded() {
   if [[ "$LOCAL_WORKSPACE_POLICY_LOADED" == '1' ]]; then
     return 0
@@ -52,7 +52,6 @@ ensure_local_workspace_policy_loaded() {
   source "$ROOT_DIR/scripts/lib/local_workspace_policy.sh"
   LOCAL_WORKSPACE_POLICY_LOADED=1
 }
-
 usage() {
   cat <<'USAGE'
 用法：bash ./scripts/setup/export_clean_delivery_bundle.sh [选项]
@@ -63,8 +62,8 @@ usage() {
   3. 按 bundle allowlist 导出规范交付包，并写出 size-manifest / BOM
 
 选项：
-  --bundle <runtime-core|ops-toolkit|full-source-governance>
-                     指定导出包类型；默认 full-source-governance
+  --bundle <bundle-id>
+                     选择 bundle manifest 中登记的包类型；默认 full-source-governance
   --output <path>    指定 zip 输出路径；默认按 bundle 前缀写到 ./tmp/
   --size-manifest <path>
                      指定 size manifest 输出路径；默认与 zip 同目录同名前缀
@@ -76,16 +75,13 @@ usage() {
   -h, --help         显示帮助
 USAGE
 }
-
 log() {
   [[ "$QUIET" == '1' ]] || echo "[export_clean_delivery_bundle] $*"
 }
-
 fail() {
   echo "[export_clean_delivery_bundle][FAIL] $*" >&2
   exit 2
 }
-
 assert_in_repo() {
   local target_path="$1"
   case "$target_path" in
@@ -95,11 +91,9 @@ assert_in_repo() {
       ;;
   esac
 }
-
 require_jq() {
   command -v jq >/dev/null 2>&1 || fail '缺少 jq；无法解析 bundle manifest 或治理真源。'
 }
-
 ensure_tool_overlay_dir() {
   if [[ -n "$TOOL_OVERLAY_DIR" ]]; then
     return 0
@@ -108,7 +102,6 @@ ensure_tool_overlay_dir() {
   TOOL_OVERLAY_DIR="$(mktemp -d "$ROOT_DIR/state/openclaw/control_plane/tmp/bundle-tools.XXXXXX")"
   mkdir -p "$TOOL_OVERLAY_DIR/bin" "$TOOL_OVERLAY_DIR/lib"
 }
-
 copy_tool_runtime_deps() {
   local host_tool="$1"
   local ldd_output=""
@@ -128,7 +121,6 @@ copy_tool_runtime_deps() {
     cp -L "$lib_path" "$TOOL_OVERLAY_DIR/lib/$(basename "$lib_path")"
   done
 }
-
 add_host_tool_overlay() {
   local tool_name="$1"
   local required="${2:-1}"
@@ -145,7 +137,6 @@ add_host_tool_overlay() {
   chmod 755 "$TOOL_OVERLAY_DIR/bin/$tool_name"
   copy_tool_runtime_deps "$host_tool"
 }
-
 default_output_name() {
   local bundle_id="$1"
   local output_prefix=''
@@ -158,7 +149,6 @@ default_output_name() {
   ts="$(date -u '+%Y%m%d_%H%M%S')"
   printf '%s_%s.zip\n' "$output_prefix" "$ts"
 }
-
 collect_bundle_mount_dirs() {
   local raw_path=''
   local target_dir=''
@@ -176,13 +166,22 @@ collect_bundle_mount_dirs() {
     esac
   done
 }
-
 run_bundle_python() {
   local -a runner_args=(
     --workdir "$ROOT_DIR"
   )
   local mount_dir=''
+  local index_snapshot=''
   add_host_tool_overlay jq 1
+  if [[ -e "$ROOT_DIR/.git" ]]; then
+    # 在宿主读取索引，再把 NUL 快照交给容器，避免宿主 Git 与容器 libc 不兼容。
+    index_snapshot="$TOOL_OVERLAY_DIR/git-index.snapshot"
+    if ! git -C "$ROOT_DIR" ls-files --stage -z > "$index_snapshot"; then
+      fail '无法读取交付源码的宿主 Git 索引；请检查 Git 与工作树后重新导出。'
+    fi
+    runner_args+=(--env "OPENCLAW_BUNDLE_GIT_INDEX_SNAPSHOT=$index_snapshot")
+    runner_args+=(--env "OPENCLAW_BUNDLE_GIT_INDEX_ROOT=$ROOT_DIR")
+  fi
   runner_args+=(--mount "$TOOL_OVERLAY_DIR")
   runner_args+=(--env "PATH=$TOOL_OVERLAY_DIR/bin:/usr/local/bin:/usr/bin:/bin")
   runner_args+=(--env "LD_LIBRARY_PATH=$TOOL_OVERLAY_DIR/lib")
@@ -192,7 +191,6 @@ run_bundle_python() {
   done < <(collect_bundle_mount_dirs "$OUTPUT_ABS" "$SIZE_MANIFEST_ABS" "$BOM_ABS")
   exec_or_run_static_python "${runner_args[@]}" -- "$@"
 }
-
 exec_or_run_static_python() {
   local -a runner_args=()
   while [[ $# -gt 0 ]]; do
@@ -261,7 +259,6 @@ done
 if [[ "$CHECK_ONLY" == '1' && "$CLEANLINESS_ONLY" == '1' ]]; then
   fail '--check-only 与 --cleanliness-only 只能二选一'
 fi
-
 collect_dirty_paths() {
   if [[ "$CLEANLINESS_ONLY" == '1' || "${OPENCLAW_EXPORT_CLEANLINESS_SHELL_ONLY:-0}" == '1' || ! -f "$STATIC_PYTHON_RUNNER" ]]; then
     ensure_local_workspace_policy_loaded
@@ -385,7 +382,6 @@ for rel_path in sorted(dict.fromkeys(dirty)):
     print(rel_path)
 PY
 }
-
 print_dirty_paths() {
   local paths="$1"
   [[ -n "$paths" ]] || return 0
@@ -395,7 +391,6 @@ print_dirty_paths() {
     printf '  - %s\n' "$rel_path"
   done <<< "$paths"
 }
-
 clean_dirty_paths() {
   local paths="$1"
   [[ -n "$paths" ]] || return 0
@@ -431,6 +426,15 @@ if [[ "$CLEANLINESS_ONLY" == '1' ]]; then
   exit 0
 fi
 
+OUTPUT_ABS=''
+SIZE_MANIFEST_ABS=''
+BOM_ABS=''
+if [[ "$CHECK_ONLY" == '1' ]]; then
+  log '工作树已通过干净度检查，开始校验 bundle 规则'
+  run_bundle_python -m openclaw.release.bundle_governance validate --bundle "$BUNDLE_ID"
+  exit 0
+fi
+
 if [[ -z "$OUTPUT_PATH" ]]; then
   default_name="$(default_output_name "$BUNDLE_ID")"
   OUTPUT_PATH="$ROOT_DIR/tmp/$default_name"
@@ -438,8 +442,6 @@ fi
 
 mkdir -p "$(dirname "$OUTPUT_PATH")"
 OUTPUT_ABS="$(cd "$(dirname "$OUTPUT_PATH")" && pwd)/$(basename "$OUTPUT_PATH")"
-SIZE_MANIFEST_ABS=''
-BOM_ABS=''
 if [[ -n "$SIZE_MANIFEST_PATH" ]]; then
   mkdir -p "$(dirname "$SIZE_MANIFEST_PATH")"
   SIZE_MANIFEST_ABS="$(cd "$(dirname "$SIZE_MANIFEST_PATH")" && pwd)/$(basename "$SIZE_MANIFEST_PATH")"
@@ -447,12 +449,6 @@ fi
 if [[ -n "$BOM_PATH" ]]; then
   mkdir -p "$(dirname "$BOM_PATH")"
   BOM_ABS="$(cd "$(dirname "$BOM_PATH")" && pwd)/$(basename "$BOM_PATH")"
-fi
-
-if [[ "$CHECK_ONLY" == '1' ]]; then
-  log '工作树已通过干净度检查，开始校验 bundle 规则'
-  run_bundle_python -m openclaw.release.bundle_governance validate --bundle "$BUNDLE_ID"
-  exit 0
 fi
 
 build_cmd=(-m openclaw.release.bundle_governance build --bundle "$BUNDLE_ID" --output "$OUTPUT_ABS")

@@ -26,11 +26,13 @@ PULL_TIMEOUT="${PULL_TIMEOUT:-900}"
 PULL_GATEWAY_OFFICIAL_TIMEOUT="${PULL_GATEWAY_OFFICIAL_TIMEOUT:-300}"
 PULL_KILL_AFTER="${PULL_KILL_AFTER:-10}"
 PULL_FORCE="${PULL_FORCE:-0}"
+PULL_CLEANUP_GATEWAY_SOURCE_ALIASES="${PULL_CLEANUP_GATEWAY_SOURCE_ALIASES:-1}"
 PULL_GATEWAY_CANDIDATE_MODE_RAW="${PULL_GATEWAY_CANDIDATE_MODE:-}"
 PULL_CN_GATEWAY_CANDIDATE_FAIL_FAST_LEGACY="${PULL_CN_GATEWAY_CANDIDATE_FAIL_FAST-}"
 PULL_STATE_FILE="${PULL_STATE_FILE:-$ROOT_DIR/state/image_pull/pulled_images.txt}"
 PULL_RECORD_FILE="${PULL_RECORD_FILE:-$ROOT_DIR/state/image_pull/pull_records.log}"
-PULL_GATEWAY_SELECTION_FILE="${PULL_GATEWAY_SELECTION_FILE:-$ROOT_DIR/state/image_pull/gateway_source_selection.json}"
+PULL_GATEWAY_SELECTION_FILE="${PULL_GATEWAY_SELECTION_FILE:-$(deployment_images_gateway_source_selection_file)}"
+DEPLOYMENT_IMAGES_GATEWAY_SELECTION_FILE="$PULL_GATEWAY_SELECTION_FILE"
 PULL_GATEWAY_CANDIDATE_MODE=""
 TARGET_IMAGES=()
 
@@ -81,17 +83,15 @@ usage() {
   PULL_FORCE        1=即使本地已存在也重新拉取（默认 0）
   PULL_GATEWAY_CANDIDATE_MODE
                     auto-switch|fail-fast|off；默认 auto-switch。CN profile 下 official GHCR 有等值候选时，
-                    auto-switch 只改写当前 deploy/.env 的 OPENCLAW_OFFICIAL_GATEWAY_IMAGE，不改 canonical pin。
+                    auto-switch 切换当前 deploy/.env 的 Gateway 镜像引用并记录来源选择，不改 canonical pin。
+  PULL_CLEANUP_GATEWAY_SOURCE_ALIASES
+                    1=拉取完成后移除未被当前部署选用的 Gateway canonical/candidate 来源标签（默认 1）；
+                    0=保留本地 Docker 中已有的等值多来源标签。
 
 说明：
   目标镜像来自 source_strategy 声明的部署镜像合同角色；实际 ref 由 deploy/.env 与 pin 真源解析。
   当前脚本不会自动提权；state/image_pull 由镜像脚本运行时创建，状态文件与记录文件由当前用户写入。
 USAGE
-}
-
-# 拆分 image:tag@digest，供 Gateway source selection 复用统一解析规则。
-image_ref_repo_tag_digest() {
-  image_env_split_image_ref "$1"
 }
 
 # 判断 Docker daemon 是否已配置国内常见 registry mirror。
@@ -133,7 +133,7 @@ gateway_candidate_profile_active() {
   docker_daemon_has_cn_registry_mirrors
 }
 
-# 写出 Gateway source selection 审计记录，记录是否改写当前 deploy env。
+# 写出 Gateway 来源选择记录，记录是否改写当前 deploy env。
 write_gateway_source_selection_json() {
   local reason="$1"
   local env_rewritten="$2"
@@ -199,10 +199,9 @@ maybe_select_gateway_candidate_source() {
   local image="$OPENCLAW_OFFICIAL_GATEWAY_IMAGE"
   local repo='' tag='' digest='' candidate_repo='' candidate_ref='' default_repo=''
   local profile_active=0
-  mapfile -t __gateway_ref_parts < <(image_ref_repo_tag_digest "$image")
-  repo="${__gateway_ref_parts[0]}"
-  tag="${__gateway_ref_parts[1]}"
-  digest="${__gateway_ref_parts[2]}"
+  repo="$(deployment_images_ref_repo "$image")"
+  tag="$(deployment_images_ref_tag "$image")"
+  digest="$(deployment_images_ref_digest "$image")"
 
   openclaw_runtime_contract_load "$ROOT_DIR" >/dev/null || return 1
   default_repo="$OPENCLAW_RUNTIME_CONTRACT_DEFAULT_OFFICIAL_GATEWAY_IMAGE_REPO"
@@ -234,7 +233,7 @@ maybe_select_gateway_candidate_source() {
     write_gateway_source_selection_json 'fail_fast_candidate_available' false "$default_repo:$tag@$digest" "$image" "$candidate_ref" "$digest" "$candidate_repo" "$mode"
     echo "[FAIL] 已确认等值 Gateway candidate source 可用：$candidate_ref" >&2
     echo "[FAIL] 当前模式 PULL_GATEWAY_CANDIDATE_MODE=fail-fast，未改写 deploy env。" >&2
-    echo "[FAIL] 改为自动切换可执行：PULL_GATEWAY_CANDIDATE_MODE=auto-switch bash ./scripts/images/pull_images.sh" >&2
+    echo "[FAIL] 使用自动切换可执行：PULL_GATEWAY_CANDIDATE_MODE=auto-switch bash ./scripts/images/pull_images.sh" >&2
     return 12
   fi
 
@@ -246,8 +245,8 @@ maybe_select_gateway_candidate_source() {
   image_env_load
   write_gateway_source_selection_json 'auto_switched_equal_candidate' true "$default_repo:$tag@$digest" "$OPENCLAW_OFFICIAL_GATEWAY_IMAGE" "$candidate_ref" "$digest" "$candidate_repo" "$mode"
   echo "[INFO] Gateway official GHCR 在当前 CN profile 下已自动切换到等值 candidate source：$candidate_ref"
-  echo "[INFO] 仅更新当前 deploy env：$IMAGE_ENV_DEPLOY_ENV_PATH；canonical pin 未改写。"
-  echo "[INFO] source selection 记录：$PULL_GATEWAY_SELECTION_FILE"
+  echo "[INFO] 当前部署 Gateway 镜像引用已写入：$IMAGE_ENV_DEPLOY_ENV_PATH；canonical pin 未改写。"
+  echo "[INFO] Gateway 来源选择记录：$PULL_GATEWAY_SELECTION_FILE"
 }
 
 pull_timeout_for_image() {
@@ -264,7 +263,7 @@ print_pull_failure_next_steps() {
   {
     echo "[HINT] 镜像拉取失败后的固定分流："
     echo "  1. 先执行 bash ./scripts/doctor/check_docker_host_readiness.sh，确认 Docker daemon、registry-mirrors 与 selected / candidate 镜像来源连通性。"
-    echo "  2. 中国国内网络首轮部署执行 sudo bash ./scripts/setup/prepare_docker_host.sh --all --network-profile cn；若仅补 daemon 镜像加速，执行 sudo bash ./scripts/setup/prepare_docker_host.sh --configure-daemon。"
+    echo "  2. 中国国内网络首轮部署执行 sudo bash ./scripts/setup/prepare_docker_host.sh --os auto --all --network-profile cn；若仅补 daemon 镜像加速或 MTU，执行 sudo bash ./scripts/setup/prepare_docker_host.sh --os auto --configure-daemon。"
     echo "  3. 若目标机持续无法访问当前 selected source，改走离线归档：bash ./scripts/images/export_deployment_images.sh -> load_deployment_images.sh。"
     if [[ "$image" == "$OPENCLAW_OFFICIAL_GATEWAY_IMAGE" ]]; then
       echo "  4. 若仅 GHCR official Gateway 不可达，默认由 PULL_GATEWAY_CANDIDATE_MODE=auto-switch 在 CN profile 下选择等值 candidate；查看 state/image_pull/gateway_source_selection.json。"
@@ -400,6 +399,15 @@ record_pull_result() {
     >> "$PULL_RECORD_FILE"
 }
 
+# 清理 canonical/candidate 之间未被当前部署选用的等值 Gateway 来源标签。
+cleanup_gateway_source_aliases() {
+  [[ "$PULL_CLEANUP_GATEWAY_SOURCE_ALIASES" == "1" ]] || return 0
+  if ! deployment_images_cleanup_gateway_source_aliases "$OPENCLAW_OFFICIAL_GATEWAY_IMAGE" "$PULL_RECORD_FILE" 0; then
+    echo "[WARN] Gateway 本地来源别名清理未完成；不阻断镜像拉取主流程。" >&2
+  fi
+  return 0
+}
+
 run_pull_once() {
   local image="$1"
   local pull_timeout=''
@@ -462,6 +470,8 @@ for image in "${TARGET_IMAGES[@]}"; do
     exit 1
   fi
 done
+
+cleanup_gateway_source_aliases || true
 
 echo "[OK] 外部镜像拉取完成。"
 echo "[INFO] 拉取记录：$PULL_RECORD_FILE"

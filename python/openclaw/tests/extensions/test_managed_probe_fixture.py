@@ -7,11 +7,10 @@ from openclaw.control_plane.modules.scaffold import scaffold_agent_module
 from openclaw.control_plane.registry import load_registry
 from openclaw.control_plane.surfaces import load_testing_manifest
 from openclaw.doctor.agent_modules.managed_probe_fixture import (
-    PROBE_CHECK_ID,
     PROBE_EXTENSION_ID,
     PROBE_OWNER_DOMAIN,
     PROBE_PRIMARY_MODULE_REF,
-    PROBE_TEST_GROUP_ID,
+    PROBE_RELEASE_CHECK_ID,
 )
 from openclaw.doctor.agent_modules.managed_probe_fixture_scaffold import module_main
 from openclaw.lib.repo.managed_extensions import load_managed_extensions_index, managed_extension_layout_for_config_path
@@ -45,20 +44,25 @@ class ManagedProbeFixtureTest(unittest.TestCase):
 
     def test_materialized_probe_extension_exposes_testing_manifest_contract(self) -> None:
         payload = load_testing_manifest(config_path=self.fixture.service_path)
-        groups = {
-            str(row.get('id') or '').strip(): row
+        extension_groups = [
+            row
             for row in payload.get('groups') or []
-            if isinstance(row, dict)
-        }
-        checks = {
-            str(row.get('id') or '').strip(): row
+            if isinstance(row, dict) and row.get('extensionId') == PROBE_EXTENSION_ID
+        ]
+        extension_checks = [
+            row
             for row in payload.get('checks') or []
+            if isinstance(row, dict) and row.get('extensionId') == PROBE_EXTENSION_ID
+        ]
+        release_gate_checks = {
+            str(row.get('id') or '').strip(): row
+            for row in payload.get('release_gate_checks') or []
             if isinstance(row, dict)
         }
 
-        self.assertEqual(groups[PROBE_TEST_GROUP_ID]['extensionId'], PROBE_EXTENSION_ID)
-        self.assertEqual(checks[PROBE_CHECK_ID]['extensionId'], PROBE_EXTENSION_ID)
-        self.assertIn(PROBE_CHECK_ID, (payload.get('acceptance_reference') or {}).get('required_checks') or [])
+        self.assertEqual([], extension_groups)
+        self.assertEqual([], extension_checks)
+        self.assertEqual(release_gate_checks[PROBE_RELEASE_CHECK_ID]['extensionId'], PROBE_EXTENSION_ID)
 
     def test_materialized_probe_extension_supports_registry_load_and_scaffold(self) -> None:
         fixture = self.fixture

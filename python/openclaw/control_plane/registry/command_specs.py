@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Canonical command specs for control-plane execution surfaces."""
+"""提供OpenClaw 控制平面子系统的生产实现。"""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -16,7 +16,7 @@ SUPPORTED_EXEC_MODES = frozenset({DIRECT_CONTROL_PLANE_EXEC, SCHEDULER_SERVICE_E
 
 @dataclass(frozen=True)
 class OpenClawCommandSpec:
-    """A canonical command description before choosing the concrete launcher."""
+    """OpenClaw 命令注册规格。"""
 
     exec_mode: str
     argv: tuple[str, ...]

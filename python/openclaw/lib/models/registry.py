@@ -21,6 +21,7 @@ class ModelRegistryError(RuntimeError):
 
 @dataclass(frozen=True)
 class ModelProfile:
+    """模型 profile 注册记录。"""
     profile_id: str
     provider: str
     model_ref: str

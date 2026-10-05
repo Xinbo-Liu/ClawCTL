@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""internal-api error helpers."""
+"""提供OpenClaw 内部API子系统的生产实现。"""
 from __future__ import annotations
 
 import os

@@ -6,12 +6,10 @@ __openclaw_script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 source "$__openclaw_script_dir/../lib/repo_root.sh"
 ROOT_DIR="$(openclaw_repo_root_from "$__openclaw_script_dir")"
 unset __openclaw_script_dir
-
 bootstrap_fail() {
   echo "[bootstrap][FAIL] $*" >&2
   exit 2
 }
-
 bootstrap_usage() {
   cat <<'USAGE'
 用法：
@@ -39,7 +37,6 @@ source "$ROOT_DIR/scripts/lib/control_plane_config_paths.sh"
 # shellcheck source=../lib/repo_contracts.sh
 source "$ROOT_DIR/scripts/lib/repo_contracts.sh"
 repo_contract_assign_relpath GATEWAY_READONLY_MANIFEST_REL_PATH gateway.readonly_manifest
-
 bootstrap_deploy_env_value() {
   local key="$1"
   awk -F= -v expected="$key" '
@@ -56,7 +53,6 @@ bootstrap_deploy_env_value() {
     }
   ' "$ROOT_DIR/deploy/.env" | tail -n 1
 }
-
 bootstrap_export_runtime_config_selection() {
   local selected_config_path=""
   local selected_profile=""
@@ -69,7 +65,6 @@ bootstrap_export_runtime_config_selection() {
   export OPENCLAW_CONTROL_PLANE_PROFILE="$selected_profile"
   export OPENCLAW_CONTROL_PLANE_SERVICE_CONFIG_PATH="$selected_config_path"
 }
-
 bootstrap_check_local_permission_prereqs() {
   local host_state_dir=""
   host_state_dir="$(runtime_permissions_host_state_root "$ROOT_DIR")"

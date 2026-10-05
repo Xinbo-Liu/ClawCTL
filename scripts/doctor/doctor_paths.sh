@@ -14,7 +14,6 @@ RUNTIME_PATHS_CONFIG_PATH="$(openclaw_control_plane_resolve_config_path agent_pl
 source "$ROOT_DIR/scripts/setup/lib/runtime_permissions.sh"
 source "$ROOT_DIR/scripts/runtime/runtime_container_lib.sh"
 RUNTIME_CONTAINER_RUNNER="$ROOT_DIR/scripts/runtime/run_runtime_container_command.sh"
-
 usage() {
   cat <<'USAGE'
 用法：
@@ -39,7 +38,6 @@ if [[ $# -gt 0 ]]; then
       ;;
   esac
 fi
-
 log() { echo "[doctor_paths] $*"; }
 section() { printf '\n== %s ==\n' "$*"; }
 check_file() {
@@ -50,7 +48,6 @@ check_file() {
     echo "MISSING $path"
   fi
 }
-
 runtime_paths_env_entry() {
   local view="${1:-host}"
   case "$view" in
@@ -60,7 +57,6 @@ runtime_paths_env_entry() {
     *) printf 'runtime_%s_env\n' "${view//-/_}" ;;
   esac
 }
-
 runtime_paths_env_args() {
   local view="${1:-host}"
   local env_entry=""
@@ -70,7 +66,6 @@ runtime_paths_env_args() {
   [[ -n "$env_file" && -f "$env_file" ]] || return 0
   printf '%s\0' --env-file "$env_file"
 }
-
 runtime_paths_resolve() {
   local entry_id="$1"
   local view="$2"
@@ -87,11 +82,9 @@ runtime_paths_resolve() {
   args+=("$@")
   bash "$RUNTIME_PATHS_TOOL" "${args[@]}"
 }
-
 runtime_paths_abs_host_path() {
   runtime_paths_resolve "$1" host --abs-host
 }
-
 resolve_optional_host_path() {
   local entry_id="$1"
   local output=""

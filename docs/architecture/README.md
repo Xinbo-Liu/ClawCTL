@@ -8,10 +8,11 @@
 - 判断哪些能力属于正式支持边界。
 - 判断 base 与 `agent_platform` 各自扮演什么角色。
 - 判断仓内 extension 如何通过正式装配链进入运行面。
-- 判断目标态边界应去哪里看：先回 [../README.md](../README.md)，再进入根目录 `VISION.md`。
+- 判断当前能力和长期方向应去哪里看：[项目概览](../../README.md) 与 [长期方向](../../VISION.md)。
 
 ## 合同页入口
 
+- 新维护者最小理解路径：[maintainer-minimal-path.md](maintainer-minimal-path.md)
 - 基线：[control-plane-baseline.md](control-plane-baseline.md)
 - 平台主路径：[platform-main-path.md](platform-main-path.md)
 - 支持边界：[supported-deployment-boundary.md](supported-deployment-boundary.md)
@@ -23,8 +24,8 @@
 - Agent 与权限：[agents-and-permissions.md](agents-and-permissions.md)
 - Agent 治理：[agent-governance.md](agent-governance.md)
 - Agent 生命周期治理：[agent-lifecycle-governance.md](agent-lifecycle-governance.md)
-- Agent 模块治理：[agent-module-governance.md](agent-module-governance.md)
-- Agent Group 治理：[agent-group-governance.md](agent-group-governance.md)
+- Agent 模块治理：[模块治理真源](../../agent/governance/module-governance.md)
+- Agent Group 治理：[Group 治理真源](../../agent/governance/group-governance.md)
 - 显式扩展包挂载与编排：[explicit-extension-packages.md](explicit-extension-packages.md)
 - 基座与扩展同步升级：[../operations/stack-upgrade-runbook.md](../operations/stack-upgrade-runbook.md)
 
@@ -32,7 +33,7 @@
 
 - 需要项目级正式基线：回 [control-plane-baseline.md](control-plane-baseline.md)。
 - 需要确认支持边界：回 [supported-deployment-boundary.md](supported-deployment-boundary.md)。
-- 需要查看 agent plane 结构：从 [agent-governance.md](agent-governance.md)、[agent-module-governance.md](agent-module-governance.md) 与 [agent-group-governance.md](agent-group-governance.md) 进入。
+- 需要查看 agent plane 结构：从 [Agent 架构桥接](agent-governance.md) 进入 [Agent 治理目录](../../agent/README.md)，再选择模块、Group 或生命周期合同。
 - 需要编写或挂载显式业务扩展包：看 [explicit-extension-packages.md](explicit-extension-packages.md)。
 - 需要升级基座与扩展组合：看 [../operations/stack-upgrade-runbook.md](../operations/stack-upgrade-runbook.md)。
-- 需要查看目标态边界：回 [../README.md](../README.md)，再进入根目录 `VISION.md`。
+- 需要查看长期方向：进入 [VISION.md](../../VISION.md)。

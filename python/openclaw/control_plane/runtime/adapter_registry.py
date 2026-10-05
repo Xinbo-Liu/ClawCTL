@@ -18,6 +18,7 @@ class RuntimeAdapterRegistryError(RuntimeError):
 
 @dataclass(frozen=True)
 class RuntimeAdapterSpec:
+    """运行态适配器注册项。"""
     adapter_id: str
     title: str
     description: str

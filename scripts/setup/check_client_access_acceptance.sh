@@ -11,19 +11,21 @@ unset __openclaw_script_dir
 source "$ROOT_DIR/scripts/lib/cidr_contract.sh"
 
 ENV_FILE="$ROOT_DIR/deploy/.env"
-CLIENT_CIDR=""
+OBSERVED_SOURCE_CIDR=""
 TLS_CN_OVERRIDE=""
 FORMAT="text"
 
 usage() {
   cat <<'USAGE'
 用法：
-  bash ./scripts/setup/check_client_access_acceptance.sh --env-file deploy/.env --client-cidr <cidr[,cidr]> --tls-cn <host>
+  bash ./scripts/setup/check_client_access_acceptance.sh --env-file deploy/.env --observed-source-cidr <cidr[,cidr]> --tls-cn <host>
 
 说明：
   - deployment_acceptance 表示目标机本机验收；现有 one_click_test_full 覆盖。
   - client_access_acceptance 表示访问端 DNS/hosts、证书信任、来源 CIDR、浏览器/HTTP 验证闭合。
-  - client-cidr 只接受逗号分隔的私网或 loopback CIDR；公网来源应通过外部 ACL、VPN 或 NAT 私网来源先完成边界确认。
+  - observed-source-cidr 必须来自目标机日志、抓包、上游转发记录或明确网络策略中的实际观测来源。
+  - 本机 Wi-Fi 网段、api.ipify/TUN 出口结果只能作为线索；除非它们与目标机实际观测来源一致，否则不能作为来源合同。
+  - observed-source-cidr 接受逗号分隔的私网、loopback 或精确公网主机 CIDR；公网来源只允许 /32 IPv4 或 /128 IPv6。
   - 仅把目标机自身 /32 写入 allowlist 只代表目标机自验通过，不代表外部浏览器已放行。
 USAGE
 }
@@ -69,9 +71,9 @@ while [[ $# -gt 0 ]]; do
       ENV_FILE="$2"
       shift 2
       ;;
-    --client-cidr)
-      [[ $# -ge 2 ]] || fail '--client-cidr 缺少 CIDR 参数'
-      CLIENT_CIDR="$2"
+    --observed-source-cidr)
+      [[ $# -ge 2 ]] || fail '--observed-source-cidr 缺少 CIDR 参数'
+      OBSERVED_SOURCE_CIDR="$2"
       shift 2
       ;;
     --tls-cn)
@@ -96,11 +98,11 @@ while [[ $# -gt 0 ]]; do
 done
 
 [[ -f "$ENV_FILE" ]] || fail "env 文件不存在：$ENV_FILE"
-[[ -n "$CLIENT_CIDR" ]] || fail '必须提供 --client-cidr <cidr[,cidr]>'
-openclaw_cidr_validate_list "$CLIENT_CIDR" '--client-cidr' || exit 2
-UNSAFE_CLIENT_CIDR="$(openclaw_cidr_first_non_private_or_loopback "$CLIENT_CIDR")"
-if [[ -n "$UNSAFE_CLIENT_CIDR" ]]; then
-  fail "client-cidr 不是私网或 loopback：$UNSAFE_CLIENT_CIDR。目标机实际看到的来源不符合当前合同；请先确认外部 ACL、VPN 或 NAT 后的私网来源 CIDR，再重新执行。"
+[[ -n "$OBSERVED_SOURCE_CIDR" ]] || fail '必须提供 --observed-source-cidr <cidr[,cidr]>'
+openclaw_cidr_validate_list "$OBSERVED_SOURCE_CIDR" '--observed-source-cidr' || exit 2
+UNSAFE_OBSERVED_SOURCE_CIDR="$(openclaw_cidr_first_not_allowed_ingress_source "$OBSERVED_SOURCE_CIDR")"
+if [[ -n "$UNSAFE_OBSERVED_SOURCE_CIDR" ]]; then
+  fail "observed-source-cidr 不是私网、loopback 或精确公网主机 CIDR：$UNSAFE_OBSERVED_SOURCE_CIDR。请先确认目标机或上游记录实际看到的访问来源，再重新执行。"
 fi
 
 TLS_CN="${TLS_CN_OVERRIDE:-$(read_env_key OPENCLAW_TLS_CN)}"
@@ -124,20 +126,20 @@ fi
 STATUS='blocked'
 DETAIL=''
 ONLY_ALLOWED_CIDR="$(openclaw_cidr_list_first "$ALLOWED_CIDRS")"
-UNSAFE_ALLOWED_CIDR="$(openclaw_cidr_first_non_private_or_loopback "$ALLOWED_CIDRS")"
-DENIED_CLIENT_CIDR="$(openclaw_cidr_first_not_allowed "$ALLOWED_CIDRS" "$CLIENT_CIDR")"
+UNSAFE_ALLOWED_CIDR="$(openclaw_cidr_first_not_allowed_ingress_source "$ALLOWED_CIDRS")"
+DENIED_OBSERVED_SOURCE_CIDR="$(openclaw_cidr_first_not_allowed "$ALLOWED_CIDRS" "$OBSERVED_SOURCE_CIDR")"
 if [[ -n "$UNSAFE_ALLOWED_CIDR" ]]; then
-  fail "OPENCLAW_INGRESS_ALLOWED_SOURCE_CIDRS 包含公网、非私网或过宽 CIDR：$UNSAFE_ALLOWED_CIDR。目标机实际看到的来源不符合当前合同；请先确认外部 ACL、VPN 或 NAT 后的私网来源 CIDR，再重新物化边界规则。"
+  fail "OPENCLAW_INGRESS_ALLOWED_SOURCE_CIDRS 包含非私网、非 loopback 或非精确公网主机 CIDR：$UNSAFE_ALLOWED_CIDR。请先确认目标机实际看到的访问来源，再重新物化边界规则。"
 fi
-if [[ -z "$DENIED_CLIENT_CIDR" ]]; then
+if [[ -z "$DENIED_OBSERVED_SOURCE_CIDR" ]]; then
   STATUS='ready'
-  DETAIL='client CIDR 列表已全部被当前 Nginx allowlist 覆盖；仍需在访问端执行 curl/浏览器验证。'
+  DETAIL='observed source CIDR 列表已全部被当前 Nginx allowlist 覆盖；仍需在访问端执行 curl/浏览器验证。'
 elif [[ "$(openclaw_cidr_list_count "$ALLOWED_CIDRS")" == '1' && ( "$ONLY_ALLOWED_CIDR" == */32 || "$ONLY_ALLOWED_CIDR" == */128 ) ]]; then
   STATUS='not_closed'
   DETAIL='当前 allowlist 只有目标机本机单地址 CIDR；deployment acceptance 可通过，但外部访问尚未闭合。'
 else
   STATUS='blocked'
-  DETAIL="client CIDR 未进入当前 allowlist：$DENIED_CLIENT_CIDR；请重新物化 ingress 边界规则或确认 VPN/NAT 后的来源 CIDR。"
+  DETAIL="observed source CIDR 未进入当前 allowlist：$DENIED_OBSERVED_SOURCE_CIDR；请重新物化 ingress 边界规则，或确认 TUN/VPN/NAT/上游代理后目标机实际看到的来源 CIDR。"
 fi
 
 if [[ "$FORMAT" == 'json' ]]; then
@@ -148,7 +150,7 @@ if [[ "$FORMAT" == 'json' ]]; then
     --arg listenIp "$LISTEN_IP" \
     --arg certPath "$CERT_DIR/$CERT_FILE" \
     --arg tlsMode "$TLS_MODE" \
-    --arg clientCidr "$CLIENT_CIDR" \
+    --arg observedSourceCidr "$OBSERVED_SOURCE_CIDR" \
     --arg allowedCidrs "$ALLOWED_CIDRS" \
     --arg deploymentAcceptance "target_local_acceptance" \
     --arg clientAccessAcceptance "$STATUS" \
@@ -159,8 +161,8 @@ if [[ "$FORMAT" == 'json' ]]; then
       listenIp: $listenIp,
       certPath: $certPath,
       tlsMode: $tlsMode,
-      clientCidr: $clientCidr,
-      clientCidrs: ($clientCidr | split(",") | map(gsub("^\\s+|\\s+$"; "")) | map(select(length > 0))),
+      observedSourceCidr: $observedSourceCidr,
+      observedSourceCidrs: ($observedSourceCidr | split(",") | map(gsub("^\\s+|\\s+$"; "")) | map(select(length > 0))),
       allowedCidrs: ($allowedCidrs | split(",") | map(gsub("^\\s+|\\s+$"; "")) | map(select(length > 0))),
       deployment_acceptance: $deploymentAcceptance,
       client_access_acceptance: $clientAccessAcceptance,
@@ -175,10 +177,12 @@ else
   note "OPENCLAW_TLS_MODE=$TLS_MODE"
   note "证书路径=$CERT_DIR/$CERT_FILE"
   note "HOST_STATE_ROOT=$HOST_STATE_ROOT"
+  note "observed_source_cidr=$OBSERVED_SOURCE_CIDR"
+  note "来源 CIDR 必须以目标机或上游转发记录实际观测为准；本机 Wi-Fi 网段、api.ipify/TUN 出口结果不能单独作为来源合同。"
   echo
   echo "访问端 DNS/hosts 检查："
   echo "  getent hosts $TLS_CN || nslookup $TLS_CN"
-  echo "  # 临时 hosts 示例：$LISTEN_IP $TLS_CN"
+  echo "  # hosts 记录示例：$LISTEN_IP $TLS_CN"
   echo
   echo "访问端证书检查："
   echo "  openssl s_client -connect $TLS_CN:443 -servername $TLS_CN -showcerts </dev/null"

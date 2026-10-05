@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Runtime-path helpers backed by the repo root resolver."""
+"""提供OpenClaw lib子系统的生产实现。"""
 from __future__ import annotations
 
 from pathlib import Path

@@ -62,7 +62,6 @@ CONTROL_PLANE_SUMMARY_OUTPUT="${CONTROL_PLANE_SUMMARY_OUTPUT:-$("${CONTROL_PLANE
 CONTROL_PLANE_RUN_LEDGER_OUTPUT="${CONTROL_PLANE_RUN_LEDGER_OUTPUT:-$("${CONTROL_PLANE_OBJECTS_CMD[@]}" entry-path --family runtime_evidence --entry control_plane_run_ledger)}"
 CONTROL_PLANE_AGENT_ACCESS_LOG_OUTPUT="${CONTROL_PLANE_AGENT_ACCESS_LOG_OUTPUT:-$("${CONTROL_PLANE_OBJECTS_CMD[@]}" entry-path --family runtime_evidence --entry control_plane_agent_access_log)}"
 CONTROL_PLANE_AGENT_GROUP_ACCESS_OUTPUT="${CONTROL_PLANE_AGENT_GROUP_ACCESS_OUTPUT:-$("${CONTROL_PLANE_OBJECTS_CMD[@]}" entry-path --family runtime_evidence --entry control_plane_agent_group_access)}"
-CONTROL_PLANE_AGENT_GROUP_ACCEPTANCE_BINDINGS_OUTPUT="${CONTROL_PLANE_AGENT_GROUP_ACCEPTANCE_BINDINGS_OUTPUT:-$("${CONTROL_PLANE_OBJECTS_CMD[@]}" entry-path --family runtime_evidence --entry control_plane_agent_group_acceptance_bindings)}"
 CONTROL_PLANE_AGENT_GROUP_RELEASE_GATES_OUTPUT="${CONTROL_PLANE_AGENT_GROUP_RELEASE_GATES_OUTPUT:-$("${CONTROL_PLANE_OBJECTS_CMD[@]}" entry-path --family runtime_evidence --entry control_plane_agent_group_release_gates)}"
 CONTROL_PLANE_ARTIFACT_POLICIES_OUTPUT="${CONTROL_PLANE_ARTIFACT_POLICIES_OUTPUT:-$("${CONTROL_PLANE_OBJECTS_CMD[@]}" entry-path --family runtime_evidence --entry control_plane_job_artifact_policies)}"
 DISPATCH_RUNTIME_CHECK_OUTPUT="${DISPATCH_RUNTIME_CHECK_OUTPUT:-$("${CONTROL_PLANE_OBJECTS_CMD[@]}" entry-path --family runtime_evidence --entry dispatch_runtime_check)}"
@@ -129,7 +128,6 @@ require_file_manageable_or_creatable "$CONTROL_PLANE_SUMMARY_OUTPUT" "control-pl
 require_file_manageable_or_creatable "$CONTROL_PLANE_RUN_LEDGER_OUTPUT" "control-plane run ledger 摘要文件"
 require_file_manageable_or_creatable "$CONTROL_PLANE_AGENT_ACCESS_LOG_OUTPUT" "control-plane agent access log 摘要文件"
 require_file_manageable_or_creatable "$CONTROL_PLANE_AGENT_GROUP_ACCESS_OUTPUT" "control-plane agent group access 摘要文件"
-require_file_manageable_or_creatable "$CONTROL_PLANE_AGENT_GROUP_ACCEPTANCE_BINDINGS_OUTPUT" "control-plane agent group acceptance binding 摘要文件"
 require_file_manageable_or_creatable "$CONTROL_PLANE_AGENT_GROUP_RELEASE_GATES_OUTPUT" "control-plane agent group release gate 摘要文件"
 require_file_manageable_or_creatable "$CONTROL_PLANE_ARTIFACT_POLICIES_OUTPUT" "control-plane artifact policy 摘要文件"
 require_file_manageable_or_creatable "$DISPATCH_RUNTIME_CHECK_OUTPUT" "dispatch runtime 证据文件"
@@ -156,15 +154,14 @@ bash "$ROOT_DIR/scripts/runtime/run_openclaw_python_tool.sh" control-plane evide
 bash "$ROOT_DIR/scripts/runtime/run_openclaw_python_tool.sh" control-plane runtime run-ledger-summary >"$CONTROL_PLANE_RUN_LEDGER_OUTPUT"
 bash "$ROOT_DIR/scripts/runtime/run_openclaw_python_tool.sh" control-plane evidence agent-access-log --limit 200 >"$CONTROL_PLANE_AGENT_ACCESS_LOG_OUTPUT"
 bash "$ROOT_DIR/scripts/runtime/run_openclaw_python_tool.sh" control-plane evidence agent-group-access --limit 200 --timeline-limit 20 >"$CONTROL_PLANE_AGENT_GROUP_ACCESS_OUTPUT"
-bash "$ROOT_DIR/scripts/runtime/run_openclaw_python_tool.sh" control-plane evidence agent-group-acceptance-bindings >"$CONTROL_PLANE_AGENT_GROUP_ACCEPTANCE_BINDINGS_OUTPUT"
 bash "$ROOT_DIR/scripts/runtime/run_openclaw_python_tool.sh" control-plane evidence agent-group-release-gates >"$CONTROL_PLANE_AGENT_GROUP_RELEASE_GATES_OUTPUT"
 bash "$ROOT_DIR/scripts/runtime/run_openclaw_python_tool.sh" control-plane artifacts json >"$CONTROL_PLANE_ARTIFACT_POLICIES_OUTPUT"
-bash "$ROOT_DIR/scripts/doctor/check_control_plane_runtime.sh" | jq '.api.summary' >"$CONTROL_PLANE_RUNTIME_SUMMARY_TMP"
+bash "$ROOT_DIR/scripts/doctor/check_control_plane_runtime.sh" --summary-only | jq '.api.summary' >"$CONTROL_PLANE_RUNTIME_SUMMARY_TMP"
 bash "$ROOT_DIR/scripts/doctor/check_dispatch_runtime.sh" --json >"$DISPATCH_RUNTIME_CHECK_OUTPUT"
 "${ACCEPTANCE_SURFACE_CMD[@]}" write-official-cli-summary --official-dir "$CONTROL_PLANE_OFFICIAL_DIR" --out "$CONTROL_PLANE_SUMMARY_OUTPUT" --target gateway
 "${ACCEPTANCE_SURFACE_CMD[@]}" write-runtime-acceptance-summary --acceptance-state "$DEPLOYMENT_ACCEPTANCE_STATE" --control-plane-summary "$CONTROL_PLANE_SUMMARY_OUTPUT" --control-plane-runtime-summary "$CONTROL_PLANE_RUNTIME_SUMMARY_TMP" --control-plane-run-ledger "$CONTROL_PLANE_RUN_LEDGER_OUTPUT" --out "$RUNTIME_ACCEPTANCE_OUTPUT"
 require_json_flag_true "$RUNTIME_ACCEPTANCE_OUTPUT" ".accepted == true" "runtime acceptance 证据文件"
-"${ACCEPTANCE_SURFACE_CMD[@]}" acceptance-summary >/dev/null
+"${ACCEPTANCE_SURFACE_CMD[@]}" acceptance-summary --strict true >/dev/null
 
 if [[ -f "$SHADOW_VERIFY_STATE_DIR/summary.json" ]]; then
   cp "$SHADOW_VERIFY_STATE_DIR/summary.json" "$SHADOW_VERIFY_OUTPUT_JSON"
@@ -186,7 +183,6 @@ fi
 echo "[export_runtime_acceptance_evidence] 已生成：$CONTROL_PLANE_RUN_LEDGER_OUTPUT"
 echo "[export_runtime_acceptance_evidence] 已生成：$CONTROL_PLANE_AGENT_ACCESS_LOG_OUTPUT"
 echo "[export_runtime_acceptance_evidence] 已生成：$CONTROL_PLANE_AGENT_GROUP_ACCESS_OUTPUT"
-echo "[export_runtime_acceptance_evidence] 已生成：$CONTROL_PLANE_AGENT_GROUP_ACCEPTANCE_BINDINGS_OUTPUT"
 echo "[export_runtime_acceptance_evidence] 已生成：$CONTROL_PLANE_AGENT_GROUP_RELEASE_GATES_OUTPUT"
 echo "[export_runtime_acceptance_evidence] 已生成：$CONTROL_PLANE_ARTIFACT_POLICIES_OUTPUT"
 echo "[export_runtime_acceptance_evidence] 已生成：$CONTROL_PLANE_SUMMARY_OUTPUT"

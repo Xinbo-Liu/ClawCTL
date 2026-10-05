@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from openclaw.lib.control_plane import object_families
+from openclaw.control_plane.manifest_fields import GOVERNANCE_SURFACES_FIELD, SURFACE_FRAGMENTS_FIELD
 from openclaw.lib.repo.contracts import (
     CONTRACTS_TRUTH_REL_PATH,
     repo_contract_path,
@@ -50,7 +51,6 @@ KEY_TRUTH_SURFACE_IDS = {
     'governance.docs_registry',
     'governance.script_catalog_surface',
     'governance.summary_manifest',
-    'governance.absent_surfaces',
     'governance.local_workspace_policy',
     'governance.verification_tiers',
 }
@@ -220,8 +220,19 @@ def _extension_registry_summary(extension: dict[str, Any], *, root_dir: Path) ->
     return rows
 
 
-def _extensions_payload(context: dict[str, Any], *, root_dir: Path) -> dict[str, Any]:
-    managed = load_managed_extensions_index(root_dir)
+def _extensions_payload(context: dict[str, Any], *, root_dir: Path, scope: str = 'repository') -> dict[str, Any]:
+    """从所选上下文构造扩展事实，按输入范围决定是否读取全仓扩展目录册。
+
+    参数：
+        context（dict[str, Any]）：已加载的 service 上下文。
+        root_dir（Path）：相对路径显示使用的仓库根。
+        scope（str）：repository 展示全仓扩展目录册，selected_config 只描述所选配置启用的 owner。
+    返回：
+        dict[str, Any]：启用扩展、已知 owner、registry 输入与范围内的受管目录册。
+    副作用：
+        repository 范围只读仓库扩展索引；selected_config 不访问无关扩展目录册。
+    """
+    managed = load_managed_extensions_index(root_dir) if scope == 'repository' else ()
     enabled_rows: list[dict[str, Any]] = []
     for extension in context.get('extensions') or []:
         if not isinstance(extension, dict):
@@ -242,7 +253,7 @@ def _extensions_payload(context: dict[str, Any], *, root_dir: Path) -> dict[str,
         )
     return {
         'enabled_extension_ids': list(context.get('enabledExtensionIds') or []),
-        'known_extension_ids': list(context.get('knownExtensionIds') or []),
+        'known_extension_ids': list(context.get('knownExtensionIds' if scope == 'repository' else 'enabledExtensionIds') or []),
         'enabled': enabled_rows,
         'registry_inputs': _registry_inputs_payload(context, root_dir=root_dir),
         'managed_explicit': [
@@ -359,8 +370,44 @@ def _generated_artifacts_payload_cached(root_dir_key: str) -> list[dict[str, Any
     return rows
 
 
-def _generated_artifacts_payload(root_dir: Path) -> list[dict[str, Any]]:
-    return deepcopy(_generated_artifacts_payload_cached(_cache_path_key(root_dir)))
+def _generated_artifacts_payload(root_dir: Path, *, context: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    """汇总生成目标；指定上下文时读取仓库登记的 JSON 真源及所选 owner 的 fragments。
+
+    参数：
+        root_dir（Path）：真源所属仓库。
+        context（dict[str, Any] | None）：所选 service 上下文；None 使用全仓目录枚举。
+    返回：
+        list[dict[str, Any]]：按真源路径排序的 generated_artifacts 声明。
+    异常：
+        ValueError：选定 source 越过仓库根目录。
+    副作用：
+        只读 JSON；显式上下文模式不递归扫描目录，也不读取 env 或 state。
+    """
+    if context is None:
+        return deepcopy(_generated_artifacts_payload_cached(_cache_path_key(root_dir)))
+    sources = {
+        repo_contract_path(contract.id, root_dir=root_dir)
+        for contract in repo_contracts(root_dir).values()
+        if contract.format == 'json'
+    }
+    for extension in context.get('extensions') or []:
+        for field in (SURFACE_FRAGMENTS_FIELD, GOVERNANCE_SURFACES_FIELD):
+            fragments = extension.get(field) or {}
+            sources.update(value for value in fragments.values() if isinstance(value, Path) and value.suffix == '.json')
+    rows: list[dict[str, Any]] = []
+    for path in sorted(sources):
+        path.resolve().relative_to(root_dir.resolve())
+        if not path.is_file():
+            continue
+        payload = json.loads(path.read_text(encoding='utf-8-sig'))
+        generated = payload.get('generated_artifacts') if isinstance(payload, dict) else None
+        if isinstance(generated, dict):
+            rows.append({
+                'source': _repo_relative(path, root_dir=root_dir),
+                'artifact_count': len(generated),
+                'artifacts': [{'id': str(key), 'path': str(value)} for key, value in sorted(generated.items())],
+            })
+    return rows
 
 
 @lru_cache(maxsize=16)
@@ -404,11 +451,23 @@ def _runtime_services_payload(root_dir: Path, *, config_path: Path) -> list[dict
 
 
 @lru_cache(maxsize=32)
-def _evidence_payload_cached(root_dir_key: str, config_path_key: str) -> list[dict[str, Any]]:
+def _evidence_payload_cached(root_dir_key: str, config_path_key: str, environment_items: tuple[tuple[str, str], ...] | None = None) -> list[dict[str, Any]]:
+    """按仓库、profile 与显式环境缓存带 family/owner 身份的 evidence 定义。
+
+    参数：
+        root_dir_key（str）：绝对仓库根目录缓存键。
+        config_path_key（str）：绝对 service 配置缓存键。
+        environment_items（tuple[tuple[str, str], ...] | None）：显式视角环境条目；空元组固定宿主机视角，None 在缓存未命中时使用进程环境。
+    返回：
+        list[dict[str, Any]]：逐 family 组织的路径定义，不访问运行产物。
+    副作用：
+        读取对象族合同并将物化结果缓存于当前进程。
+    """
     root_dir = Path(root_dir_key)
     config_path = Path(config_path_key)
     rows: list[dict[str, Any]] = []
-    for family in object_families.all_families(root_dir, config_path=config_path):
+    environment = None if environment_items is None else dict(environment_items)
+    for family in object_families.all_families(root_dir, config_path=config_path, environment=environment):
         family_id = str(family.get('id') or '').strip()
         entries = []
         for entry in family.get('entries') or []:
@@ -431,6 +490,7 @@ def _evidence_payload_cached(root_dir_key: str, config_path_key: str) -> list[di
                 'id': family_id,
                 'label': str(family.get('label') or '').strip(),
                 'purpose': str(family.get('purpose') or '').strip(),
+                **({'extensionId': family['extensionId']} if family.get('extensionId') else {}),
                 'runtime_evidence_family': family_id in RUNTIME_EVIDENCE_FAMILIES,
                 'entries': entries,
             }
@@ -438,14 +498,36 @@ def _evidence_payload_cached(root_dir_key: str, config_path_key: str) -> list[di
     return rows
 
 
-def _evidence_payload(root_dir: Path, *, config_path: Path) -> list[dict[str, Any]]:
-    return deepcopy(_evidence_payload_cached(_cache_path_key(root_dir), _cache_path_key(config_path)))
+def _evidence_payload(root_dir: Path, *, config_path: Path, environment: dict[str, str] | None = None) -> list[dict[str, Any]]:
+    """返回所选配置和路径视角的 evidence 定义副本，调用方修改不会影响共享缓存。
+
+    参数：
+        root_dir（Path）：对象族所属仓库。
+        config_path（Path）：所选 service。
+        environment（dict[str, str] | None）：路径视角环境；None 在缓存未命中时使用进程环境，空字典固定宿主机视角。
+    返回：
+        list[dict[str, Any]]：独立的 family 与 entry 列表。
+    副作用：
+        缓存未命中时读取仓库合同并物化路径；返回缓存内容的独立副本，不读取运行产物。
+    """
+    items = None if environment is None else tuple(sorted(environment.items()))
+    return deepcopy(_evidence_payload_cached(_cache_path_key(root_dir), _cache_path_key(config_path), items))
 
 
 @lru_cache(maxsize=32)
 def _runtime_evidence_path_count_cached(root_dir_key: str, config_path_key: str) -> int:
+    """在指定仓库与 profile 中统计运行 evidence 条目，不物化路径或探测产物。
+
+    参数：
+        root_dir_key（str）：对象族基座真源所属仓库的绝对路径键。
+        config_path_key（str）：service 配置的绝对路径键。
+    返回：
+        int：属于运行 evidence family 的 entry 总数。
+    副作用：
+        只读取对象族合同并缓存计数，不读取部署输入或运行 state。
+    """
     config_path = Path(config_path_key)
-    contract = object_families.load_contract(config_path=config_path)
+    contract = object_families.load_contract(config_path=config_path, root_dir=Path(root_dir_key))
     total = 0
     for family in contract.get('families') or []:
         if not isinstance(family, dict):
@@ -618,8 +700,32 @@ def build_overview_payload(
     include_profile_runtime_services: bool = True,
     include_profile_evidence_paths: bool = True,
     root_dir: Path = ROOT_DIR,
+    scope: str = 'repository',
+    path_environment: dict[str, str] | None = None,
 ) -> dict[str, Any]:
-    """构建维护事实总览 JSON。"""
+    """构建控制面事实；静态调用可在获取数据时限定 owner 和路径环境。
+
+    参数：
+        config_path（str | Path | None）：显式 service 路径。
+        control_plane_profile（str | None）：与显式路径互斥的 profile 选择。
+        env_file（str | Path | None）：现场探测时读取的部署 env 文件。
+        probe_local（bool）：是否读取部署输入和运行 state 的存在性。
+        include_all_profiles（bool）：是否追加全仓 profile 汇总。
+        include_profile_runtime_services（bool）：profile 汇总是否包含运行服务。
+        include_profile_evidence_paths（bool）：profile 汇总是否物化 evidence 路径。
+        root_dir（Path）：仓库边界。
+        scope（str）：repository 展示仓内 profile 和扩展目录册；selected_config 只展示所选 profile 及其启用 owner。
+        path_environment（dict[str, str] | None）：物化 evidence 的路径视角环境；None 在缓存未命中时使用进程环境，空字典固定宿主机视角。
+    返回：
+        dict[str, Any]：所选配置、profile、扩展、真源、运行服务、evidence 与可选现场诊断事实。
+    异常：
+        ValueError：范围无效，或静态范围同时要求全仓 profile 汇总。
+        FactsOverviewError：无法加载所选 service。
+    副作用：
+        读取所选仓库真源和共享缓存；probe_local=False 时不读取 env 文件或运行 state。
+    """
+    if scope not in {'repository', 'selected_config'} or (scope == 'selected_config' and include_all_profiles):
+        raise ValueError('facts scope 必须为 repository 或不带全仓 profile 汇总的 selected_config')
     repo_root = Path(root_dir).resolve()
     selected_path, profile_id = _load_selected_config(
         root_dir=repo_root,
@@ -636,13 +742,13 @@ def build_overview_payload(
             requested_config_path=config_path,
             requested_profile=control_plane_profile,
         ),
-        'profiles': _profile_payload(repo_root),
-        'extensions': _extensions_payload(context, root_dir=repo_root),
+        'profiles': _profile_payload(repo_root) if scope == 'repository' else {'items': [{'id': profile_id, 'configPath': _repo_relative(selected_path, root_dir=repo_root)}]},
+        'extensions': _extensions_payload(context, root_dir=repo_root, scope=scope),
         'truth_surfaces': _truth_surfaces_payload(repo_root),
-        'generated_artifacts': _generated_artifacts_payload(repo_root),
+        'generated_artifacts': _generated_artifacts_payload(repo_root, context=context if scope == 'selected_config' else None),
         'scripts': _scripts_payload(repo_root),
         'runtime_services': _runtime_services_payload(repo_root, config_path=selected_path),
-        'evidence': _evidence_payload(repo_root, config_path=selected_path),
+        'evidence': _evidence_payload(repo_root, config_path=selected_path, environment=path_environment),
         'local_environment': _local_environment_payload(
             root_dir=repo_root,
             config_path=selected_path,
@@ -839,7 +945,6 @@ def _known_extensions_label(payload: dict[str, Any]) -> str:
 
 
 def render_overview_markdown(payload: dict[str, Any], *, redact_managed_extensions: bool = False) -> str:
-    """把 facts overview JSON 渲染为维护者入口页。"""
     selected = payload['selected_config']
     local = payload['local_environment']
     aliases = _managed_extension_aliases(payload) if redact_managed_extensions else {}
@@ -986,7 +1091,6 @@ def render_overview_markdown(payload: dict[str, Any], *, redact_managed_extensio
 
 
 def build_parser() -> argparse.ArgumentParser:
-    """构造 facts overview CLI 参数；支持单 profile、全 profile、JSON 和 Markdown 输出。"""
     parser = argparse.ArgumentParser(prog='control-plane facts overview')
     parser.add_argument('--config-path', default=None)
     parser.add_argument('--control-plane-profile', default=None)
@@ -999,7 +1103,6 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def overview_entry(argv: list[str] | None = None) -> int:
-    """执行 facts overview 子命令，读取控制面事实并输出机器 JSON 或人类 Markdown。"""
     args = list(sys.argv[1:] if argv is None else argv)
     if args[:1] == ['overview']:
         args = args[1:]
@@ -1026,7 +1129,6 @@ def overview_entry(argv: list[str] | None = None) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
-    """模块命令行入口，直接委托 overview_entry。"""
     return overview_entry(argv)
 
 

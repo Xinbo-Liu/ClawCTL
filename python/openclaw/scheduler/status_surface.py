@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Scheduler status and heartbeat helpers."""
+"""提供OpenClaw 调度器子系统的生产实现。"""
 from __future__ import annotations
 
 import json

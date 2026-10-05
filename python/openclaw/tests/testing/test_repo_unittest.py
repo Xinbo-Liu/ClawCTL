@@ -2,41 +2,58 @@
 from __future__ import annotations
 
 import argparse
-from contextlib import ExitStack, contextmanager
+import io
+import json
+from contextlib import ExitStack, contextmanager, redirect_stderr
 from pathlib import Path
+import sys
 import tempfile
 import types
 import unittest
 from unittest import mock
 import zipfile
 
+from openclaw.lib.repo.managed_extensions import (
+    MANAGED_EXPLICIT_EXTENSION_STATUS,
+    ManagedExtensionRow,
+)
+from openclaw.lib.runtime.bounded_process import BoundedProcessResult
 from openclaw.testing import repo_unittest, syntax_check
 
 
-class AlphaCase(unittest.TestCase):
-    def test_one(self) -> None:
-        self.assertTrue(True)
+def _sample_case_types() -> dict[str, type[unittest.TestCase]]:
+    """构造仅供分桶测试使用且不会被模块发现器直接收集的样例类型。"""
 
-    def test_two(self) -> None:
-        self.assertTrue(True)
+    class AlphaCase(unittest.TestCase):
+        def test_one(self) -> None:
+            self.assertTrue(True)
+
+        def test_two(self) -> None:
+            self.assertTrue(True)
+
+    class BetaCase(unittest.TestCase):
+        def test_one(self) -> None:
+            self.assertTrue(True)
+
+    class GammaCase(unittest.TestCase):
+        def test_one(self) -> None:
+            self.assertTrue(True)
+
+    rows = {'alpha': AlphaCase, 'beta': BetaCase, 'gamma': GammaCase}
+    for case_type in rows.values():
+        case_type.__qualname__ = case_type.__name__
+    return rows
 
 
-class BetaCase(unittest.TestCase):
-    def test_one(self) -> None:
-        self.assertTrue(True)
-
-
-class GammaCase(unittest.TestCase):
-    def test_one(self) -> None:
-        self.assertTrue(True)
+_SAMPLE_CASE_TYPES = _sample_case_types()
 
 
 @contextmanager
 def patched_case_modules():
     with ExitStack() as stack:
-        stack.enter_context(mock.patch.object(AlphaCase, '__module__', 'alpha.tests.test_alpha'))
-        stack.enter_context(mock.patch.object(BetaCase, '__module__', 'beta.tests.test_beta'))
-        stack.enter_context(mock.patch.object(GammaCase, '__module__', 'gamma.tests.test_gamma'))
+        stack.enter_context(mock.patch.object(_SAMPLE_CASE_TYPES['alpha'], '__module__', 'alpha.tests.test_alpha'))
+        stack.enter_context(mock.patch.object(_SAMPLE_CASE_TYPES['beta'], '__module__', 'beta.tests.test_beta'))
+        stack.enter_context(mock.patch.object(_SAMPLE_CASE_TYPES['gamma'], '__module__', 'gamma.tests.test_gamma'))
         yield
 
 
@@ -46,6 +63,8 @@ class RepoUnittestSupportTest(unittest.TestCase):
 
         self.assertIn('bash ./scripts/testing/check_repo_test_readiness.sh', help_text)
         self.assertIn('--durations', help_text)
+        self.assertIn('--report-json', help_text)
+        self.assertIn('--list-tests', help_text)
 
     def test_clean_repo_bytecode_residue_removes_repo_python_and_extension_pycache_only(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -119,9 +138,9 @@ class RepoUnittestSupportTest(unittest.TestCase):
         with patched_case_modules():
             suite = unittest.TestSuite(
                 [
-                    loader.loadTestsFromTestCase(AlphaCase),
-                    loader.loadTestsFromTestCase(BetaCase),
-                    loader.loadTestsFromTestCase(GammaCase),
+                    loader.loadTestsFromTestCase(_SAMPLE_CASE_TYPES['alpha']),
+                    loader.loadTestsFromTestCase(_SAMPLE_CASE_TYPES['beta']),
+                    loader.loadTestsFromTestCase(_SAMPLE_CASE_TYPES['gamma']),
                 ]
             )
             self.assertEqual(
@@ -152,6 +171,34 @@ class RepoUnittestSupportTest(unittest.TestCase):
             },
         )
 
+    def test_build_file_buckets_is_deterministic_without_importing_modules(self) -> None:
+        inventory = (
+            repo_unittest.TestFile('tests/test_large.py', 8),
+            repo_unittest.TestFile('tests/test_beta.py', 3),
+            repo_unittest.TestFile('tests/test_alpha.py', 3),
+        )
+
+        first = repo_unittest._build_file_buckets(inventory, jobs=2)
+        second = repo_unittest._build_file_buckets(tuple(reversed(inventory)), jobs=2)
+
+        self.assertEqual(first, second)
+        self.assertEqual(
+            {selector for bucket in first for selector in bucket},
+            {item.selector for item in inventory},
+        )
+
+    def test_inventory_work_units_bound_concurrency_without_oversized_buckets(self) -> None:
+        self.assertEqual(repo_unittest._inventory_work_unit_count(151, 4, list_only=False), 8)
+        self.assertEqual(repo_unittest._inventory_work_unit_count(151, 4, list_only=True), 4)
+        self.assertEqual(repo_unittest._inventory_work_unit_count(3, 4, list_only=False), 3)
+        with self.assertRaises(ValueError):
+            repo_unittest._inventory_work_unit_count(0, 4, list_only=False)
+
+    def test_worker_timeout_is_clamped_to_remaining_suite_budget(self) -> None:
+        self.assertEqual(repo_unittest._remaining_worker_timeout(300.0, 1000.0, now=800.0), 200.0)
+        self.assertEqual(repo_unittest._remaining_worker_timeout(300.0, 1200.0, now=800.0), 300.0)
+        self.assertEqual(repo_unittest._remaining_worker_timeout(300.0, 800.0, now=800.0), 0.0)
+
     def test_selector_for_module_prefers_repo_relative_file_selector(self) -> None:
         module = types.ModuleType('openclaw.tests.testing.fake_worker_module')
         module_path = repo_unittest.repo_root() / 'python' / 'openclaw' / 'tests' / 'testing' / 'fake_worker_module.py'
@@ -165,7 +212,7 @@ class RepoUnittestSupportTest(unittest.TestCase):
         module_path = repo_unittest.repo_root() / 'python' / 'openclaw' / 'tests' / 'alpha' / 'test_alpha.py'
         module.__file__ = str(module_path)
         with patched_case_modules(), mock.patch.dict('sys.modules', {module.__name__: module}, clear=False):
-            selector = repo_unittest._selector_for_test(AlphaCase('test_one'), repo_unittest.repo_root())
+            selector = repo_unittest._selector_for_test(_SAMPLE_CASE_TYPES['alpha']('test_one'), repo_unittest.repo_root())
         self.assertEqual(
             selector,
             f'{module_path.relative_to(repo_unittest.repo_root())}::AlphaCase::test_one',
@@ -177,7 +224,7 @@ class RepoUnittestSupportTest(unittest.TestCase):
         module_path = repo_unittest.repo_root() / 'python' / 'openclaw' / 'tests' / 'alpha' / 'test_alpha.py'
         module.__file__ = str(module_path)
         with patched_case_modules():
-            suite = unittest.TestSuite([loader.loadTestsFromTestCase(AlphaCase)])
+            suite = unittest.TestSuite([loader.loadTestsFromTestCase(_SAMPLE_CASE_TYPES['alpha'])])
             with mock.patch.dict('sys.modules', {module.__name__: module}, clear=False):
                 counts = repo_unittest._selector_case_counts(suite, repo_unittest.repo_root())
         self.assertEqual(
@@ -200,9 +247,9 @@ class RepoUnittestSupportTest(unittest.TestCase):
         with patched_case_modules(), mock.patch.dict('sys.modules', modules, clear=False):
             suite = unittest.TestSuite(
                 [
-                    loader.loadTestsFromTestCase(AlphaCase),
-                    loader.loadTestsFromTestCase(BetaCase),
-                    loader.loadTestsFromTestCase(GammaCase),
+                    loader.loadTestsFromTestCase(_SAMPLE_CASE_TYPES['alpha']),
+                    loader.loadTestsFromTestCase(_SAMPLE_CASE_TYPES['beta']),
+                    loader.loadTestsFromTestCase(_SAMPLE_CASE_TYPES['gamma']),
                 ]
             )
             counts = repo_unittest._parallel_selector_counts(
@@ -220,7 +267,7 @@ class RepoUnittestSupportTest(unittest.TestCase):
         module_path = repo_unittest.repo_root() / 'python' / 'openclaw' / 'tests' / 'alpha' / 'test_alpha.py'
         module.__file__ = str(module_path)
         with patched_case_modules(), mock.patch.dict('sys.modules', {module.__name__: module}, clear=False):
-            suite = unittest.TestSuite([AlphaCase('test_one')])
+            suite = unittest.TestSuite([_SAMPLE_CASE_TYPES['alpha']('test_one')])
             counts = repo_unittest._parallel_selector_counts(
                 argparse.Namespace(selectors=['alpha.tests.test_alpha::AlphaCase::test_one']),
                 suite,
@@ -240,7 +287,7 @@ class RepoUnittestSupportTest(unittest.TestCase):
         module_path = repo_unittest.repo_root() / 'python' / 'openclaw' / 'tests' / 'alpha' / 'test_alpha.py'
         module.__file__ = str(module_path)
         with patched_case_modules(), mock.patch.dict('sys.modules', {module.__name__: module}, clear=False):
-            suite = unittest.TestSuite([loader.loadTestsFromTestCase(AlphaCase)])
+            suite = unittest.TestSuite([loader.loadTestsFromTestCase(_SAMPLE_CASE_TYPES['alpha'])])
             counts = repo_unittest._parallel_selector_counts(
                 argparse.Namespace(selectors=['alpha.tests.test_alpha.AlphaCase']),
                 suite,
@@ -259,8 +306,8 @@ class RepoUnittestSupportTest(unittest.TestCase):
         loader = unittest.defaultTestLoader
         suite = unittest.TestSuite(
             [
-                loader.loadTestsFromTestCase(AlphaCase),
-                loader.loadTestsFromTestCase(BetaCase),
+                loader.loadTestsFromTestCase(_SAMPLE_CASE_TYPES['alpha']),
+                loader.loadTestsFromTestCase(_SAMPLE_CASE_TYPES['beta']),
             ]
         )
         args = argparse.Namespace(
@@ -277,7 +324,7 @@ class RepoUnittestSupportTest(unittest.TestCase):
         self.assertFalse(repo_unittest._parallelizable_suite(args, suite))
 
     def test_parallelizable_suite_rejects_single_case_selector(self) -> None:
-        suite = unittest.defaultTestLoader.loadTestsFromTestCase(BetaCase)
+        suite = unittest.defaultTestLoader.loadTestsFromTestCase(_SAMPLE_CASE_TYPES['beta'])
         args = argparse.Namespace(
             quiet=False,
             jobs='auto',
@@ -290,7 +337,7 @@ class RepoUnittestSupportTest(unittest.TestCase):
             self.assertFalse(repo_unittest._parallelizable_suite(args, suite))
 
     def test_parallelizable_suite_rejects_jobs_equal_one(self) -> None:
-        suite = unittest.defaultTestLoader.loadTestsFromTestCase(AlphaCase)
+        suite = unittest.defaultTestLoader.loadTestsFromTestCase(_SAMPLE_CASE_TYPES['alpha'])
         args = argparse.Namespace(
             quiet=False,
             jobs='1',
@@ -302,7 +349,7 @@ class RepoUnittestSupportTest(unittest.TestCase):
         self.assertFalse(repo_unittest._parallelizable_suite(args, suite))
 
     def test_parallelizable_suite_rejects_duration_profile(self) -> None:
-        suite = unittest.defaultTestLoader.loadTestsFromTestCase(AlphaCase)
+        suite = unittest.defaultTestLoader.loadTestsFromTestCase(_SAMPLE_CASE_TYPES['alpha'])
         args = argparse.Namespace(
             quiet=False,
             jobs='auto',
@@ -354,6 +401,64 @@ class RepoUnittestSupportTest(unittest.TestCase):
             )
 
             suite = repo_unittest._suite_from_selectors([str(test_path.relative_to(root))], root)
+
+        self.assertEqual(suite.countTestCases(), 1)
+
+    def test_default_discovery_adds_extension_offline_wheelhouse(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            extension_root = root / 'agent' / 'extensions' / 'agent_probe'
+            test_dir = extension_root / 'tests'
+            python_root = extension_root / 'python'
+            wheelhouse = extension_root / 'offline_wheelhouse'
+            manifest_dir = extension_root / 'config' / 'control_plane' / 'extensions.d'
+            test_dir.mkdir(parents=True)
+            python_root.mkdir(parents=True)
+            wheelhouse.mkdir(parents=True)
+            manifest_dir.mkdir(parents=True)
+            (test_dir / '__init__.py').write_text('', encoding='utf-8')
+            (root / 'agent' / 'extensions' / 'index.json').write_text(
+                json.dumps(
+                    {
+                        'extensions': [
+                            {
+                                'id': 'agent_probe',
+                                'title': 'Agent Probe',
+                                'rootDir': 'agent/extensions/agent_probe',
+                                'manifestDir': 'agent/extensions/agent_probe/config/control_plane/extensions.d',
+                                'pythonRoots': ['agent/extensions/agent_probe/python'],
+                                'defaultServiceConfigPath': 'agent/extensions/agent_probe/config/control_plane/profiles/agent_probe.service.json',
+                                'status': 'managed_explicit_extension',
+                            }
+                        ]
+                    },
+                    ensure_ascii=False,
+                )
+                + '\n',
+                encoding='utf-8',
+            )
+            (manifest_dir / 'agent_probe.json').write_text('{"id":"agent_probe","title":"Agent Probe"}\n', encoding='utf-8')
+            with zipfile.ZipFile(wheelhouse / 'fixture_dep-1.0.0-py3-none-any.whl', 'w') as archive:
+                archive.writestr('fixture_dep.py', 'VALUE = 42\n')
+            (test_dir / 'test_dep.py').write_text(
+                'import fixture_dep\nimport unittest\n\n'
+                'class ExtensionDependencyTest(unittest.TestCase):\n'
+                '    def test_dep(self):\n'
+                '        self.assertEqual(fixture_dep.VALUE, 42)\n',
+                encoding='utf-8',
+            )
+            args = argparse.Namespace(
+                quiet=True,
+                jobs='1',
+                import_mode='',
+                durations=0,
+                start_dir=repo_unittest.DEFAULT_START_DIR,
+                start_dir_explicit=False,
+                pattern='test_*.py',
+                selectors=[],
+            )
+
+            suite = repo_unittest._suite_from_args(args, root)
 
         self.assertEqual(suite.countTestCases(), 1)
 
@@ -430,7 +535,87 @@ class RepoUnittestSupportTest(unittest.TestCase):
 
         self.assertEqual(suite.countTestCases(), 2)
 
-    def test_default_suite_loads_managed_extension_test_all_files_without_module_name_collision(self) -> None:
+    def test_default_suite_prepends_managed_extension_python_roots(self) -> None:
+        original_sys_path = list(sys.path)
+        try:
+            with tempfile.TemporaryDirectory() as tmpdir:
+                root = Path(tmpdir)
+                repo_tests = root / 'python' / 'openclaw' / 'tests'
+                dependency_python = root / 'agent' / 'extensions' / 'agent_dependency' / 'python'
+                extension_tests = root / 'agent' / 'extensions' / 'agent_probe' / 'tests'
+                for package_dir in (repo_tests, dependency_python / 'dependency_pkg', extension_tests):
+                    package_dir.mkdir(parents=True)
+                    (package_dir / '__init__.py').write_text('', encoding='utf-8')
+                (dependency_python / 'dependency_pkg' / 'api.py').write_text('VALUE = 42\n', encoding='utf-8')
+                (extension_tests / 'test_dep.py').write_text(
+                    'import unittest\n'
+                    'from dependency_pkg.api import VALUE\n\n'
+                    'class ExtensionDependencyTest(unittest.TestCase):\n'
+                    '    def test_imports_dependency(self):\n'
+                    '        self.assertEqual(VALUE, 42)\n',
+                    encoding='utf-8',
+                )
+                args = argparse.Namespace(
+                    quiet=False,
+                    jobs='1',
+                    import_mode='',
+                    durations=0,
+                    start_dir=repo_unittest.DEFAULT_START_DIR,
+                    start_dir_explicit=False,
+                    pattern='test_*.py',
+                    selectors=[],
+                )
+                row = ManagedExtensionRow(
+                    id='agent_dependency',
+                    title='Agent Dependency',
+                    root_dir=root / 'agent' / 'extensions' / 'agent_dependency',
+                    default_service_config_path=(
+                        root
+                        / 'agent'
+                        / 'extensions'
+                        / 'agent_dependency'
+                        / 'config'
+                        / 'control_plane'
+                        / 'profiles'
+                        / 'agent_dependency.service.json'
+                    ),
+                    manifest_dir=(
+                        root
+                        / 'agent'
+                        / 'extensions'
+                        / 'agent_dependency'
+                        / 'config'
+                        / 'control_plane'
+                        / 'extensions.d'
+                    ),
+                    python_roots=(dependency_python,),
+                    status=MANAGED_EXPLICIT_EXTENSION_STATUS,
+                )
+                with (
+                    mock.patch('openclaw.testing.repo_unittest.managed_explicit_extensions', return_value=(row,)),
+                    mock.patch('openclaw.testing.repo_unittest.managed_extension_test_roots', return_value=(extension_tests,)),
+                ):
+                    suite = repo_unittest._suite_from_args(args, root)
+
+                result = unittest.TestResult()
+                suite.run(result)
+
+            self.assertEqual(result.errors, [])
+            self.assertEqual(result.failures, [])
+            self.assertEqual(result.testsRun, 1)
+        finally:
+            sys.path[:] = original_sys_path
+
+    def test_managed_extension_import_entries_rejects_incomplete_rows(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            row = types.SimpleNamespace(id='agent_dependency', python_roots=(root / 'agent_dependency' / 'python',))
+
+            with mock.patch('openclaw.testing.repo_unittest.managed_explicit_extensions', return_value=(row,)):
+                with self.assertRaisesRegex(TypeError, 'ManagedExtensionRow'):
+                    repo_unittest._managed_extension_import_entries(root)
+
+    def test_default_suite_excludes_aggregate_entries_and_loads_real_extension_files(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             repo_tests = root / 'python' / 'openclaw' / 'tests'
@@ -445,6 +630,12 @@ class RepoUnittestSupportTest(unittest.TestCase):
             )
             for test_root, class_name in ((alpha_tests, 'AlphaExtensionTest'), (beta_tests, 'BetaExtensionTest')):
                 (test_root / 'test_all.py').write_text(
+                    'raise RuntimeError("aggregate entry must not be imported by default discovery")\n',
+                    encoding='utf-8',
+                )
+                unit_dir = test_root / 'unit'
+                unit_dir.mkdir()
+                (unit_dir / 'test_real.py').write_text(
                     'import unittest\n\n'
                     f'class {class_name}(unittest.TestCase):\n'
                     '    def test_one(self):\n'
@@ -468,6 +659,81 @@ class RepoUnittestSupportTest(unittest.TestCase):
                 suite = repo_unittest._suite_from_args(args, root)
 
         self.assertEqual(suite.countTestCases(), 3)
+
+    def test_aggregate_report_sorts_test_ids_independently_of_worker_order(self) -> None:
+        payload = repo_unittest._aggregate_worker_reports(
+            reports=[
+                {
+                    'worker': 2,
+                    'exitCode': 0,
+                    'tests': [{'id': 'z.test', 'module': 'z', 'worker': 2}],
+                },
+                {
+                    'worker': 1,
+                    'exitCode': 0,
+                    'tests': [{'id': 'a.test', 'module': 'a', 'worker': 1}],
+                },
+            ],
+            duration_seconds=1.25,
+            timed_out=False,
+        )
+
+        self.assertEqual([item['id'] for item in payload['tests']], ['a.test', 'z.test'])
+        self.assertEqual([item['worker'] for item in payload['workers']], [1, 2])
+        self.assertEqual(payload['summary']['exitCode'], 0)
+        self.assertEqual(payload['summary']['duplicateTestIds'], [])
+
+    def test_aggregate_report_rejects_duplicate_test_execution(self) -> None:
+        payload = repo_unittest._aggregate_worker_reports(
+            reports=[
+                {'worker': 1, 'exitCode': 0, 'tests': [{'id': 'duplicate.test', 'module': 'a'}]},
+                {'worker': 2, 'exitCode': 0, 'tests': [{'id': 'duplicate.test', 'module': 'a'}]},
+            ],
+            duration_seconds=0.5,
+            timed_out=False,
+        )
+
+        self.assertEqual(payload['status'], 'FAIL')
+        self.assertEqual(payload['summary']['exitCode'], 1)
+        self.assertEqual(payload['summary']['duplicateTestIds'], ['duplicate.test'])
+
+    def test_inventory_reports_worker_timeout_and_truncates_failure_output(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            report_path = Path(tmpdir) / 'repo-unittest.json'
+            args = argparse.Namespace(
+                jobs='1',
+                list_tests=False,
+                quiet=True,
+                json_output=False,
+                report_json=str(report_path),
+                start_dir=repo_unittest.DEFAULT_START_DIR,
+                pattern='test_*.py',
+            )
+            outcome = BoundedProcessResult(
+                exit_code=None,
+                stdout='head-' + ('x' * 70_000) + '-tail',
+                stderr='',
+                duration_seconds=0.2,
+                timed_out=True,
+            )
+            with mock.patch.object(repo_unittest, 'run_bounded_process', return_value=outcome):
+                with redirect_stderr(io.StringIO()):
+                    exit_code = repo_unittest._run_inventory(
+                        args,
+                        repo_unittest.repo_root(),
+                        [repo_unittest.TestFile('python/openclaw/tests/test_probe.py', 1)],
+                    )
+
+            payload = json.loads(report_path.read_text(encoding='utf-8'))
+
+        self.assertEqual(exit_code, 1)
+        self.assertTrue(payload['summary']['timedOut'])
+        self.assertEqual(payload['summary']['parallelJobs'], 1)
+        self.assertEqual(payload['summary']['workUnits'], 1)
+        self.assertEqual(payload['workers'][0]['status'], 'TIMEOUT')
+        self.assertIn('truncated', payload['workers'][0]['output'])
+        self.assertTrue(payload['workers'][0]['output'].startswith('head-'))
+        self.assertTrue(payload['workers'][0]['output'].endswith('-tail'))
 
     def test_start_dir_discovery_clears_stale_same_named_modules(self) -> None:
         with tempfile.TemporaryDirectory() as first_tmpdir, tempfile.TemporaryDirectory() as second_tmpdir:

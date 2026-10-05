@@ -55,19 +55,18 @@
         "target-scoped acceptance JSON 中 overall_status 不应为 fail；生产相关 target 还应继续通过对应发布批次 acceptance。"
       ],
       "common_branches": [
-        "若报 endpoint_missing / invalid_target_endpoint，回 deploy/targets.d/<target_id>.env 补齐并重新 one_click_config + bootstrap。",
+        "若报 endpoint_missing / invalid_target_endpoint，回 deploy/targets.d/<target_id>.env 补齐，执行 one_click_config 后使用默认 deploy/.env 执行 scheduler up --force-recreate。",
         "若 current_release_allowed=false，说明当前是 release gate 拦截，而不是 provider 故障。"
       ]
     },
     "dispatch_target_default_dry_run": {
       "id": "dispatch_target_default_dry_run",
       "title": "分发目标默认 dry-run 顺序",
-      "purpose": "统一定义首次接入或轮换后的 send / retry / resend dry-run 组合与正式命令入口。",
+      "purpose": "统一定义首次接入或轮换后的 send / retry dry-run 组合与正式命令入口。",
       "entry_command": "bash ./scripts/runtime/run_openclaw_python_tool.sh dispatch ops commands --entry dispatch_target_default_dry_run",
       "steps": [
         "bash ./scripts/runtime/run_openclaw_python_tool.sh dispatch ops run-target-operation --operation send --target <target_id> --env-file deploy/.env --control-plane-profile <profile_id> --ensure-running strict -- --dry-run true",
         "bash ./scripts/runtime/run_openclaw_python_tool.sh dispatch ops run-target-operation --operation retry --target <target_id> --env-file deploy/.env --control-plane-profile <profile_id> --ensure-running strict -- --dry-run true",
-        "bash ./scripts/runtime/run_openclaw_python_tool.sh dispatch ops run-target-operation --operation resend --target <target_id> --env-file deploy/.env --control-plane-profile <profile_id> --ensure-running strict -- --dry-run true",
         "bash ./scripts/runtime/run_openclaw_python_tool.sh dispatch observability show-target-acceptance --target <target_id> --gate-env-file deploy/.env --fail-on-fail --json --write-audit"
       ],
       "references": [
@@ -76,19 +75,15 @@
       ],
       "notes": [
         "该 dry-run 组合用于验证控制面入口、release gate 与目标级 acceptance 口径一致性；真实发送验收使用完整 acceptance 链。",
-        "本页的 dry-run / resend / preflight 人工命令统一走 scheduler service exec；批量验收读取 observability acceptance。"
+        "本页的 dry-run 与 preflight 人工命令统一走 scheduler service exec；批量验收读取 observability acceptance。"
       ],
       "prerequisites": [
-        "已完成目标接入或轮换后的最小配置生效动作：one_click_config、bootstrap、scheduler up --force-recreate。"
+        "已完成目标接入或轮换后的最小配置生效动作：one_click_config 后使用默认 deploy/.env 执行 scheduler up --force-recreate。"
       ],
       "example_commands": [
         {
-          "title": "对目标做 send/retry/resend 预演",
-          "command": "bash ./scripts/runtime/run_openclaw_python_tool.sh dispatch ops run-target-operation --operation send --target <target_id> --env-file deploy/.env --control-plane-profile <profile_id> --ensure-running strict -- --dry-run true && bash ./scripts/runtime/run_openclaw_python_tool.sh dispatch ops run-target-operation --operation retry --target <target_id> --env-file deploy/.env --control-plane-profile <profile_id> --ensure-running strict -- --dry-run true && bash ./scripts/runtime/run_openclaw_python_tool.sh dispatch ops run-target-operation --operation resend --target <target_id> --env-file deploy/.env --control-plane-profile <profile_id> --ensure-running strict -- --dry-run true && bash ./scripts/runtime/run_openclaw_python_tool.sh dispatch observability show-target-acceptance --target <target_id> --gate-env-file deploy/.env --fail-on-fail --json --write-audit"
-        },
-        {
-          "title": "单独执行 resend dry-run",
-          "command": "bash ./scripts/runtime/run_openclaw_python_tool.sh dispatch ops run-target-operation --operation resend --target <target_id> --env-file deploy/.env --control-plane-profile <profile_id> --ensure-running strict -- --dry-run true"
+          "title": "对目标做 send/retry 预演",
+          "command": "bash ./scripts/runtime/run_openclaw_python_tool.sh dispatch ops run-target-operation --operation send --target <target_id> --env-file deploy/.env --control-plane-profile <profile_id> --ensure-running strict -- --dry-run true && bash ./scripts/runtime/run_openclaw_python_tool.sh dispatch ops run-target-operation --operation retry --target <target_id> --env-file deploy/.env --control-plane-profile <profile_id> --ensure-running strict -- --dry-run true && bash ./scripts/runtime/run_openclaw_python_tool.sh dispatch observability show-target-acceptance --target <target_id> --gate-env-file deploy/.env --fail-on-fail --json --write-audit"
         },
         {
           "title": "补看最新 explain-latest",
@@ -100,7 +95,7 @@
         "正式放开真实发送前必须完成完整 acceptance；dry-run 结果只表示控制面预演通过。"
       ],
       "common_branches": [
-        "retry/resend 的 dry-run 不会消费 queue；判断 backlog 是否下降时必须看 queue_done 与 ledger。"
+        "retry dry-run 不会消费 queue；判断 backlog 是否下降时必须看 queue_done 与 ledger。"
       ]
     },
     "dispatch_target_rotation": {
@@ -111,7 +106,6 @@
       "steps": [
         "# 先更新 deploy/targets.d/<target_id>.env 中当前 target 对应的 endpointEnv / secretEnv",
         "bash ./scripts/setup/one_click_config.sh",
-        "bash ./scripts/setup/bootstrap.sh",
         "bash ./scripts/runtime/run_runtime_service_action.sh up --target scheduler --force-recreate",
         "bash ./scripts/runtime/run_openclaw_python_tool.sh dispatch ops run-target-operation --operation preflight --target <target_id> --env-file deploy/.env --control-plane-profile <profile_id> --ensure-running strict",
         "bash ./scripts/runtime/run_openclaw_python_tool.sh dispatch observability show-target-acceptance --target <target_id> --gate-env-file deploy/.env --fail-on-fail --json --write-audit",
@@ -136,8 +130,8 @@
           "command": "vim deploy/targets.d/<target_id>.env"
         },
         {
-          "title": "重新生成 deploy/.env 并刷新运行态",
-          "command": "bash ./scripts/setup/one_click_config.sh && bash ./scripts/setup/bootstrap.sh"
+          "title": "重新生成 deploy/.env",
+          "command": "bash ./scripts/setup/one_click_config.sh"
         },
         {
           "title": "重建 scheduler 后执行目标最小轮换验收",
@@ -145,11 +139,11 @@
         }
       ],
       "result_checks": [
-        "bootstrap 完成后，dispatch target 运行态副本应已刷新；随后 scheduler force recreate 不应报错。",
+        "scheduler force recreate 不应报错；运行态派生 env 由 run_runtime_service_action.sh up 在重建前刷新。",
         "target-scoped acceptance 与对应轮换批次 acceptance 不应为 fail；生产放量前还应补看发布必需批次。"
       ],
       "common_branches": [
-        "若轮换后系统表现为未刷新的配置，优先检查是否遗漏 bootstrap 或 scheduler up --force-recreate。",
+        "若轮换后系统表现为未刷新的配置，优先检查是否使用默认 deploy/.env 执行 scheduler up --force-recreate。",
         "若治理巡检报共享 provider endpoint，说明多个 target 引用同一 endpoint，不得直接放量。"
       ]
     },
@@ -201,9 +195,10 @@
         "docs/operations/dispatch-targets.md#dispatch-recovery-order"
       ],
       "notes": [
-        "disabled 用于停止真实发送但保留注册表条目、批次与治理关系。"
+        "disabled 用于停止非正式目标的真实发送并保留注册表条目、批次与治理关系；正式 latest publisher 不允许进入该状态。"
       ],
       "prerequisites": [
+        "目标不是 formal_broadcast/required latest publisher；正式目标维护必须使用 scheduler maintenance。",
         "明确这是停发而不是彻底下线；disabled 保留注册表条目与审计关系。"
       ],
       "example_commands": [
@@ -220,7 +215,8 @@
         "apply 后摘要中应显示 current_state -> next_state 的变化，enabledDefault 应为 false。"
       ],
       "common_branches": [
-        "disabled 不会自动删除 target；需要从批次与轮换中彻底移除时，使用 `decommissioned`。"
+        "disabled 不会自动删除 target；需要从批次与轮换中彻底移除非正式目标时，使用 `decommissioned`。",
+        "正式 latest publisher 的维护窗口使用 scheduler maintenance，不修改其生命周期职责。"
       ]
     },
     "dispatch_target_decommission": {
@@ -236,9 +232,10 @@
         "docs/operations/dispatch-targets.md#dispatch-recovery-order"
       ],
       "notes": [
-        "进入 decommissioned 后，脚本会自动把 enabledDefault=false 并清空 verificationBatchIds，避免已下线 target 继续参与轮换。"
+        "非正式目标进入 decommissioned 后，脚本会自动把 enabledDefault=false 并清空 verificationBatchIds，避免已下线 target 继续参与轮换。"
       ],
       "prerequisites": [
+        "目标不是 formal_broadcast/required latest publisher；正式目标维护必须使用 scheduler maintenance。",
         "明确该 target 已退出任何轮换、验收与真实发送，并已准备好 owner/批次层面的清理评审。"
       ],
       "example_commands": [
@@ -251,7 +248,8 @@
         "apply 后 target 的 enabledDefault 应为 false，verificationBatchIds 应为空，相关批次若仅剩该目标也会被移除。"
       ],
       "common_branches": [
-        "decommissioned 默认不允许直接回退；需要恢复时，必须先补回 verificationBatchIds、owner 与策略并重新评审。"
+        "decommissioned 默认不允许直接回退；需要恢复时，必须先补回 verificationBatchIds、owner 与策略并重新评审。",
+        "正式 latest publisher 不进入 decommissioned；使用 scheduler maintenance 完成正式目标维护。"
       ]
     }
   }

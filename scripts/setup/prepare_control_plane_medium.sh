@@ -15,12 +15,10 @@ OFFLINE=0
 IMAGE_ARCHIVE_PATH=""
 HELP_ONLY=0
 EXPLAIN_ONLY=0
-
 medium_fail() {
   echo "[prepare_control_plane_medium][FAIL] $1" >&2
   exit 2
 }
-
 show_prepare_control_plane_medium_help() {
   local purpose=''
   local help_lines=''
@@ -56,7 +54,6 @@ USAGE
   setup_help_surface_guarantee_text
   setup_help_surface_reference_text
 }
-
 show_prepare_control_plane_medium_explain() {
   local purpose=''
   local boundaries=''

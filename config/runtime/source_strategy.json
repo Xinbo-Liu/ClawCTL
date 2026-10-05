@@ -12,7 +12,7 @@
     "control plane Python / runtime Python / Nginx 宿主机预检只验证本地缓存与 Docker 传输链路；精确 tag@digest artifact 可用性统一在 check_deployment_image_readiness.sh、pull_images.sh 与部署镜像归档链路闭合。",
     "宿主机静态预检、Gateway 供应链事实与 registry manifest 探针固定走 bash + jq + curl 静态链路；这些入口不准备 host 控制面执行介质，进入 host 控制面命令前必须显式执行 prepare_control_plane_medium.sh。",
     "Gateway 宿主机预检必须复用统一供应链事实，明确区分 selected source 不可达、selected source digest 与 pin 不一致、以及候选链路可用三种状态。",
-    "pull_images.sh 默认按 PULL_GATEWAY_CANDIDATE_MODE=auto-switch 在 CN profile 下选择等值 Gateway candidate；该选择只写当前 deploy/.env 与 state/image_pull/gateway_source_selection.json，不改写 config/image_pins/openclaw.env。"
+    "pull_images.sh 默认按 PULL_GATEWAY_CANDIDATE_MODE=auto-switch 在 CN profile 下选择等值 Gateway candidate；该选择仅切换当前 deploy/.env 的 Gateway 镜像引用，并写入 state/image_pull/gateway_source_selection.json，不改写 config/image_pins/openclaw.env；拉取完成后默认移除未被当前部署选用的 Gateway canonical/candidate 来源标签。"
   ],
   "images": {
     "official_gateway": {
@@ -193,7 +193,7 @@
         "nginx_runtime"
       ],
       "selected_defaults": [
-        "OPENCLAW_OFFICIAL_GATEWAY_IMAGE 默认保持 config/image_pins/openclaw.env 中的 official GHCR pin；CN profile 下在线拉取由 pull_images.sh 自动选择等值 candidate 并只改写当前 deploy/.env。",
+        "OPENCLAW_OFFICIAL_GATEWAY_IMAGE 默认保持 config/image_pins/openclaw.env 中的 official GHCR pin；CN profile 下在线拉取由 pull_images.sh 自动选择等值 candidate，仅改写当前 deploy/.env 的 Gateway 镜像引用，并默认清理未被当前部署选用的 Gateway 来源标签。",
         "OPENCLAW_CONTROL_PLANE_IMAGE / OPENCLAW_RUNTIME_PYTHON_IMAGE 默认固定为 docker.m.daocloud.io/library/python tag@digest pin；Docker daemon registry-mirrors 仅作为补充传输加速",
         "NGINX_IMAGE 默认固定为 docker.m.daocloud.io/library/nginx tag@digest pin；Docker daemon registry-mirrors 仅作为补充传输加速"
       ],

@@ -8,7 +8,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
-from openclaw.docs.renderers import runtime_surface
+from openclaw.docs.renderers import runtime_surface, script_catalog
 from openclaw.docs.support import reference_specs
 from openclaw.tests.support.managed_extensions import managed_extensions
 
@@ -124,6 +124,30 @@ class RuntimeSurfaceReferenceSpecsSurfaceTest(unittest.TestCase):
         default_paths = set(manifest['default_entrypoint'])
         self.assertIn('scripts/runtime/run_openclaw_python_tool.sh', default_paths)
         self.assertNotIn('scripts/runtime/container_python', default_paths)
+
+    def test_script_catalog_cli_help_and_unknown_args_do_not_render(self) -> None:
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        with patch.object(script_catalog, 'validate_catalog_against_filesystem') as validate_catalog:
+            with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+                self.assertEqual(script_catalog.render_entry(['--help']), 0)
+                self.assertEqual(script_catalog.render_entry(['--unknown']), 2)
+
+        validate_catalog.assert_not_called()
+        self.assertIn('python -m openclaw.docs.renderers.script_catalog', stdout.getvalue())
+        self.assertIn('未知参数：--unknown', stderr.getvalue())
+
+    def test_script_catalog_accepts_profile_arg(self) -> None:
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            self.assertEqual(
+                script_catalog.render_entry(['--check', '--control-plane-profile', 'agent_platform']),
+                0,
+            )
+
+        self.assertIn('已同步', stdout.getvalue())
+        self.assertEqual(stderr.getvalue(), '')
 
     def test_reference_specs_script_helpers_remain_patchable_from_public_surface(self) -> None:
         with patch.object(reference_specs, 'load_specs', return_value=[]):

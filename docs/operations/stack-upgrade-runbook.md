@@ -77,7 +77,15 @@ bash ./scripts/doctor/run_repo_release_gate.sh
 bash ./scripts/setup/one_click_upgrade.sh --repo-url <git-url> --ref main
 ```
 
-该入口会先备份受保护文件，开启 scheduler maintenance，修复脚本执行位，同步源码，生成 effective compose，自动 ensure active profile 的扩展离线 wheelhouse 与 venv，启动服务并等待所有 runtime services 进入 `running healthy`，再解除 maintenance 执行 run_all_once、full test 与 runtime evidence 导出。源码同步会写出 `state/openclaw/control_plane/upgrade/source_sync_metadata.json`，其中包含完整 40 位目标 commit 与目标源码的 `releaseBundleHash`。`stack verify --strict-release` 会带上这份来源元数据：真实 base release 内容漂移会阻断；仅 `openclaw-stack.lock.json`、`agent/extensions/provenance.json` 等被排除文件变化导致目标 commit 前进时，只要锁内 `releaseBundleHash`、当前源码 hash 和来源 metadata hash 三方一致，则视为同一基座内容。失败时 scheduler maintenance 保持 enabled，恢复命令会写入升级报告。若 strict stack verify 发现 lock drift、来源 hash 不一致、provenance 内容漂移或无法证明 release 等价，默认阻断；确认当前源码组合可作为新基线时，显式追加 `--refresh-stack-lock`，升级入口会先执行 `control-plane extensions lock` 刷新 `agent/extensions/lock.json`，再同步刷新 `agent/extensions/provenance.json` 与 `openclaw-stack.lock.json` 后继续。
+该入口会先备份受保护文件，开启 scheduler maintenance，修复脚本执行位，同步源码，生成 effective compose，自动 ensure active profile 的扩展离线 wheelhouse 与 venv，启动服务并等待所有 runtime services 进入 `running healthy`，再进入验收窗口；只有平台 deployment acceptance manifest 声明 `required_run_ledger_jobs` 时才执行 `run_control_plane_run_all_once.sh`，随后执行 full test 与 runtime evidence 导出。源码同步会写出 `state/openclaw/control_plane/upgrade/source_sync_metadata.json`，其中包含完整 40 位目标 commit 与目标源码的 `releaseBundleHash`。`stack verify --strict-release` 会带上这份来源元数据：真实 base release 内容漂移会阻断；仅 `openclaw-stack.lock.json`、`agent/extensions/provenance.json` 等被排除文件变化导致目标 commit 前进时，只要锁内 `releaseBundleHash`、当前源码 hash 和来源 metadata hash 三方一致，则视为同一基座内容。失败时 scheduler maintenance 保持 enabled，恢复命令会写入升级报告。若 strict stack verify 发现 lock drift、来源 hash 不一致、provenance 内容漂移或无法证明 release 等价，默认阻断；确认当前源码组合可作为新基线时，显式追加 `--refresh-stack-lock`，升级入口会先执行 `control-plane extensions lock` 刷新 `agent/extensions/lock.json`，再同步刷新 `agent/extensions/provenance.json` 与 `openclaw-stack.lock.json` 后继续。
+
+需要执行真实外部闭环验收时显式声明扩展：
+
+```bash
+bash ./scripts/setup/one_click_upgrade.sh --repo-url <git-url> --ref main --require-live-verification <extension-id>
+```
+
+`--require-live-verification` 可重复。参数必须是当前 active profile 启用的扩展，且该扩展必须在 testing manifest 的 `live_acceptance_checks` 声明检查项。默认 full test 不触发外部发送；只有显式声明 live verification 时，升级主链才执行扩展拥有的 live acceptance 脚本，并把脱敏 stdout 写入 `state/openclaw/control_plane/upgrade/live_acceptance.<extension-id>.<check-id>.json`。该报告会保留扩展输出的容器内 `evidence_paths`，并追加部署机可直接访问的 `hostEvidencePaths`。需要绑定真实业务任务的扩展在自身 deploy env schema 中把对应字段标记为 `live_acceptance_env=true`，该值先写入扩展 `extension.env`，再通过 `one_click_config.sh` 渲染到 `deploy/.env`；升级主链按 schema 注入这些字段。
 
 手工拆解时固定顺序：
 
@@ -89,8 +97,9 @@ bash ./scripts/setup/one_click_upgrade.sh --repo-url <git-url> --ref main
 6. 执行启用扩展的 migration。
 7. 启动 runtime services，并用 `show_runtime_service_status.sh` 确认所有启用 target 均为 `running healthy`。
 8. 恢复 scheduler 调度入口。
-9. 执行 `run_control_plane_run_all_once.sh`、默认 full test 与 runtime evidence 导出。
-10. 记录 stack lock、profile 列表、extension lock、migration applied ids、active venv manifest、服务健康状态与 release gate 结果。
+9. 按平台 manifest 条件执行 `run_control_plane_run_all_once.sh`，再执行默认 full test 与 runtime evidence 导出。
+10. 需要真实外部闭环时，先按扩展 README 完成真实业务任务并设置该扩展 schema 声明的 live 验收变量，再执行 `--require-live-verification <extension-id>` 对应的 manifest 声明检查。
+11. 记录 stack lock、profile 列表、extension lock、migration applied ids、active venv manifest、服务健康状态、release gate 与 live acceptance 结果。
 
 ## 升级类型
 

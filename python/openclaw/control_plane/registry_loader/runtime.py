@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Control-plane registry runtime derivation and validation helpers."""
+"""提供OpenClaw 控制平面子系统的生产实现。"""
 from __future__ import annotations
 
 from typing import Any
@@ -24,7 +24,6 @@ def _combined_owned_index(collections: dict[str, Any], key: str) -> dict[str, di
 
 
 def _derive_registry_runtime_state(context: dict[str, Any], collections: dict[str, Any]) -> dict[str, Any]:
-    """Derive runtime-only state needed by registry validation and rendering."""
     agent_modules = collections['agentModules']
     job_bindings_by_job_id = (
         _derive_job_bindings_from_modules(agent_modules, extensions=context['extensions'], collections=collections)
@@ -163,7 +162,6 @@ def _validate_registry_collections(
     collections: dict[str, Any],
     runtime_state: dict[str, Any],
 ) -> None:
-    """Validate registry collections in fixed staged order."""
     payload = context.get('payload') if isinstance(context.get('payload'), dict) else {}
     registry_validation_lib._validate_default_timezone(
         str((payload.get('defaults') or {}).get('timezone') or '').strip()

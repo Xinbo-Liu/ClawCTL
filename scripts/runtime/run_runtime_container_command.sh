@@ -15,7 +15,6 @@ CONTAINER_NAME=""
 TTY='0'
 SHELL_COMMAND=""
 PASSTHROUGH_ARGS=()
-
 usage() {
   cat <<'USAGE'
 用法：
@@ -36,7 +35,6 @@ usage() {
   -h, --help                     显示帮助
 USAGE
 }
-
 fail() {
   echo "[run_runtime_container_command][FAIL] $*" >&2
   exit 2

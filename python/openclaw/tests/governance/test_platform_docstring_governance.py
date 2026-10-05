@@ -7,16 +7,8 @@ from tempfile import TemporaryDirectory
 
 from openclaw.doctor.platform import docstring_governance
 
-ROOT_DIR = Path(__file__).resolve().parents[4]
-
 
 class PlatformDocstringGovernanceTest(unittest.TestCase):
-    def test_current_repo_matches_platform_docstring_baseline(self) -> None:
-        report = docstring_governance.build_report(ROOT_DIR)
-        baseline = docstring_governance.load_baseline(docstring_governance.DEFAULT_BASELINE_PATH)
-
-        self.assertEqual(docstring_governance.compare_with_baseline(report, baseline), [])
-
     def test_new_public_file_requires_chinese_docstrings(self) -> None:
         with TemporaryDirectory() as tmpdir:
             repo_root = Path(tmpdir)

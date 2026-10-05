@@ -2,6 +2,11 @@
   "schemaVersion": 1,
   "mode": "enforce",
   "baselinePath": "config/governance/validation/host_python_baseline.json",
+  "scan_exclude_prefixes": [
+    "state",
+    "logs",
+    "__pycache__"
+  ],
   "shell_scan_manifest": {
     "self": [
       "scripts/runtime/verify_python_runtime_container.sh",
@@ -54,16 +59,16 @@
       "literal": "local python_runner=\"${PYTHON_RUNNER:-$FULL_TEST_GROUP_REGISTRY_ROOT/scripts/runtime/run_python_container.sh}\""
     },
     {
-      "relPath": "scripts/setup/lib/full_test_group_runner.sh",
-      "literal": "local config_path='' item='' python_runner=\"${PYTHON_RUNNER:-$ROOT_DIR/scripts/runtime/run_python_container.sh}\""
-    },
-    {
       "relPath": "scripts/doctor/check_model_profile_connectivity.sh",
       "literal": "python_runner=\"${PYTHON_RUNNER:-$ROOT_DIR/scripts/runtime/run_python_container.sh}\""
     },
     {
       "relPath": "scripts/runtime/verify_python_runtime_container.sh",
       "literal": "bash \"$ROOT_DIR/scripts/runtime/run_python_container.sh\" --workdir \"$ROOT_DIR\" -- -"
+    },
+    {
+      "relPath": "scripts/setup/one_click_upgrade.sh",
+      "literal": "bash \"$ROOT_DIR/scripts/runtime/run_python_container.sh\" \\"
     },
     {
       "relPath": "scripts/doctor/check_host_python_governance.sh",
@@ -138,11 +143,5 @@
       "id": "python_bin_exec_lower",
       "pattern": "(^|[[:space:]])(exec[[:space:]]+)?\\\"?\\$\\{?python_bin\\}?\\\"?[[:space:]]+-B([[:space:]]|$)"
     }
-  ],
-  "doc_command_policy": {
-    "allowed_families": [
-      "repo_host",
-      "unittest_openclaw"
-    ]
-  }
+  ]
 }

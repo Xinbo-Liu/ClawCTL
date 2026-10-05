@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # 用途：快速更新 OpenClaw 官方 Gateway镜像 pin。
 # 模式：
-# - candidate：只更新本地 deploy/.env，适合先试拉取 / 构建 / 烟测；
+# - candidate：仅更新本地 deploy/.env 的 Gateway candidate ref，适合先试拉取 / 构建 / 烟测；
 # - promote：更新仓库默认 Gateway pin 真源；one_click_config.sh 读取新的默认值生成部署配置。
 set -euo pipefail
 
@@ -32,7 +32,7 @@ usage() {
   bash ./scripts/images/update_openclaw_pin.sh --ref <image@digest> --mode promote
 
 说明：
-- candidate：只改 deploy/.env，不改仓库默认 pin；
+- candidate：仅更新本地 deploy/.env 的 Gateway candidate ref，不改仓库默认 pin；
 - --candidate-repo：按当前 OPENCLAW_OFFICIAL_GATEWAY_IMAGE 的 tag@digest 派生候选仓库引用，适合切到 ghcr.nju.edu.cn 等已登记候选源；
 - promote：直接改 __OPENCLAW_PIN__；one_click_config.sh 读取新的默认值生成部署配置；
 - --write-local-env：在 promote 时，如果 deploy/.env 存在，也一并更新本地覆盖层；

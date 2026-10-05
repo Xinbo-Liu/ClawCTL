@@ -26,13 +26,11 @@ REPO_ROOT = resolve_repo_root(Path(__file__))
 PROOF_SCHEMA_VERSION = 1
 
 def fail(message: str, code: int = 2) -> NoReturn:
-    """输出 basic summary 控制面错误并以指定退出码终止。"""
     sys.stderr.write(f'[basic_summary_control_plane][FAIL] {message}\n')
     raise SystemExit(code)
 
 
 def parse_bool(raw: object, name: str) -> bool:
-    """解析命令行布尔值，拒绝模糊输入。"""
     value = str(raw).strip().lower()
     if value in {'1', 'true', 'yes'}:
         return True
@@ -43,7 +41,6 @@ def parse_bool(raw: object, name: str) -> bool:
 
 
 def parse_args(argv: list[str]) -> dict[str, Any]:
-    """解析 summary/proof 子命令参数并返回统一 options 字典。"""
     opts: dict[str, Any] = {
         'format': 'text',
         'generated_at': '',
@@ -103,7 +100,6 @@ def parse_args(argv: list[str]) -> dict[str, Any]:
 
 
 def read_lines(file_path: str) -> list[str]:
-    """读取 result lines 文件；路径为空时返回空列表。"""
     if not file_path:
         return []
     path = Path(file_path)
@@ -113,18 +109,15 @@ def read_lines(file_path: str) -> list[str]:
 
 
 def default_gate_proof_path() -> Path:
-    """返回默认 latest basic gate proof 路径。"""
     return Path(host_control_plane_file('setup/one_click_test_basic.latest.proof.json', REPO_ROOT))
 
 
 def gate_proof_path(options: dict[str, Any]) -> Path:
-    """按显式参数或默认位置解析 proof 文件路径。"""
     raw = str(options.get('proof_path') or '').strip()
     return Path(raw).resolve() if raw else default_gate_proof_path()
 
 
 def resolve_existing_or_requested_path(raw: str) -> str:
-    """将路径请求规范化为绝对路径；空值保持为空。"""
     text = str(raw or '').strip()
     if not text:
         return ''
@@ -132,7 +125,6 @@ def resolve_existing_or_requested_path(raw: str) -> str:
 
 
 def resolve_image_archive_for_mode(options: dict[str, Any]) -> str:
-    """离线模式下解析归档路径；未显式传入时选择最新归档。"""
     requested = resolve_existing_or_requested_path(str(options.get('image_archive_path') or ''))
     if requested or not bool(options.get('offline')):
         return requested
@@ -145,7 +137,6 @@ def resolve_image_archive_for_mode(options: dict[str, Any]) -> str:
 
 
 def sha256_file(path: Path) -> str:
-    """计算文件 sha256，作为 proof 输入指纹。"""
     if not path.is_file():
         fail(f'无法计算 env 摘要，文件不存在：{path}', 2)
     digest = hashlib.sha256()
@@ -156,12 +147,10 @@ def sha256_file(path: Path) -> str:
 
 
 def image_ref_pin_contracts(root_dir: Path = REPO_ROOT) -> dict[str, str]:
-    """从 runtime source strategy 派生部署镜像 env key 与 pin 合同关系。"""
     return {role.env_key: role.pin_contract for role in deployment_image_roles(root_dir)}
 
 
 def env_image_refs(env_file: Path) -> dict[str, str]:
-    """读取 deploy env 与 pin 合同，形成 proof 绑定的部署镜像引用。"""
     values = parse_env_file(env_file)
     pins: dict[str, str] = {}
     pin_contracts = image_ref_pin_contracts(REPO_ROOT)
@@ -173,12 +162,10 @@ def env_image_refs(env_file: Path) -> dict[str, str]:
 
 
 def _has_status(checks: list[dict[str, Any]], status: str, check_id: str) -> bool:
-    """判断指定检查项是否存在某个状态。"""
     return any(item.get('status') == status and item.get('id') == check_id for item in checks)
 
 
 def _collect_failure_scenarios(checks: list[dict[str, Any]]) -> list[str]:
-    """根据失败项归类 setup 主链失败场景。"""
     scenarios: list[str] = []
     if any(
         _has_status(checks, 'FAIL', target)
@@ -197,7 +184,6 @@ def _collect_failure_scenarios(checks: list[dict[str, Any]]) -> list[str]:
 
 
 def _apply_basic_command_variants(command: str, *, offline: bool, image_archive_path: str) -> str:
-    """按在线/离线模式为 basic gate 复跑命令追加必要参数。"""
     line = str(command).strip()
     if not offline:
         return line
@@ -212,7 +198,6 @@ def _apply_basic_command_variants(command: str, *, offline: bool, image_archive_
 
 
 def _scenario_commands(entry_id: str, scenario_id: str, *, offline: bool, image_archive_path: str) -> list[str]:
-    """读取失败场景建议命令并套用 basic gate 模式参数。"""
     scenario = failure_surface.scenario_info(entry_id, scenario_id)
     commands = failure_surface.list_str(scenario, 'commands')
     return [
@@ -222,7 +207,6 @@ def _scenario_commands(entry_id: str, scenario_id: str, *, offline: bool, image_
 
 
 def _success_commands(*, offline: bool, image_archive_path: str) -> list[str]:
-    """读取成功态下一步命令，并按当前模式调整离线参数。"""
     scenario_id = 'success_offline' if offline else 'success_online'
     scenario = followup_surface.scenario_info(ENTRY_ID, scenario_id)
     return [
@@ -232,7 +216,6 @@ def _success_commands(*, offline: bool, image_archive_path: str) -> list[str]:
 
 
 def _dedupe(items: list[str]) -> list[str]:
-    """保持原顺序去重字符串列表。"""
     result: list[str] = []
     seen: set[str] = set()
     for item in items:
@@ -245,7 +228,6 @@ def _dedupe(items: list[str]) -> list[str]:
 
 
 def _duration_seconds(check: dict[str, Any]) -> int | None:
-    """从检查项 duration 字段解析秒级耗时。"""
     value = check.get('duration_seconds')
     if isinstance(value, bool):
         return None
@@ -257,7 +239,6 @@ def _duration_seconds(check: dict[str, Any]) -> int | None:
 
 
 def _slow_checks(checks: list[dict[str, Any]], *, limit: int = 5) -> list[dict[str, Any]]:
-    """提取耗时最高的检查项，用于文本摘要展示。"""
     timed: list[dict[str, Any]] = []
     for check in checks:
         duration = _duration_seconds(check)
@@ -273,7 +254,6 @@ def _slow_checks(checks: list[dict[str, Any]], *, limit: int = 5) -> list[dict[s
 
 
 def _build_checks(options: dict[str, Any]) -> list[dict[str, Any]]:
-    """把 result lines 或 preflight 失败参数转换为标准检查项列表。"""
     checks = [parse_result_line(line) for line in read_lines(str(options.get('result_lines_file') or ''))]
     if checks:
         return checks
@@ -289,7 +269,6 @@ def _build_checks(options: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def build_summary(options: dict[str, Any]) -> dict[str, Any]:
-    """构建 basic gate 人类摘要和机器摘要的共享数据结构。"""
     checks = _build_checks(options)
     blocking_checks = [item['id'] for item in checks if item.get('status') == 'FAIL']
     warning_checks = [item['id'] for item in checks if item.get('status') == 'WARN']
@@ -358,7 +337,6 @@ def build_summary(options: dict[str, Any]) -> dict[str, Any]:
 
 
 def build_gate_proof(options: dict[str, Any]) -> dict[str, Any]:
-    """构建 latest proof，绑定 env、模式、归档和镜像输入。"""
     return_code = int(options.get('return_code') or 0)
     if return_code != 0:
         fail('basic gate 未通过，不写入成功 proof', 2)
@@ -393,7 +371,6 @@ def build_gate_proof(options: dict[str, Any]) -> dict[str, Any]:
 
 
 def write_gate_proof(options: dict[str, Any]) -> int:
-    """写出 basic gate proof 文件并打印 proof 路径。"""
     proof = build_gate_proof(options)
     proof_path = gate_proof_path(options)
     proof_path.parent.mkdir(parents=True, exist_ok=True)
@@ -407,12 +384,10 @@ def write_gate_proof(options: dict[str, Any]) -> int:
 
 
 def quote_arg(value: str) -> str:
-    """为复跑命令中的单个参数做 shell quoting。"""
     return shlex.quote(str(value))
 
 
 def rerun_basic_gate_command(options: dict[str, Any]) -> str:
-    """生成与当前 proof key 输入一致的 basic gate 复跑命令。"""
     parts = ['bash', './scripts/setup/one_click_test_basic.sh']
     env_file = resolve_existing_or_requested_path(str(options.get('env_file') or ''))
     default_env = str((REPO_ROOT / 'deploy' / '.env').resolve())
@@ -431,7 +406,6 @@ def rerun_basic_gate_command(options: dict[str, Any]) -> str:
 
 
 def verify_gate_proof(options: dict[str, Any]) -> int:
-    """校验 latest proof 是否仍匹配当前 deploy 输入和运行模式。"""
     proof_path = gate_proof_path(options)
     if not proof_path.is_file():
         fail(f'缺少 basic gate proof：{proof_path}\n请先执行：{rerun_basic_gate_command(options)}', 2)
@@ -480,7 +454,6 @@ def verify_gate_proof(options: dict[str, Any]) -> int:
 
 
 def render_text(summary: dict[str, Any]) -> str:
-    """把机器摘要渲染为终端可读的中文文本。"""
     lines = [
         '=== one_click_test_basic 汇总 ===',
         f"PASS: {summary['summary']['pass']}",
@@ -524,7 +497,6 @@ def render_text(summary: dict[str, Any]) -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
-    """CLI 入口：按命令写 proof、验 proof 或输出摘要。"""
     args = list(sys.argv[1:] if argv is None else argv)
     if not args:
         fail('缺少命令')

@@ -84,7 +84,10 @@
           "uniqueItems": true,
           "items": {
             "type": "string",
-            "minLength": 1
+            "enum": [
+              "sent",
+              "noop"
+            ]
           }
         },
         "retryableStatuses": {
@@ -92,7 +95,10 @@
           "uniqueItems": true,
           "items": {
             "type": "string",
-            "minLength": 1
+            "enum": [
+              "retry_pending",
+              "rate_limited"
+            ]
           }
         },
         "terminalStatuses": {
@@ -100,7 +106,10 @@
           "uniqueItems": true,
           "items": {
             "type": "string",
-            "minLength": 1
+            "enum": [
+              "failed",
+              "blocked"
+            ]
           }
         }
       }

@@ -8,6 +8,7 @@ import shlex
 import shutil
 import sys
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, Sequence
 
@@ -19,20 +20,49 @@ from openclaw.lib.repo.verification_tiers import release_gate_usage_lines
 
 ROOT_DIR = resolve_repo_root(Path(__file__))
 STRICT_MODE = 'strict'
+STATIC_LANE = 'static'
+INTEGRATION_LANE = 'integration'
+EXHAUSTIVE_LANE = 'exhaustive'
+RELEASE_LANES = (STATIC_LANE, INTEGRATION_LANE, EXHAUSTIVE_LANE)
+DEFAULT_STATIC_TIMEOUT_SECONDS = 120.0
+DEFAULT_INTEGRATION_TIMEOUT_SECONDS = 300.0
+DEFAULT_EXHAUSTIVE_TIMEOUT_SECONDS = 240.0
 GENERATED_DOCS_SYNC_CHECK_ID = 'generated_docs_sync'
 GENERATED_DOCS_SYNC_TITLE = '生成文档同步检查'
 GENERATED_DOCS_SYNC_COMMAND_TEXT = 'bash ./scripts/docs/check_generated_docs_sync.sh'
 GENERATED_DOCS_INSERT_AFTER_CHECK_ID = 'documentation_implementation_alignment'
+DOCUMENTATION_BATCH_CHECK_IDS = (
+    'docs_registry_sync',
+    'documentation_inventory',
+    'documentation_links',
+    'documentation_entrypoints',
+    'documentation_boundaries',
+    'documentation_navigation',
+    'documentation_task_structure',
+    'documentation_page_budget',
+    'documentation_implementation_alignment',
+    'documentation_object_closure',
+    'local_document_identity',
+)
+AGENT_GOVERNANCE_BATCH_CHECK_ID = 'agent_extension_governance'
+AGENT_GOVERNANCE_BATCH_SCRIPT_NAMES = {
+    'check_agent_runtime_script_orphans.sh',
+    'check_agent_governance_baseline.sh',
+    'check_agent_module_optional_surface.sh',
+    'check_agent_job_surface.sh',
+}
 
 
 @dataclass(frozen=True)
 class CheckSpec:
-    """单个发布门禁检查的静态定义，包含展示文本和实际执行命令。"""
+    """单个发布门禁检查的静态定义、执行 lane 与内层时间边界。"""
 
     check_id: str
     title: str
     command_text: str
     command: Sequence[str]
+    lane: str = STATIC_LANE
+    timeout_seconds: float = DEFAULT_STATIC_TIMEOUT_SECONDS
 
 
 @dataclass(frozen=True)
@@ -45,6 +75,10 @@ class CheckResult:
     status: str
     detail: str
     mode: str = STRICT_MODE
+    lane: str = STATIC_LANE
+    duration_seconds: float = 0.0
+    exit_code: int | None = None
+    timed_out: bool = False
 
 
 def _git_bash_candidates(git_executable: str) -> list[str]:
@@ -61,7 +95,6 @@ def _git_bash_candidates(git_executable: str) -> list[str]:
 
 
 def resolve_bash_executable() -> str:
-    """解析发布门禁执行 shell 脚本时使用的 bash，可通过环境变量覆盖。"""
     configured = str(os.environ.get('OPENCLAW_BASH_BIN') or '').strip()
     if configured:
         return configured
@@ -80,18 +113,65 @@ def resolve_bash_executable() -> str:
 
 
 def bash_command(script_rel: str, *args: str) -> list[str]:
-    """把仓库内 shell 脚本相对路径转换为可执行命令数组。"""
     return [resolve_bash_executable(), str(ROOT_DIR / script_rel), *args]
 
 
 def generated_docs_check_spec() -> CheckSpec:
-    """返回生成文档同步检查的固定 CheckSpec，供顺序插入逻辑复用。"""
     return CheckSpec(
         GENERATED_DOCS_SYNC_CHECK_ID,
         GENERATED_DOCS_SYNC_TITLE,
         GENERATED_DOCS_SYNC_COMMAND_TEXT,
         bash_command('scripts/docs/check_generated_docs_sync.sh'),
+        lane=STATIC_LANE,
+        timeout_seconds=DEFAULT_STATIC_TIMEOUT_SECONDS,
     )
+
+
+def documentation_batch_check_spec() -> CheckSpec:
+    """返回一次执行全部文档 validator 的内部批处理检查定义。
+
+    返回：
+        CheckSpec：共享文档扫描的静态 lane、命令和内层时限。
+    """
+    return CheckSpec(
+        'documentation_validators',
+        '文档注册表与实现契约共享扫描',
+        'bash ./scripts/docs/check_documentation_validators.sh',
+        bash_command('scripts/docs/check_documentation_validators.sh'),
+        lane=STATIC_LANE,
+        timeout_seconds=DEFAULT_STATIC_TIMEOUT_SECONDS,
+    )
+
+
+def agent_governance_batch_check_spec() -> CheckSpec:
+    """返回共享受管扩展 profile 与 registry 的内部批处理定义。
+
+    返回：
+        CheckSpec：扩展静态治理批处理的命令、lane 与内层时限。
+    """
+    return CheckSpec(
+        AGENT_GOVERNANCE_BATCH_CHECK_ID,
+        '受管扩展静态治理共享扫描',
+        'bash ./scripts/doctor/check_agent_extension_governance.sh',
+        bash_command('scripts/doctor/check_agent_extension_governance.sh'),
+        lane=STATIC_LANE,
+        timeout_seconds=DEFAULT_STATIC_TIMEOUT_SECONDS,
+    )
+
+
+def is_agent_governance_batch_spec(spec: CheckSpec) -> bool:
+    """判断发布检查是否属于可共享上下文的扩展静态治理集合。
+
+    参数：
+        spec（CheckSpec）：待分类的发布检查定义。
+
+    返回：
+        bool：命令指向四类受管扩展静态治理脚本时为真。
+    """
+    command = list(spec.command)
+    if spec.lane != STATIC_LANE or len(command) < 2:
+        return False
+    return Path(str(command[1])).name in AGENT_GOVERNANCE_BATCH_SCRIPT_NAMES
 
 
 def _repo_relative_path(path: Path) -> str:
@@ -167,16 +247,41 @@ def _release_gate_check_spec(
         for item in raw_args
     ]
     command_suffix = '' if not args else ' ' + ' '.join(shlex.quote(item) for item in args)
+    lane = str(row.get('lane') or '').strip()
+    if not lane:
+        raise ValueError(f'release gate check {check_id} 必须显式声明 lane')
+    if lane not in RELEASE_LANES:
+        raise ValueError(f'release gate check {check_id} lane 不受支持：{lane}')
+    default_timeout = {
+        STATIC_LANE: DEFAULT_STATIC_TIMEOUT_SECONDS,
+        INTEGRATION_LANE: DEFAULT_INTEGRATION_TIMEOUT_SECONDS,
+        EXHAUSTIVE_LANE: DEFAULT_EXHAUSTIVE_TIMEOUT_SECONDS,
+    }[lane]
+    if 'timeoutSeconds' not in row:
+        raise ValueError(f'release gate check {check_id} 必须显式声明 timeoutSeconds')
+    raw_timeout = row.get('timeoutSeconds', default_timeout)
+    if isinstance(raw_timeout, bool) or not isinstance(raw_timeout, (int, float)) or float(raw_timeout) <= 0:
+        raise ValueError(f'release gate check {check_id} timeoutSeconds 必须是正数')
     return CheckSpec(
         check_id,
         title,
         f'bash ./{script_rel}{command_suffix}',
         bash_command(script_rel, *args),
+        lane=lane,
+        timeout_seconds=float(raw_timeout),
     )
 
 
-def managed_extension_release_checks() -> list[CheckSpec]:
-    """从受管扩展 testing manifest 收集扩展贡献的 release gate 检查。"""
+@lru_cache(maxsize=1)
+def _managed_extension_release_checks_cached() -> tuple[CheckSpec, ...]:
+    """装配并缓存受管扩展的发布检查定义。
+
+    返回：
+        tuple[CheckSpec, ...]：按扩展注册顺序排列的不可变检查定义。
+
+    异常：
+        ValueError：manifest 缺失、检查 ID 重复或声明不合法时抛出。
+    """
     specs: list[CheckSpec] = []
     seen_ids: set[str] = set()
     for extension_row in managed_explicit_extensions(ROOT_DIR):
@@ -195,11 +300,19 @@ def managed_extension_release_checks() -> list[CheckSpec]:
                 raise ValueError(f'duplicate managed extension release gate check id: {spec.check_id}')
             seen_ids.add(spec.check_id)
             specs.append(spec)
-    return specs
+    return tuple(specs)
+
+
+def managed_extension_release_checks() -> list[CheckSpec]:
+    """返回受管扩展 release checks 的稳定副本，并复用注册表与 manifest 解析。
+
+    返回：
+        list[CheckSpec]：可由调用方安全修改的检查定义列表。
+    """
+    return list(_managed_extension_release_checks_cached())
 
 
 def managed_extension_release_summary() -> str:
-    """返回受管扩展 release gate 覆盖摘要，用于帮助文本展示。"""
     entries: list[str] = []
     for extension_row in managed_explicit_extensions(ROOT_DIR):
         count = len(_release_gate_rows_for_extension(extension_row))
@@ -209,7 +322,6 @@ def managed_extension_release_summary() -> str:
 
 
 def base_checks() -> list[CheckSpec]:
-    """返回平台基座固定 release gate 检查列表，不含生成文档插入项。"""
     return [
         CheckSpec(
             'host_python_governance',
@@ -218,16 +330,10 @@ def base_checks() -> list[CheckSpec]:
             bash_command('scripts/doctor/check_host_python_governance.sh'),
         ),
         CheckSpec(
-            'platform_docstring_governance',
-            '平台 Python 中文注释递进检查',
-            'bash ./scripts/doctor/check_platform_docstring_governance.sh',
-            bash_command('scripts/doctor/check_platform_docstring_governance.sh'),
-        ),
-        CheckSpec(
-            'keyword_gate_inventory',
-            '关键词门禁静态治理检查',
-            'openclaw guards keyword-gate-inventory',
-            [sys.executable, '-m', 'openclaw.doctor.platform.keyword_gate_inventory'],
+            'docstring_governance',
+            '生产 Python 中文注释共享扫描检查',
+            'bash ./scripts/doctor/check_docstring_governance.sh',
+            bash_command('scripts/doctor/check_docstring_governance.sh'),
         ),
         CheckSpec(
             'centos7_host_shell_guard',
@@ -242,10 +348,20 @@ def base_checks() -> list[CheckSpec]:
             bash_command('scripts/doctor/check_architecture_import_guards.sh'),
         ),
         CheckSpec(
+            'import_closure',
+            '批量模块导入闭包检查',
+            'bash ./scripts/doctor/check_cold_start_imports.sh --mode closure',
+            bash_command('scripts/doctor/check_cold_start_imports.sh', '--mode', 'closure'),
+            lane=STATIC_LANE,
+            timeout_seconds=DEFAULT_EXHAUSTIVE_TIMEOUT_SECONDS,
+        ),
+        CheckSpec(
             'cold_start_imports',
-            '冷启动单模块导入检查',
-            'bash ./scripts/doctor/check_cold_start_imports.sh',
-            bash_command('scripts/doctor/check_cold_start_imports.sh'),
+            '独立冷启动模块导入检查',
+            'bash ./scripts/doctor/check_cold_start_imports.sh --mode isolated',
+            bash_command('scripts/doctor/check_cold_start_imports.sh', '--mode', 'isolated'),
+            lane=EXHAUSTIVE_LANE,
+            timeout_seconds=DEFAULT_EXHAUSTIVE_TIMEOUT_SECONDS,
         ),
         CheckSpec(
             'shell_pythonpath_contract',
@@ -264,6 +380,18 @@ def base_checks() -> list[CheckSpec]:
             'docs_registry 同步检查',
             'bash ./scripts/docs/check_docs_registry_sync.sh',
             bash_command('scripts/docs/check_docs_registry_sync.sh'),
+        ),
+        CheckSpec(
+            'documentation_inventory',
+            '受管文档登记与归属检查',
+            'bash ./scripts/docs/check_documentation_validators.sh',
+            bash_command('scripts/docs/check_documentation_validators.sh'),
+        ),
+        CheckSpec(
+            'documentation_links',
+            '文档本地链接与锚点检查',
+            'bash ./scripts/docs/check_documentation_validators.sh',
+            bash_command('scripts/docs/check_documentation_validators.sh'),
         ),
         CheckSpec(
             'documentation_entrypoints',
@@ -307,12 +435,6 @@ def base_checks() -> list[CheckSpec]:
             'bash ./scripts/docs/check_documentation_object_closure.sh',
             bash_command('scripts/docs/check_documentation_object_closure.sh'),
         ),
-        CheckSpec(
-            'delivery_cleanliness',
-            '交付说明洁净度检查',
-            'bash ./scripts/doctor/check_delivery_cleanliness.sh',
-            bash_command('scripts/doctor/check_delivery_cleanliness.sh'),
-        ),
         *managed_extension_release_checks(),
         CheckSpec(
             'local_document_identity',
@@ -323,8 +445,18 @@ def base_checks() -> list[CheckSpec]:
     ]
 
 
-def ordered_check_specs() -> list[CheckSpec]:
-    """返回实际执行顺序，将生成文档同步检查插入到实现对齐之后。"""
+def ordered_check_specs(lanes: Sequence[str] | None = None) -> list[CheckSpec]:
+    """按稳定顺序返回全部检查，或返回调用方选定 lane 的检查。
+
+    参数：
+        lanes（Sequence[str] | None）：待保留的 lane；为 ``None`` 时返回全部检查。
+
+    返回：
+        list[CheckSpec]：保持完整门禁相对顺序的检查定义。
+
+    异常：
+        ValueError：调用方传入未登记的 lane 时抛出。
+    """
     ordered: list[CheckSpec] = []
     generated_inserted = False
     generated_spec = generated_docs_check_spec()
@@ -335,32 +467,37 @@ def ordered_check_specs() -> list[CheckSpec]:
             generated_inserted = True
     if not generated_inserted:
         ordered.append(generated_spec)
-    return ordered
+    if lanes is None:
+        return ordered
+    selected = set(lanes)
+    unknown = sorted(selected - set(RELEASE_LANES))
+    if unknown:
+        raise ValueError(f'unsupported release lane: {", ".join(unknown)}')
+    return [spec for spec in ordered if spec.lane in selected]
 
 
 def generated_docs_steps() -> list[tuple[str, Sequence[str]]]:
-    """返回生成文档同步步骤，供外层 runner 单独补跑或展示。"""
     return [
         (GENERATED_DOCS_SYNC_CHECK_ID, generated_docs_check_spec().command),
     ]
 
 
 def usage() -> str:
-    """渲染 release gate 帮助文本，说明入口边界、检查清单和执行前提。"""
     check_lines = [f'    {index}. {spec.title}' for index, spec in enumerate(ordered_check_specs(), start=1)]
     return '\n'.join([
         '用法：',
-        '  bash ./scripts/doctor/run_repo_release_gate.sh [--with-docker-sock] [--quiet] [--json]',
+        '  bash ./scripts/doctor/run_repo_release_gate.sh [--with-docker-sock] [--quiet] [--json] [--lane <static|integration|exhaustive>]...',
         '',
         '说明：',
         '  推荐仓库级检查顺序：',
         '    1. bash ./scripts/testing/check_repo_test_readiness.sh',
-        '    2. bash ./scripts/doctor/run_repo_release_gate.sh [--with-docker-sock] [--quiet] [--json]',
+        '    2. bash ./scripts/doctor/run_repo_release_gate.sh [--with-docker-sock] [--quiet] [--json] [--lane <lane>]...',
         '',
         '  可独立于完整 release gate 运行的前置检查入口：',
         '    - bash ./scripts/testing/check_repo_test_readiness.sh',
         '    - bash ./scripts/doctor/check_host_python_governance.sh',
         '    - bash ./scripts/doctor/check_platform_docstring_governance.sh --mode report',
+        '    - bash ./scripts/doctor/check_repo_prod_docstring_governance.sh --scope repo-prod --mode report',
         '    注：除 --help 外，静态 Python 检查仍固定要求 Docker 与控制面执行介质。',
         '',
         *release_gate_usage_lines(ROOT_DIR),
@@ -376,6 +513,7 @@ def usage() -> str:
         '',
         '模式：',
         '  - 默认模式：所有检查统一保持 strict；除 host_python_governance 外，其余检查执行面固定复用控制面容器，宿主机 Python 不属于支持路径。',
+        '  - --lane 可重复传入；选择多个 lane 或不指定时并发执行 lane，每个 lane 内仍保持声明顺序。',
         '',
         '边界：',
         '  - 只覆盖仓库静态治理与生成产物同步；',
@@ -385,13 +523,37 @@ def usage() -> str:
     ])
 
 
-def render_json(results: list[CheckResult]) -> str:
-    """把门禁结果列表序列化为稳定 JSON，便于 CI 或外部工具消费。"""
+def render_json(
+    results: list[CheckResult],
+    *,
+    duration_seconds: float | None = None,
+) -> str:
+    """渲染发布门禁机器报告，并区分墙钟总耗时与单项耗时。
+
+    参数：
+        results（list[CheckResult]）：按稳定声明顺序排列的检查结果。
+        duration_seconds（float | None）：完整执行的墙钟秒数；未提供时兼容使用单项耗时之和。
+
+    返回：
+        str：保持既有字段并包含耗时、lane 与超时状态的 JSON 文本。
+    """
+    total_duration = round(
+        sum(item.duration_seconds for item in results)
+        if duration_seconds is None
+        else max(float(duration_seconds), 0.0),
+        3,
+    )
+    slowest = max(results, key=lambda item: (item.duration_seconds, item.check_id), default=None)
     summary = {
         'pass': sum(1 for item in results if item.status == 'PASS'),
         'strict_pass': sum(1 for item in results if item.status == 'PASS' and item.mode == STRICT_MODE),
         'fail': sum(1 for item in results if item.status == 'FAIL'),
         'total': len(results),
+        'durationSeconds': total_duration,
+        'slowestCheck': None if slowest is None else {
+            'id': slowest.check_id,
+            'durationSeconds': slowest.duration_seconds,
+        },
     }
     payload = {
         'suite': 'repo_release_gate',
@@ -403,6 +565,10 @@ def render_json(results: list[CheckResult]) -> str:
                 'command': item.command_text,
                 'status': item.status,
                 'mode': item.mode,
+                'lane': item.lane,
+                'durationSeconds': item.duration_seconds,
+                'exitCode': item.exit_code,
+                'timedOut': item.timed_out,
                 'detail': item.detail,
             }
             for item in results
@@ -412,7 +578,6 @@ def render_json(results: list[CheckResult]) -> str:
 
 
 def safe_print(text: str, *, err: bool = False) -> None:
-    """按当前输出流编码安全打印文本，避免 Windows 控制台编码异常中断门禁。"""
     stream = sys.stderr if err else sys.stdout
     payload = f'{text}\n'
     if hasattr(stream, 'buffer'):

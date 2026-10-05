@@ -150,7 +150,6 @@ def bootstrap_flow_options(args: argparse.Namespace) -> dict[str, str]:
 
 
 def cmd_bootstrap_json(args: argparse.Namespace) -> int:
-    """一次性输出部署入口启动所需的静态控制面事实。"""
 
     check_required_files()
     flow_options = bootstrap_flow_options(args)

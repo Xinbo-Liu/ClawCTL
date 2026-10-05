@@ -15,7 +15,7 @@ class HermeticGit:
 
     STATE_NAME = 'openclaw_fake_git'
     BARE_NAME = 'openclaw_fake_bare'
-    IGNORED_TREE_PARTS = {'.git', '__pycache__', '.pytest_cache', '.mypy_cache'}
+    IGNORED_TREE_PARTS = {'.git', '__pycache__', '.pytest_cache', '.mypy_cache', '.ruff_cache'}
 
     def run(
         self,

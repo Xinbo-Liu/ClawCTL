@@ -7,7 +7,6 @@ __openclaw_script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 source "$__openclaw_script_dir/../lib/repo_root.sh"
 ROOT_DIR="$(openclaw_repo_root_from "$__openclaw_script_dir")"
 unset __openclaw_script_dir
-
 usage() {
   cat <<'USAGE'
 用法：
@@ -27,21 +26,10 @@ usage() {
   --mode <observe|enforce>
 USAGE
 }
-
 fail() {
   echo "[check_host_python_governance][FAIL] $*" >&2
   exit "${2:-2}"
 }
-
-python_env_path() {
-  local raw="$1"
-  if command -v cygpath >/dev/null 2>&1; then
-    cygpath -w "$raw"
-    return 0
-  fi
-  printf '%s\n' "$raw"
-}
-
 python_arg_path() {
   local raw="${1:-}"
   [[ -n "$raw" ]] || return 0
@@ -82,18 +70,6 @@ while [[ $# -gt 0 ]]; do
 done
 
 export OPENCLAW_REPO_ROOT="${OPENCLAW_REPO_ROOT:-$ROOT_DIR}"
-
-if [[ -n "${OPENCLAW_HOST_PYTHON_GOVERNANCE_PYTHON:-}" ]]; then
-  PYTHON_BIN="$OPENCLAW_HOST_PYTHON_GOVERNANCE_PYTHON"
-  command -v "$PYTHON_BIN" >/dev/null 2>&1 || fail "找不到 Python 解释器：$PYTHON_BIN" 127
-  PYTHON_ROOT="$(python_env_path "$ROOT_DIR/python")"
-  case "$(uname -s 2>/dev/null || printf unknown)" in
-    MINGW*|MSYS*|CYGWIN*) PYTHONPATH_SEP=';' ;;
-    *) PYTHONPATH_SEP=':' ;;
-  esac
-  export PYTHONPATH="$PYTHON_ROOT${PYTHONPATH:+$PYTHONPATH_SEP$PYTHONPATH}"
-  exec "$PYTHON_BIN" -B -m openclaw.doctor.platform.host_python_governance "${ARGS[@]+"${ARGS[@]}"}"
-fi
 
 exec bash "$ROOT_DIR/scripts/runtime/run_python_container.sh" \
   --workdir "$ROOT_DIR" \

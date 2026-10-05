@@ -73,6 +73,7 @@ def _store_ready_payload(payload: dict[str, Any], *, now: float, ttl_seconds: fl
 
 
 class _CallState:
+    """内部 API 调用统计快照。"""
     def __init__(self) -> None:
         self.result: Any = None
         self.error: BaseException | None = None

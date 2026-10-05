@@ -53,7 +53,6 @@ def _read_json_cached(path_text: str, mtime_ns: int, size: int) -> dict[str, Any
 
 
 def _read_json(path: Path) -> dict[str, Any]:
-    """读取控制平面 JSON 配置并校验顶层对象。"""
     resolved = Path(path).resolve()
     try:
         stat = resolved.stat()
@@ -63,7 +62,6 @@ def _read_json(path: Path) -> dict[str, Any]:
 
 
 def _relative_to_base(path: Path, *, base_dir: Path) -> str:
-    """把路径转换为相对指定基目录的 POSIX 路径。"""
     try:
         relative = os.path.relpath(path, base_dir)
     except ValueError:
@@ -101,7 +99,6 @@ def _rebase_path_field(
     dest_base: Path,
     repo_root: Path | None = None,
 ) -> None:
-    """重写单个路径字段，使其相对最终配置目录。"""
     current: Any = payload
     for key in keys[:-1]:
         if not isinstance(current, dict):
@@ -128,7 +125,6 @@ def _rebase_path_list_field(
     dest_base: Path,
     repo_root: Path | None = None,
 ) -> None:
-    """重写路径数组字段，使其相对最终配置目录。"""
     current: Any = payload
     for key in keys[:-1]:
         if not isinstance(current, dict):
@@ -156,7 +152,6 @@ def _rebase_path_list_field(
 
 
 def _rebase_payload_paths(payload: dict[str, Any], *, source_base: Path, dest_base: Path) -> dict[str, Any]:
-    """对整个配置载荷中的路径字段执行 rebasing。"""
     rebased = deepcopy(payload)
     repo_root = _repo_root_or_none(source_base)
     for keys in _PATH_FIELDS:
@@ -167,7 +162,6 @@ def _rebase_payload_paths(payload: dict[str, Any], *, source_base: Path, dest_ba
 
 
 def _merge_values(base: Any, override: Any) -> Any:
-    """按字典深合并规则合并配置值。"""
     if isinstance(base, dict) and isinstance(override, dict):
         merged: dict[str, Any] = {str(key): deepcopy(value) for key, value in base.items()}
         for key, value in override.items():
@@ -181,7 +175,6 @@ def _merge_values(base: Any, override: Any) -> Any:
 
 
 def _load_config_chain(path: Path, *, stack: tuple[Path, ...] = ()) -> list[tuple[Path, dict[str, Any]]]:
-    """沿 profile.extends 链加载全部配置文件。"""
     resolved = path.resolve()
     if resolved in stack:
         cycle = ' -> '.join(item.as_posix() for item in (*stack, resolved))
@@ -204,13 +197,11 @@ def _load_config_chain(path: Path, *, stack: tuple[Path, ...] = ()) -> list[tupl
 
 
 def control_plane_service_schema_path(config_path: Path | None = None) -> Path:
-    """解析控制平面 service schema 的仓库路径。"""
     base = resolve_repo_root(Path(__file__) if config_path is None else Path(config_path).resolve())
     return base.joinpath(*_SERVICE_SCHEMA_RELATIVE_PATH).resolve()
 
 
 def load_control_plane_service_payload(config_path: Path | None = None) -> tuple[Path, dict[str, Any]]:
-    """加载并合并控制平面 service/profile 配置。"""
     requested = resolve_control_plane_service_config_path(Path(__file__)) if config_path is None else Path(config_path).resolve()
     chain = _load_config_chain(requested)
     final_base = requested.parent.resolve()

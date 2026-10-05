@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""internal-api read-only route dispatch helpers."""
+"""internal-api 只读请求分派与扩展路由接入。"""
 from __future__ import annotations
 
 import os
@@ -18,7 +18,6 @@ from openclaw.internal_api.contract import control_plane_job_detail_prefix, rout
 from openclaw.internal_api.routes.control_plane import (
     render_agent_access_log,
     render_agent_group_access,
-    render_agent_group_acceptance_bindings,
     render_agent_group_release_gates,
     render_agent_groups,
     render_agent_modules,
@@ -42,6 +41,11 @@ TIMELINE_LIMIT_MAX = 50
 
 
 def _extension_route_specs() -> dict[str, dict[str, Any]]:
+    """加载扩展声明的 internal-api 路由，并拒绝路径冲突。
+
+    返回：
+        返回 dict[str, dict[str, Any]]，键为 HTTP path，值为扩展路由 id、模块、callable 与鉴权声明。
+    """
     specs: dict[str, dict[str, Any]] = {}
     base_paths = {str(value).strip() for value in route_surface().values() if isinstance(value, str) and str(value).strip()}
     for row in extension_internal_api_routes():
@@ -66,6 +70,14 @@ def _extension_route_specs() -> dict[str, dict[str, Any]]:
 
 
 def _extension_route_effective_auth_required(spec: dict[str, Any]) -> bool:
+    """计算扩展路由最终是否需要 internal-api token。
+
+    参数：
+        spec（dict[str, Any]）：扩展路由声明，包含 `id` 与 `authRequired`。
+
+    返回：
+        返回 bool，`True` 表示该路由必须通过 token 访问。
+    """
     if bool(spec.get('authRequired', True)):
         return True
     route_id = str(spec.get('id') or '').strip()
@@ -73,6 +85,14 @@ def _extension_route_effective_auth_required(spec: dict[str, Any]) -> bool:
 
 
 def _extension_route_handler(path: str) -> dict[str, Any] | None:
+    """解析指定 path 对应的扩展路由 handler。
+
+    参数：
+        path（str）：HTTP 请求路径。
+
+    返回：
+        返回 dict[str, Any] | None；命中扩展路由时包含 callable 与鉴权信息，未命中时返回 None。
+    """
     spec = _extension_route_specs().get(path)
     if not isinstance(spec, dict):
         return None
@@ -85,6 +105,17 @@ def _extension_route_handler(path: str) -> dict[str, Any] | None:
 
 
 def _parse_bounded_non_negative_int(value: object, *, default: int, upper_bound: int, error_key: str) -> tuple[int | None, dict[str, Any] | None]:
+    """解析带上限的非负整数查询参数。
+
+    参数：
+        value（object）：原始查询参数值。
+        default（int）：缺省整数值。
+        upper_bound（int）：允许返回的最大值。
+        error_key（str）：解析失败时写入错误 payload 的错误码。
+
+    返回：
+        返回 tuple[int | None, dict[str, Any] | None]；成功时第一项为裁剪后的整数，失败时第二项为错误 payload。
+    """
     raw = str(value or default).strip()
     try:
         parsed = max(0, int(raw or str(default)))
@@ -94,6 +125,14 @@ def _parse_bounded_non_negative_int(value: object, *, default: int, upper_bound:
 
 
 def route_requires_auth(path: str) -> bool:
+    """判断 internal-api 路由是否需要鉴权。
+
+    参数：
+        path（str）：HTTP 请求路径。
+
+    返回：
+        返回 bool，`False` 仅用于 health/ready 和明确允许匿名访问的扩展路由。
+    """
     routes = route_surface()
     if path in (routes['healthz'], routes['readyz']):
         return False
@@ -104,10 +143,25 @@ def route_requires_auth(path: str) -> bool:
 
 
 def _string_query_arg(query: Mapping[str, list[str]], key: str, default: str = '') -> str:
+    """读取单值字符串查询参数。
+
+    参数：
+        query（Mapping[str, list[str]]）：按 key 存储的 query string 列表值。
+        key（str）：要读取的查询参数名。
+        default（str）：参数缺失或为空时返回的缺省字符串。
+
+    返回：
+        返回 str，取列表第一项；空值回退到 `default`。
+    """
     return str((query.get(key) or [default])[0] or default)
 
 
 def _render_config_summary_payload() -> dict[str, Any]:
+    """渲染 internal-api 配置与扩展路由摘要。
+
+    返回：
+        返回 dict[str, Any]，包含 token 是否配置、control-plane 摘要和扩展路由鉴权状态。
+    """
     extension_routes = _extension_route_specs()
     return {
         'service': 'openclaw-internal-api',
@@ -128,6 +182,15 @@ def _render_config_summary_payload() -> dict[str, Any]:
 
 
 def dispatch_readonly_request(path: str, query: Mapping[str, list[str]]) -> tuple[dict[str, Any], HTTPStatus]:
+    """把只读 HTTP 请求分派到基座或扩展路由。
+
+    参数：
+        path（str）：HTTP 请求路径。
+        query（Mapping[str, list[str]]）：已解析的 query string 参数。
+
+    返回：
+        返回 tuple[dict[str, Any], HTTPStatus]，第一项是响应 JSON payload，第二项是 HTTP 状态码。
+    """
     routes = route_surface()
     if path == routes['healthz']:
         return render_health(), HTTPStatus.OK
@@ -176,8 +239,6 @@ def dispatch_readonly_request(path: str, query: Mapping[str, list[str]]) -> tupl
             status=_string_query_arg(query, 'status'),
             source=_string_query_arg(query, 'source'),
         ), HTTPStatus.OK
-    if path == routes.get('control_plane_agent_group_acceptance_bindings'):
-        return render_agent_group_acceptance_bindings(group_ref=_string_query_arg(query, 'groupRef')), HTTPStatus.OK
     if path == routes.get('control_plane_agent_group_release_gates'):
         return render_agent_group_release_gates(group_ref=_string_query_arg(query, 'groupRef')), HTTPStatus.OK
     if path == routes.get('control_plane_skill_sets'):

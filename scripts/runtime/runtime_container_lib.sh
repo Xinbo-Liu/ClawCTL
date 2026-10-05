@@ -33,6 +33,11 @@ runtime_known_targets() {
   runtime_target_known_targets
 }
 
+# 预加载 target registry，避免状态与日志脚本在容器循环中反复合并控制面配置。
+runtime_container_load_target_registry_cache() {
+  runtime_target_load_registry_cache
+}
+
 # 返回容器状态与 health 的组合摘要。
 runtime_container_status_line() {
   runtime_docker_container_status_line "$1"

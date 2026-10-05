@@ -65,16 +65,9 @@ done
   exit 2
 }
 
-supply_chain_has_shell_stack() {
-  command -v curl >/dev/null 2>&1 && command -v jq >/dev/null 2>&1
-}
-
 require_supply_chain_cmds() {
-  if supply_chain_has_shell_stack; then
-    return 0
-  fi
-  registry_manifest_probe_python_executable >/dev/null 2>&1 || {
-    echo '[check_openclaw_supply_chain] 缺少 curl/jq，且未检测到可用 Python。' >&2
+  command -v curl >/dev/null 2>&1 && command -v jq >/dev/null 2>&1 || {
+    echo '[check_openclaw_supply_chain] 缺少 curl/jq，无法执行 supply-chain 检查。' >&2
     exit 20
   }
 }
@@ -258,65 +251,6 @@ resolve_latest_release_info_github_api() {
   printf 'status=ok\nsource=github-api\ntag=%s\nrelease=%s\n' "$tag" "$release"
 }
 
-resolve_latest_release_info_python() {
-  local github_url="$1"
-  local python_bin=''
-  python_bin="$(registry_manifest_probe_python_executable)" || return 1
-  "$python_bin" - "$github_url" <<'PY'
-from __future__ import annotations
-
-import json
-import sys
-import urllib.error
-import urllib.request
-
-github_url = sys.argv[1]
-MAX_GITHUB_RESPONSE_BYTES = 262144
-request = urllib.request.Request(
-    github_url,
-    headers={
-        'Accept': 'application/vnd.github+json',
-        'User-Agent': 'openclaw-minimax-supply-chain-checker',
-    },
-)
-try:
-    with urllib.request.urlopen(request, timeout=20) as response:
-        body = response.read(MAX_GITHUB_RESPONSE_BYTES + 1)
-        if len(body) > MAX_GITHUB_RESPONSE_BYTES:
-            print('status=response-too-large')
-            print('source=github-api')
-            raise SystemExit(11)
-        payload = json.loads(body.decode('utf-8'))
-except urllib.error.HTTPError as exc:
-    body = ""
-    try:
-        body = exc.read(MAX_GITHUB_RESPONSE_BYTES + 1).decode('utf-8', errors='ignore')
-    except Exception:
-        body = ""
-    if exc.code == 403 and 'rate limit exceeded' in body.lower():
-        print('status=github-rate-limited')
-        print('source=github-api')
-        raise SystemExit(11)
-    print('status=network-unavailable')
-    print('source=github-api')
-    print(f'http_status={exc.code}')
-    raise SystemExit(11)
-except urllib.error.URLError:
-    print('status=network-unavailable')
-    print('source=github-api')
-    raise SystemExit(11)
-tag = str(payload.get('tag_name') or '').lstrip('v').strip()
-if not tag:
-    print('status=parse-failed')
-    print('source=github-api')
-    raise SystemExit(3)
-print('status=ok')
-print('source=github-api')
-print(f'tag={tag}')
-print(f'release={tag.split("-", 1)[0]}')
-PY
-}
-
 resolve_latest_release_info_git_tags() {
   local git_remote="$1"
   local output='' git_status=0 best_tag='' ref='' tag=''
@@ -471,17 +405,10 @@ resolve_latest_release_info() {
     return 0
   fi
   github_url="${OPENCLAW_GITHUB_RELEASES_URL_OVERRIDE:-$OPENCLAW_RUNTIME_CONTRACT_GITHUB_LATEST_RELEASE_API}"
-  if supply_chain_has_shell_stack; then
-    set +e
-    info="$(resolve_latest_release_info_github_api "$github_url")"
-    api_status=$?
-    set -e
-  else
-    set +e
-    info="$(resolve_latest_release_info_python "$github_url")"
-    api_status=$?
-    set -e
-  fi
+  set +e
+  info="$(resolve_latest_release_info_github_api "$github_url")"
+  api_status=$?
+  set -e
   if [[ "$api_status" -eq 0 ]]; then
     local api_tag='' api_source='' git_tag=''
     api_tag="$(release_info_field "$info" tag || true)"
@@ -587,139 +514,74 @@ LATEST_OFFICIAL_STATUS=''
 LATEST_OFFICIAL_DIGEST=''
 
 emit_supply_chain_json() {
-  if command -v jq >/dev/null 2>&1; then
-    jq -n \
-      --arg scope "$SCOPE" \
-      --arg current_ref "$CURRENT_REF" \
-      --arg current_repo "$CURRENT_IMAGE_REPO" \
-      --arg current_tag "$CURRENT_IMAGE_TAG" \
-      --arg current_release "$CURRENT_RELEASE_VERSION" \
-      --arg current_digest "$CURRENT_IMAGE_DIGEST" \
-      --arg current_mirror_status "$CURRENT_MIRROR_STATUS" \
-      --arg current_mirror_digest "$CURRENT_MIRROR_DIGEST" \
-      --arg current_official_repo "$OFFICIAL_RELEASE_IMAGE_REPO" \
-      --arg current_official_status "$CURRENT_OFFICIAL_STATUS" \
-      --arg current_official_digest "$CURRENT_OFFICIAL_DIGEST" \
-      --arg latest_tag "$LATEST_TAG" \
-      --arg latest_release "$LATEST_RELEASE_VERSION" \
-      --arg latest_mirror_repo "$RELEASE_CHECK_IMAGE_REPO" \
-      --arg latest_mirror_status "$LATEST_MIRROR_STATUS" \
-      --arg latest_mirror_digest "$LATEST_MIRROR_DIGEST" \
-      --arg latest_official_repo "$OFFICIAL_RELEASE_IMAGE_REPO" \
-      --arg latest_official_status "$LATEST_OFFICIAL_STATUS" \
-      --arg latest_official_digest "$LATEST_OFFICIAL_DIGEST" \
-      --arg release_lookup_status "$LATEST_LOOKUP_STATUS" \
-      --arg release_lookup_source "$LATEST_LOOKUP_SOURCE" \
-      --arg release_lookup_detail "$LATEST_LOOKUP_DETAIL" \
-      '
-      def status_or_null($value):
-        if ($value | length) == 0 then null else ($value | tonumber) end;
-      def digest_or_null($value):
-        if ($value | length) == 0 then null else $value end;
-      def string_or_null($value):
-        if ($value | length) == 0 then null else $value end;
-      {
-        schema_version: 1,
-        generated_at: (now | todateiso8601 | sub("\\.000Z$"; "Z")),
-        scope: $scope,
-        current: {
-          ref: $current_ref,
-          repo: $current_repo,
-          tag: $current_tag,
-          release_version: $current_release,
-          pinned_digest: $current_digest,
-          mirror_repo: $current_repo,
-          mirror_digest_status: status_or_null($current_mirror_status),
-          mirror_digest: digest_or_null($current_mirror_digest),
-          official_repo: $current_official_repo,
-          official_digest_status: status_or_null($current_official_status),
-          official_digest: digest_or_null($current_official_digest)
-        },
-        release_lookup: (if $scope == "current-tag" then null else {
-          status: string_or_null($release_lookup_status),
-          source: string_or_null($release_lookup_source),
-          detail: string_or_null($release_lookup_detail)
-        } end),
-        latest: (if $scope == "current-tag" then null else {
-          tag: $latest_tag,
-          release_version: $latest_release,
-          mirror_repo: $latest_mirror_repo,
-          mirror_digest_status: status_or_null($latest_mirror_status),
-          mirror_digest: digest_or_null($latest_mirror_digest),
-          official_repo: $latest_official_repo,
-          official_digest_status: status_or_null($latest_official_status),
-          official_digest: digest_or_null($latest_official_digest)
-        } end)
-      }
-      '
-    return 0
-  fi
-  local python_bin=''
-  python_bin="$(registry_manifest_probe_python_executable)" || {
-    echo '[check_openclaw_supply_chain] 缺少 jq，且未检测到可用 Python，无法输出 JSON。' >&2
+  command -v jq >/dev/null 2>&1 || {
+    echo '[check_openclaw_supply_chain] 缺少 jq，无法输出 JSON。' >&2
     exit 20
   }
-  "$python_bin" - \
-    "$SCOPE" "$CURRENT_REF" "$CURRENT_IMAGE_REPO" "$CURRENT_IMAGE_TAG" "$CURRENT_RELEASE_VERSION" "$CURRENT_IMAGE_DIGEST" \
-    "$CURRENT_MIRROR_STATUS" "$CURRENT_MIRROR_DIGEST" "$OFFICIAL_RELEASE_IMAGE_REPO" "$CURRENT_OFFICIAL_STATUS" "$CURRENT_OFFICIAL_DIGEST" \
-    "$LATEST_TAG" "$LATEST_RELEASE_VERSION" "$RELEASE_CHECK_IMAGE_REPO" "$LATEST_MIRROR_STATUS" "$LATEST_MIRROR_DIGEST" \
-    "$OFFICIAL_RELEASE_IMAGE_REPO" "$LATEST_OFFICIAL_STATUS" "$LATEST_OFFICIAL_DIGEST" \
-    "$LATEST_LOOKUP_STATUS" "$LATEST_LOOKUP_SOURCE" "$LATEST_LOOKUP_DETAIL" <<'PY'
-from __future__ import annotations
-
-import json
-import sys
-from datetime import datetime, timezone
-
-
-def status_or_none(value: str) -> int | None:
-    value = value.strip()
-    return int(value) if value else None
-
-
-def value_or_none(value: str) -> str | None:
-    value = value.strip()
-    return value or None
-
-
-payload = {
-    "schema_version": 1,
-    "generated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-    "scope": sys.argv[1],
-    "current": {
-        "ref": sys.argv[2],
-        "repo": sys.argv[3],
-        "tag": sys.argv[4],
-        "release_version": sys.argv[5],
-        "pinned_digest": sys.argv[6],
-        "mirror_repo": sys.argv[3],
-        "mirror_digest_status": status_or_none(sys.argv[7]),
-        "mirror_digest": value_or_none(sys.argv[8]),
-        "official_repo": sys.argv[9],
-        "official_digest_status": status_or_none(sys.argv[10]),
-        "official_digest": value_or_none(sys.argv[11]),
-    },
-    "release_lookup": None,
-    "latest": None,
-}
-if sys.argv[1] != "current-tag":
-    payload["release_lookup"] = {
-        "status": value_or_none(sys.argv[20]),
-        "source": value_or_none(sys.argv[21]),
-        "detail": value_or_none(sys.argv[22]),
+  jq -n \
+    --arg scope "$SCOPE" \
+    --arg current_ref "$CURRENT_REF" \
+    --arg current_repo "$CURRENT_IMAGE_REPO" \
+    --arg current_tag "$CURRENT_IMAGE_TAG" \
+    --arg current_release "$CURRENT_RELEASE_VERSION" \
+    --arg current_digest "$CURRENT_IMAGE_DIGEST" \
+    --arg current_mirror_status "$CURRENT_MIRROR_STATUS" \
+    --arg current_mirror_digest "$CURRENT_MIRROR_DIGEST" \
+    --arg current_official_repo "$OFFICIAL_RELEASE_IMAGE_REPO" \
+    --arg current_official_status "$CURRENT_OFFICIAL_STATUS" \
+    --arg current_official_digest "$CURRENT_OFFICIAL_DIGEST" \
+    --arg latest_tag "$LATEST_TAG" \
+    --arg latest_release "$LATEST_RELEASE_VERSION" \
+    --arg latest_mirror_repo "$RELEASE_CHECK_IMAGE_REPO" \
+    --arg latest_mirror_status "$LATEST_MIRROR_STATUS" \
+    --arg latest_mirror_digest "$LATEST_MIRROR_DIGEST" \
+    --arg latest_official_repo "$OFFICIAL_RELEASE_IMAGE_REPO" \
+    --arg latest_official_status "$LATEST_OFFICIAL_STATUS" \
+    --arg latest_official_digest "$LATEST_OFFICIAL_DIGEST" \
+    --arg release_lookup_status "$LATEST_LOOKUP_STATUS" \
+    --arg release_lookup_source "$LATEST_LOOKUP_SOURCE" \
+    --arg release_lookup_detail "$LATEST_LOOKUP_DETAIL" \
+    '
+    def status_or_null($value):
+      if ($value | length) == 0 then null else ($value | tonumber) end;
+    def digest_or_null($value):
+      if ($value | length) == 0 then null else $value end;
+    def string_or_null($value):
+      if ($value | length) == 0 then null else $value end;
+    {
+      schema_version: 1,
+      generated_at: (now | todateiso8601 | sub("\\.000Z$"; "Z")),
+      scope: $scope,
+      current: {
+        ref: $current_ref,
+        repo: $current_repo,
+        tag: $current_tag,
+        release_version: $current_release,
+        pinned_digest: $current_digest,
+        mirror_repo: $current_repo,
+        mirror_digest_status: status_or_null($current_mirror_status),
+        mirror_digest: digest_or_null($current_mirror_digest),
+        official_repo: $current_official_repo,
+        official_digest_status: status_or_null($current_official_status),
+        official_digest: digest_or_null($current_official_digest)
+      },
+      release_lookup: (if $scope == "current-tag" then null else {
+        status: string_or_null($release_lookup_status),
+        source: string_or_null($release_lookup_source),
+        detail: string_or_null($release_lookup_detail)
+      } end),
+      latest: (if $scope == "current-tag" then null else {
+        tag: $latest_tag,
+        release_version: $latest_release,
+        mirror_repo: $latest_mirror_repo,
+        mirror_digest_status: status_or_null($latest_mirror_status),
+        mirror_digest: digest_or_null($latest_mirror_digest),
+        official_repo: $latest_official_repo,
+        official_digest_status: status_or_null($latest_official_status),
+        official_digest: digest_or_null($latest_official_digest)
+      } end)
     }
-    payload["latest"] = {
-        "tag": sys.argv[12],
-        "release_version": sys.argv[13],
-        "mirror_repo": sys.argv[14],
-        "mirror_digest_status": status_or_none(sys.argv[15]),
-        "mirror_digest": value_or_none(sys.argv[16]),
-        "official_repo": sys.argv[17],
-        "official_digest_status": status_or_none(sys.argv[18]),
-        "official_digest": value_or_none(sys.argv[19]),
-    }
-print(json.dumps(payload, ensure_ascii=False, indent=2))
-PY
+    '
 }
 
 if [[ "$SCOPE" != 'current-tag' ]]; then

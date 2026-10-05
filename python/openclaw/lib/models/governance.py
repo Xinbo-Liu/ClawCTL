@@ -97,7 +97,6 @@ def _record_rate_window(profile: ModelProfile) -> None:
 
 @contextmanager
 def model_call_governance(profile: ModelProfile) -> Iterator[None]:
-    """围绕单次模型请求执行 provider/profile 级闸门。"""
     lock_path, guard = _acquire_concurrency_slot(profile)
     try:
         _record_rate_window(profile)

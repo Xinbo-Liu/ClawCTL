@@ -31,7 +31,6 @@ from openclaw.lib.repo.control_plane_service_scope import (
 
 
 def resolve_relative(base: Path, value: str, label: str) -> Path:
-    """解析并校验必填相对路径。"""
     target = (base / value).resolve()
     if not target.exists():
         raise CliError(f'{label} 不存在：{target}', 2)
@@ -39,7 +38,6 @@ def resolve_relative(base: Path, value: str, label: str) -> Path:
 
 
 def resolve_optional_relative(base: Path, value: Any, label: str) -> Path | None:
-    """解析可选相对路径。"""
     text = str(value or '').strip()
     if not text:
         return None
@@ -47,7 +45,6 @@ def resolve_optional_relative(base: Path, value: Any, label: str) -> Path | None
 
 
 def resolve_collection_dir(base: Path, value: Any, label: str) -> Path:
-    """解析 collection 目录路径。"""
     text = str(value or '').strip()
     if not text:
         raise CliError(f'{label} 不能为空', 2)
@@ -55,7 +52,6 @@ def resolve_collection_dir(base: Path, value: Any, label: str) -> Path:
 
 
 def describe_registry_path(path: Path, *, expected_kind: str) -> dict[str, Any]:
-    """描述单个 registry 路径的存在性与类型。"""
     resolved = Path(path).resolve()
     exists = resolved.exists()
     return {
@@ -69,7 +65,6 @@ def describe_registry_path(path: Path, *, expected_kind: str) -> dict[str, Any]:
 
 
 def describe_registry_path_list(paths: list[Path], *, expected_kind: str) -> list[dict[str, Any]]:
-    """描述路径列表的存在性与类型。"""
     rows: list[dict[str, Any]] = []
     seen: set[str] = set()
     for path in paths:
@@ -91,7 +86,6 @@ def resolve_schema_path(
     label: str,
     required: bool,
 ) -> Path | None:
-    """从 base 与 extension 中解析单一 schema 真源。"""
     candidates: list[Path] = []
     service_value = resolve_optional_relative(base, service_schemas.get(schema_key), label)
     if service_value is not None:
@@ -113,7 +107,6 @@ def resolve_schema_path(
 
 
 def dedupe_extension_registry_paths(candidates: list[Path]) -> list[Path]:
-    """按绝对路径对 extension registry 路径去重。"""
     deduped: list[Path] = []
     seen: set[str] = set()
     for candidate in candidates:
@@ -137,7 +130,6 @@ def _record_registry_path_owner(owner_map: dict[Path, str], path: Path, owner: s
 
 
 def collect_registry_inputs(*, base: Path, registry: dict[str, Any], extensions: list[dict[str, Any]]) -> dict[str, Any]:
-    """收集 base 与 extension 的 registry 输入路径。"""
     jobs_dirs = [resolve_collection_dir(base, registry.get('jobsDir') or 'jobs', 'jobsDir')]
     models_dirs = [resolve_collection_dir(base, registry.get('modelsDir') or 'models', 'modelsDir')]
     targets_dirs = [resolve_collection_dir(base, registry.get('targetsDir') or 'targets', 'targetsDir')]
@@ -206,7 +198,6 @@ def resolve_registry_schema_paths(
     extensions: list[dict[str, Any]],
     registry_inputs: dict[str, list[Path]],
 ) -> dict[str, Path | None]:
-    """解析 registry 装配与 agent 派生面所需的 schema 路径。"""
     agent_groups_dirs = registry_inputs['agent_groups_dirs']
     agent_modules_dirs = registry_inputs['agent_modules_dirs']
     runtime_adapter_registry_paths = registry_inputs['runtime_adapter_registry_paths']
@@ -226,7 +217,6 @@ def resolve_registry_schema_paths(
 
 
 def load_registry_service_context(config_path: Path) -> dict[str, Any]:
-    """Load the config-scoped service context used by loader entrypoints."""
     path = Path(config_path).resolve()
     try:
         _, payload = load_control_plane_service_payload(path)

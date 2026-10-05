@@ -1,12 +1,12 @@
 {
   "schema_version": 1,
   "generated_artifacts": {
-    "object_family_doc": "agent/README.md"
+    "object_family_doc": "docs/operations/runtime-artifacts-reference.md"
   },
   "families": {
     "acceptance_state": {
       "label": "deployment acceptance 对象族",
-      "purpose": "统一说明 deployment acceptance state 与 private ingress 边界证据，避免 runtime acceptance surface、runtime-service-reference 与排障页重复维护同一组控制面对象。",
+      "purpose": "说明 deployment acceptance state 与 private ingress 边界证据的路径、生产入口和验收用途。",
       "references": [
         "docs/operations/runtime-service-reference.md#deployment-acceptance-artifacts",
         "docs/operations/runtime-service-reference.md",
@@ -33,12 +33,10 @@
     },
     "flow_summary_state": {
       "label": "部署 / full test latest 摘要对象族",
-      "purpose": "统一说明 one_click_deploy 与 one_click_test_full 的固定 latest 摘要路径，供部署日志目录、排障页与入口帮助引用。",
+      "purpose": "说明 one_click_deploy 与 one_click_test_full 的 latest 摘要路径，用于查看最近一次执行结果和定位部署或验收故障。",
       "references": [
         "docs/operations/troubleshooting.md",
-        "docs/operations/runtime-service-reference.md",
-        "docs/operations/troubleshooting.md",
-        "docs/operations/troubleshooting.md"
+        "docs/operations/runtime-service-reference.md"
       ],
       "entries": [
         {
@@ -77,7 +75,7 @@
     },
     "runtime_evidence": {
       "label": "runtime evidence 对象族",
-      "purpose": "统一说明导出到 control-plane state release/evidence/ 的运行验收对象与 job artifact policy 摘要，供 runtime acceptance surface、runtime-service-reference、export_runtime_acceptance_evidence.sh 统一引用。",
+      "purpose": "说明导出到 control-plane state release/evidence/ 的运行验收、run ledger、group 发布证据与 job artifact policy 摘要，用于核对运行结果和归档交付证据。",
       "references": [
         "docs/operations/runtime-service-reference.md#deployment-acceptance-artifacts",
         "docs/operations/runtime-service-reference.md",
@@ -115,14 +113,6 @@
           "path_ref": "release/evidence/control-plane-agent-group-access.json",
           "producer": "control-plane export-agent-group-evidence / scheduler auto export",
           "usage": "导出按 group 聚合的 recent access、timeline、member waterfall 与 failure hotspots，作为 group_access_view 正式证据。"
-        },
-        {
-          "id": "control_plane_agent_group_acceptance_bindings",
-          "title": "agent group acceptance bindings",
-          "path_kind": "host_control_plane_file",
-          "path_ref": "release/evidence/control-plane-agent-group-acceptance-bindings.json",
-          "producer": "control-plane export-agent-group-evidence / scheduler auto export",
-          "usage": "导出按 agent group 绑定到 deployment acceptance required checks、runtime evidence 与 required run ledger jobs 的正式映射摘要。"
         },
         {
           "id": "control_plane_agent_group_release_gates",

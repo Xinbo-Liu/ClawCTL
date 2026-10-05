@@ -19,19 +19,16 @@ LABEL="render_local_ro_mirror"
 CONFIG_PATH=""
 CONFIG_PATH_EXPLICIT=0
 OPENCLAW_PYTHON_TOOL="$ROOT_DIR/scripts/runtime/run_openclaw_python_tool.sh"
-
 usage() {
   cat <<'USAGE'
 用法：
   bash ./scripts/setup/render_local_ro_mirror.sh --manifest <manifest> --output-dir <gateway-state-dir/child> [--label <name>] [--check] [--config-path <path>]
 USAGE
 }
-
 fail() {
   echo "[$LABEL][FAIL] $1" >&2
   exit "${2:-2}"
 }
-
 ensure_output_dir_in_gateway_state() {
   local output_dir="$1"
   local gateway_root

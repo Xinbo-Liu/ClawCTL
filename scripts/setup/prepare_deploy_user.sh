@@ -12,7 +12,6 @@ REPO_DIR="$ROOT_DIR"
 CHOWN_REPO=1
 VERIFY_DOCKER=1
 DEPLOY_USER_CREATED=0
-
 usage() {
   cat <<'USAGE'
 用法：
@@ -30,18 +29,15 @@ usage() {
   - 本脚本不会复制 root 或当前登录用户的 SSH 公钥；若需要直接 SSH 登录部署用户，请按目标机安全策略显式配置该用户 authorized_keys。
 USAGE
 }
-
 note() { printf '[prepare_deploy_user][INFO] %s\n' "$*"; }
 warn() { printf '[prepare_deploy_user][WARN] %s\n' "$*"; }
 fail() {
   printf '[prepare_deploy_user][FAIL] %s\n' "$*" >&2
   exit "${2:-2}"
 }
-
 require_root() {
   [[ "$(id -u)" == "0" ]] || fail '当前脚本需要 root 权限；请使用 sudo bash ./scripts/setup/prepare_deploy_user.sh ...' 30
 }
-
 validate_deploy_user() {
   local user="$1"
   [[ -n "$user" ]] || fail '--user 不能为空'
@@ -49,18 +45,15 @@ validate_deploy_user() {
     fail "--user 只接受 1-32 位 Linux 普通用户名格式：小写字母或下划线开头，后续只能包含小写字母、数字、下划线或连字符。当前值：$user"
   fi
 }
-
 shell_quote() {
   printf '%q' "$1"
 }
-
 resolve_repo_dir() {
   local input="$1"
   [[ -n "$input" ]] || fail '--repo-dir 不能为空'
   [[ -d "$input" ]] || fail "仓库目录不存在：$input"
   cd "$input" && pwd -P
 }
-
 assert_openclaw_repo_dir() {
   local repo_dir="$1"
   case "$repo_dir" in
@@ -71,7 +64,6 @@ assert_openclaw_repo_dir() {
   [[ -f "$repo_dir/scripts/setup/one_click_deploy.sh" ]] || fail "仓库目录缺少 scripts/setup/one_click_deploy.sh：$repo_dir"
   [[ -f "$repo_dir/deploy/docker-compose.yml" ]] || fail "仓库目录缺少 deploy/docker-compose.yml：$repo_dir"
 }
-
 ensure_deploy_user() {
   local user="$1"
   if id "$user" >/dev/null 2>&1; then
@@ -86,10 +78,9 @@ ensure_deploy_user() {
     usermod -aG docker "$user"
     note "已确保 $user 属于 docker 组"
   else
-    warn '未检测到 docker 组；请先完成 prepare_docker_host.sh --install-docker 或手工修复 Docker 安装。'
+    warn '未检测到 docker 组；请先完成 prepare_docker_host.sh --os auto --install-docker 或手工修复 Docker 安装。'
   fi
 }
-
 mark_deploy_user_evidence() {
   local user="$1"
   local repo_dir="$2"
@@ -116,12 +107,10 @@ EOF
   chmod 600 "$marker_path"
   note "已写入 OpenClaw 部署用户证据：$marker_path"
 }
-
 deploy_user_group() {
   local user="$1"
   id -gn "$user"
 }
-
 chown_repo_to_deploy_user() {
   local user="$1"
   local repo_dir="$2"
@@ -130,7 +119,6 @@ chown_repo_to_deploy_user() {
   chown -R "$user:$group" "$repo_dir"
   note "已把仓库目录交接给 $user:$group：$repo_dir"
 }
-
 verify_deploy_user_docker_access() {
   local user="$1"
   if ! command -v docker >/dev/null 2>&1; then
@@ -143,7 +131,6 @@ verify_deploy_user_docker_access() {
     warn "部署用户暂不能访问 Docker daemon；若刚加入 docker 组，请重新登录该用户后再执行 docker info。"
   fi
 }
-
 emit_handoff() {
   local user="$1"
   local repo_dir="$2"

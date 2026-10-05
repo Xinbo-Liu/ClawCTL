@@ -1,4 +1,4 @@
-"""验证部署镜像 shell 归档合同解析在 bundle 与 legacy 路径上失败闭合。"""
+"""验证部署镜像 shell 归档合同解析在 bundle 与 Docker save 格式上失败闭合。"""
 from __future__ import annotations
 
 import json
@@ -65,8 +65,8 @@ class DeploymentImagesShellArchiveContractTest(unittest.TestCase):
                 info.size = len(content)
                 archive.addfile(info, BytesIO(content))
 
-    def _legacy_manifest(self, tags: list[str] | None) -> bytes:
-        """生成 legacy docker save manifest.json 测试载荷。"""
+    def _docker_save_manifest(self, tags: list[str] | None) -> bytes:
+        """生成 Docker save manifest.json 测试载荷。"""
         return json.dumps([{'Config': 'config.json', 'RepoTags': tags, 'Layers': []}]).encode()
 
     def _bundle_contract(self, refs: list[str]) -> bytes:
@@ -103,21 +103,21 @@ class DeploymentImagesShellArchiveContractTest(unittest.TestCase):
 
             self.assertEqual(result.returncode, 0, msg=result.stderr + result.stdout)
 
-    def test_legacy_raw_tar_passes_with_repo_tags(self) -> None:
-        """legacy raw tar 仍可通过 RepoTags 覆盖当前 pin tag 的兼容路径。"""
+    def test_docker_save_tar_passes_with_repo_tags(self) -> None:
+        """Docker save 归档的 RepoTags 覆盖当前 pin tag 时校验通过。"""
         with tempfile.TemporaryDirectory() as tmpdir:
-            archive = Path(tmpdir) / 'legacy.tar'
-            self._write_tar(archive, {'manifest.json': self._legacy_manifest(self.refs)})
+            archive = Path(tmpdir) / 'docker-save.tar'
+            self._write_tar(archive, {'manifest.json': self._docker_save_manifest(self.refs)})
 
             result = self._verify_archive(archive)
 
             self.assertEqual(result.returncode, 0, msg=result.stderr + result.stdout)
 
-    def test_legacy_repo_tags_null_fails_closed(self) -> None:
-        """legacy manifest 的 RepoTags:null 必须失败闭合。"""
+    def test_docker_save_repo_tags_null_fails_closed(self) -> None:
+        """Docker save manifest 的 RepoTags:null 必须失败闭合。"""
         with tempfile.TemporaryDirectory() as tmpdir:
-            archive = Path(tmpdir) / 'legacy-null.tar'
-            self._write_tar(archive, {'manifest.json': self._legacy_manifest(None)})
+            archive = Path(tmpdir) / 'docker-save-null.tar'
+            self._write_tar(archive, {'manifest.json': self._docker_save_manifest(None)})
 
             result = self._verify_archive(archive)
 

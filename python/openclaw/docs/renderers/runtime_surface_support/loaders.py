@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Truth-manifest loaders for runtime_surface renderer."""
+"""读取运行入口、服务目标、验收检查和镜像合同，组成运行态参考的渲染输入。"""
 from __future__ import annotations
 
 import json

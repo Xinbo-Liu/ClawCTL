@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Summary assembly for deploy_success surface."""
+"""提供OpenClaw setup子系统的生产实现。"""
 from __future__ import annotations
 
 from pathlib import Path
@@ -10,7 +10,6 @@ from openclaw.lib.runtime.source_strategy import deployment_image_roles, runtime
 
 
 def _image_ref_pin_contracts(root_dir: Path) -> dict[str, tuple[str, ...]]:
-    """从 runtime source strategy 派生部署镜像 env key 与 pin 合同关系。"""
     return {role.env_key: (role.pin_contract,) for role in deployment_image_roles(root_dir)}
 
 
@@ -22,7 +21,6 @@ def _selected_image(
     parse_env_file_fn: Callable[[Path], dict[str, str]],
     pin_contracts: dict[str, tuple[str, ...]],
 ) -> str | None:
-    """按 deploy env 优先、pin 真源兜底的顺序解析镜像引用。"""
     value = str(env_map.get(key) or '').strip()
     if value:
         return value

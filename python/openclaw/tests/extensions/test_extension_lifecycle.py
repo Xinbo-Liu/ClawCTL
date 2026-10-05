@@ -77,6 +77,22 @@ class ExtensionLifecycleTest(unittest.TestCase):
         self.assertEqual(first_hash, second_hash)
         self.assertNotEqual(first_hash, third_hash)
 
+    def test_content_hash_ignores_local_test_and_lint_caches(self) -> None:
+        with isolated_test_root('extension-lifecycle-local-caches') as repo_root:
+            extension_root = repo_root / 'agent' / 'extensions' / 'agent_probe'
+            extension_root.mkdir(parents=True)
+            (extension_root / 'manifest.json').write_text('{"id":"agent_probe"}\n', encoding='utf-8')
+            expected_hash = content_hash(extension_root)
+
+            pytest_cache = extension_root / '.pytest_cache' / 'v' / 'cache'
+            pytest_cache.mkdir(parents=True)
+            (pytest_cache / 'nodeids').write_text('["test_probe"]\n', encoding='utf-8')
+            ruff_cache = extension_root / '.ruff_cache' / '0.15.13'
+            ruff_cache.mkdir(parents=True)
+            (ruff_cache / 'lint-result').write_bytes(b'local-cache\x00payload')
+
+            self.assertEqual(content_hash(extension_root), expected_hash)
+
     def test_content_hash_normalizes_text_line_endings_but_not_binary_payloads(self) -> None:
         with isolated_test_root('extension-lifecycle-line-endings') as repo_root:
             lf_root = repo_root / 'agent' / 'extensions' / 'agent_lf'

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 用途：读取 extension-aware 的 one_click_test_full 检查组真源，并驱动脚本检查与 follow-up 动作。
+# 用途：读取平台 one_click_test_full 检查组真源，并驱动脚本检查与 follow-up 动作。
 set -euo pipefail
 
 FULL_TEST_GROUP_REGISTRY_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
@@ -23,7 +23,7 @@ full_test_group_registry_jq_available() {
   command -v jq >/dev/null 2>&1
 }
 
-# 渲染 extension-aware 的 full_test_group_registry 真源 JSON。
+# 渲染平台 full_test_group_registry 真源 JSON。
 full_test_group_registry_render_json() {
   local config_path=""
   local python_runner="${PYTHON_RUNNER:-$FULL_TEST_GROUP_REGISTRY_ROOT/scripts/runtime/run_python_container.sh}"
@@ -151,7 +151,7 @@ full_test_group_registry_run_entrypoint_presence_checks_for_group() {
   done
 }
 
-# 判断 extension-aware full test group registry 是否声明了指定分组。
+# 判断平台 full test group registry 是否声明了指定分组。
 full_test_group_registry_has_group() {
   local group="$1"
   full_test_group_registry_require_truth
@@ -163,16 +163,6 @@ full_test_group_registry_run_declared_group() {
   local group="$1"
   full_test_group_registry_run_entrypoint_presence_checks_for_group "$group"
   full_test_group_registry_run_script_checks_for_group "$group"
-}
-
-# 追加 dispatch 恢复动作建议。
-full_test_append_dispatch_recovery_actions() {
-  full_test_group_registry_require_truth
-  local action=''
-  while IFS= read -r action; do
-    [[ -n "$action" ]] || continue
-    append_action "$action"
-  done < <(full_test_group_registry_cached_json | jq -r '.dispatch_recovery_actions[]?')
 }
 
 # 执行 service 分组的脚本检查。
@@ -191,20 +181,4 @@ full_test_group_registry_append_official_cli_followups_if_failed() {
       append_action "$action"
     done < <(full_test_group_registry_cached_json | jq -r --arg group service --arg checkId "$check_id" '.groups[$group].followups_if_failed[$checkId][]?')
   done
-}
-
-# 执行 dispatch 分组的脚本检查。
-full_test_group_registry_run_dispatch_script_checks() {
-  full_test_group_registry_run_script_checks_for_group dispatch
-}
-
-# 执行 dispatch target 分组的脚本检查。
-full_test_group_registry_run_dispatch_target_script_checks() {
-  full_test_group_registry_run_script_checks_for_group dispatch_targets
-}
-
-# 执行 pipeline 分组的入口脚本与脚本类检查。
-full_test_group_registry_run_pipeline_checks() {
-  full_test_group_registry_run_entrypoint_presence_checks_for_group pipeline
-  full_test_group_registry_run_script_checks_for_group pipeline
 }

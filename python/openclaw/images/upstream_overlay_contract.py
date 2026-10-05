@@ -1,4 +1,4 @@
-"""OpenClaw upstream overlay contract checker."""
+"""提供OpenClaw 镜像子系统的生产实现。"""
 from __future__ import annotations
 
 import json
@@ -13,12 +13,14 @@ from typing import NoReturn
 
 @dataclass(frozen=True)
 class OverlayContext:
+    """镜像覆盖校验的输入上下文。"""
     root_dir: Path
     contract_path: Path
     official_gateway_image: str
 
 
 class OverlayContractError(RuntimeError):
+    """镜像覆盖合同校验失败。"""
     pass
 
 

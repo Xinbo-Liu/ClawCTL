@@ -9,7 +9,6 @@ ROOT_DIR="$(openclaw_repo_root_from "$__openclaw_script_dir")"
 unset __openclaw_script_dir
 # shellcheck source=../lib/local_workspace_policy.sh
 source "$ROOT_DIR/scripts/lib/local_workspace_policy.sh"
-
 hygiene_usage() {
   cat <<'USAGE'
 用法：
@@ -25,16 +24,13 @@ hygiene_usage() {
   - 只有 .gitignore 覆盖缺失才失败
 USAGE
 }
-
 hygiene_fail() {
   echo "[local_workspace_hygiene][FAIL] $*" >&2
   exit "${2:-2}"
 }
-
 hygiene_note() {
   echo "[local_workspace_hygiene] $*"
 }
-
 hygiene_mtime_epoch() {
   local target="$1"
   if stat -c %Y "$target" >/dev/null 2>&1; then
@@ -43,7 +39,6 @@ hygiene_mtime_epoch() {
   fi
   stat -f %m "$target"
 }
-
 hygiene_format_timestamp() {
   local epoch="${1:-}"
   [[ -n "$epoch" ]] || {
@@ -60,7 +55,6 @@ hygiene_format_timestamp() {
   fi
   printf '%s' "$epoch"
 }
-
 hygiene_find_pruned() {
   local target_path="$1"
   shift
@@ -84,7 +78,6 @@ hygiene_find_pruned() {
       -o -path '*/build' \
     \) -prune -o "$@"
 }
-
 hygiene_file_count() {
   local target_path="$1"
   [[ -e "$target_path" ]] || {
@@ -98,7 +91,6 @@ hygiene_file_count() {
   hygiene_find_pruned "$target_path" -type f -print0 2>/dev/null \
     | awk 'BEGIN { RS = "\0"; count = 0 } { count += 1 } END { printf "%d", count }'
 }
-
 hygiene_total_bytes() {
   local target_path="$1"
   [[ -e "$target_path" ]] || {
@@ -120,7 +112,6 @@ hygiene_total_bytes() {
       done \
     | awk '{ sum += $1 } END { printf "%.0f", sum + 0 }'
 }
-
 hygiene_latest_epoch() {
   local target_path="$1"
   local latest=''

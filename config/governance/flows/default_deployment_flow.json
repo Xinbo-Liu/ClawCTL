@@ -39,13 +39,13 @@
         "entry_id": "one_click_deploy",
         "command": "bash ./scripts/setup/one_click_deploy.sh",
         "offline_command": "bash ./scripts/setup/one_click_deploy.sh --offline --image-archive <local-path>",
-        "purpose": "执行正式部署主链；默认会校验或刷新 basic gate proof，启动 runtime 服务后按当前 profile/extension 的 required run ledger jobs 决定是否先受控执行 run_control_plane_run_all_once.sh，再自动执行部署后 full test 并导出 runtime acceptance evidence，同时把最近一次 one_click_deploy 摘要镜像到固定 latest 路径。阶段矩阵、--resume-from、--require-basic-gate-proof 与 --skip-acceptance 统一查看 docs/getting-started/quickstart.md。"
+        "purpose": "执行正式部署主链；默认会校验或刷新 basic gate proof，启动 runtime 服务后按平台 deployment acceptance manifest 的 required run ledger jobs 决定是否先受控执行 run_control_plane_run_all_once.sh，再自动执行部署后 full test 并导出 runtime acceptance evidence，同时把最近一次 one_click_deploy 摘要镜像到固定 latest 路径。阶段矩阵、--resume-from、--require-basic-gate-proof 与 --skip-acceptance 统一查看 docs/getting-started/quickstart.md。"
       }
     ],
     "notes": [
-      "默认 one_click 主链固定为 one_click_config -> apply_ingress_boundary_rules -> fix_permissions -> one_click_test_basic -> one_click_deploy；one_click_deploy 默认按 required run ledger jobs 自动补齐 run-all-once、部署后 full test 与 runtime evidence 导出。",
+      "默认 one_click 主链固定为 one_click_config -> apply_ingress_boundary_rules -> fix_permissions -> one_click_test_basic -> one_click_deploy；one_click_deploy 默认按平台 deployment acceptance manifest 自动补齐 required run ledger jobs、部署后 full test 与 runtime evidence 导出。",
       "进入默认主链前，必须先完成宿主机前置链：prepare_docker_host -> check_docker_host_readiness -> prepare_control_plane_medium。",
-      "CentOS 7 存量老系统路径与其它受支持目标机共享同一条默认主链，不存在例外顺序；host_firewall 模式的 ingress 来源限制固定通过 apply_ingress_boundary_rules.sh 物化。",
+      "Ubuntu 22.04 推荐基线与 CentOS 7 legacy 路径共享同一条默认主链，不存在例外顺序；host_firewall 模式的 ingress 来源限制固定通过 apply_ingress_boundary_rules.sh 物化。",
       "deployment acceptance 默认顺序、通过标准与证据产物统一查看 docs/operations/runtime-service-reference.md。",
       "one_click_deploy 的分阶段顺序、--resume-from、固定 latest 摘要路径与恢复执行入口统一查看 docs/getting-started/quickstart.md。",
       "one_click_test_full 用作服务已启动后的 deployment acceptance 与结构化输出入口；检查组顺序、固定摘要路径与 latest summary 统一查看 docs/operations/runtime-service-reference.md。"
@@ -89,15 +89,15 @@
     "steps": [
       {
         "entry_id": "prepare_docker_host",
-        "command": "sudo bash ./scripts/setup/prepare_docker_host.sh --all",
-        "offline_command": "sudo bash ./scripts/setup/prepare_docker_host.sh --configure-kernel --configure-daemon --open-firewall",
-        "purpose": "统一准备 CentOS 7 存量老系统路径宿主机前提；离线新机若尚未安装 Docker / Compose，需先挂载本地 RPM 或本地 YUM 源，再分步执行安装入口。"
+        "command": "sudo bash ./scripts/setup/prepare_docker_host.sh --os auto --all",
+        "offline_command": "sudo bash ./scripts/setup/prepare_docker_host.sh --os auto --configure-kernel --configure-daemon --open-firewall",
+        "purpose": "统一准备 Ubuntu 22.04 推荐基线或 CentOS 7 legacy 宿主机前提；离线新机若尚未安装 Docker / Compose，需先挂载本地 OS 软件源，再分步执行安装入口。"
       },
       {
         "entry_id": "check_docker_host_readiness",
         "command": "bash ./scripts/doctor/check_docker_host_readiness.sh",
         "offline_command": "bash ./scripts/doctor/check_docker_host_readiness.sh --offline",
-        "purpose": "作为唯一宿主机准入入口，检查 Docker / Compose、运行来源连通性与 CentOS 7 宿主机支持策略。"
+        "purpose": "作为唯一宿主机准入入口，检查 Docker / Compose、运行来源连通性、Docker MTU 与 Ubuntu 22.04 推荐基线 / CentOS 7 legacy 宿主机支持策略。"
       },
       {
         "entry_id": "prepare_control_plane_medium",

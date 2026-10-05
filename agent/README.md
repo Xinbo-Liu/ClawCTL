@@ -6,6 +6,9 @@
 
 - `agent/governance/`：治理规则与仓内 extension authoring 合同。
 - `agent/control_plane/`：共享 registry、runtime 与 object policy 真源。
+- [extensions/README.md](extensions/README.md)：受管扩展索引、业务说明和接入合同。
+
+运行对象、产物策略和路径由 [运行产物参考](../docs/operations/runtime-artifacts-reference.md) 承接；本页只导航作者合同和治理规则。
 
 ## 正式入口
 
@@ -28,16 +31,11 @@
 
 ## 阅读顺序
 
-1. `governance/baseline.md`
-2. `governance/directory-standard.md`
-3. `governance/source-of-truth-matrix.md`
-4. `governance/repository-surface-governance.md`
-5. `governance/module-governance.md`
-6. `governance/group-governance.md`
-7. `governance/group-membership-governance.md`
-8. `governance/group-topology-governance.md`
-9. `governance/group-recovery-governance.md`
-10. `governance/job-operation-bridge.md`
-11. `governance/job-contract-governance.md`
-12. `governance/implementation-binding-governance.md`
-13. `governance/lifecycle-governance.md`
+1. [治理基线](governance/baseline.md)、[目录标准](governance/directory-standard.md)、[真源矩阵](governance/source-of-truth-matrix.md)：确认默认运行面和作者边界。
+2. [仓库结构治理](governance/repository-surface-governance.md)、[Python 面治理](governance/python-surface-governance.md)、[领域治理](governance/domain-governance.md)：选择实现的归属位置。
+3. [模块治理](governance/module-governance.md)：组织模块清单、能力边界、入口与测试。
+4. [Group 治理](governance/group-governance.md)、[成员归属](governance/group-membership-governance.md)、[主链拓扑](governance/group-topology-governance.md)、[恢复真源](governance/group-recovery-governance.md)：管理组合运行与补偿。
+5. [Job / Operation 绑定](governance/job-operation-bridge.md)、[Job 合同](governance/job-contract-governance.md)、[Implementation 绑定](governance/implementation-binding-governance.md)：核对运行对象如何从模块派生。
+6. [生命周期治理](governance/lifecycle-governance.md)：确认真源同步项；项目级阶段顺序见 [生命周期架构](../docs/architecture/agent-lifecycle-governance.md)。
+
+共享对象职责见 [control_plane/README.md](control_plane/README.md)，身份与权限概念见 [智能体身份与权限](../docs/architecture/agents-and-permissions.md)。

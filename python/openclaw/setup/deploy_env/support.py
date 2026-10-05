@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Shared deploy-env schema rendering and validation helpers."""
+"""提供OpenClaw setup子系统的生产实现。"""
 from __future__ import annotations
 
 import re
@@ -14,8 +14,10 @@ from urllib.parse import urlparse
 from openclaw.control_plane.surfaces import load_deploy_env_schema
 from openclaw.lib.repo.contracts import repo_contract_path
 from openclaw.lib.repo.layout import (
+    DEFAULT_RUNTIME_CONTROL_PLANE_PROFILE_ID,
     available_control_plane_profile_ids,
     resolve_default_runtime_control_plane_service_config_path,
+    resolve_control_plane_profile_service_config_path,
     resolve_repo_root,
 )
 from openclaw.doctor.platform.ingress_boundary.normalization import normalize_source_cidrs
@@ -188,8 +190,19 @@ def render_doc_detail_section(field: dict[str, Any], *, detected_ingress_ip: str
     return rows
 
 
-def build_site_env_template_lines(*, detected_ingress_ip: str = '', populate_detected_ingress_ip: bool = False) -> list[str]:
-    schema = load_schema()
+def build_site_env_template_lines(
+    *,
+    detected_ingress_ip: str = '',
+    populate_detected_ingress_ip: bool = False,
+    config_path: Path | None = None,
+) -> list[str]:
+    schema = load_schema(
+        config_path=config_path
+        or resolve_control_plane_profile_service_config_path(
+            DEFAULT_RUNTIME_CONTROL_PLANE_PROFILE_ID,
+            start_path=ROOT_DIR,
+        )
+    )
     lines = [
         '# OpenClaw deploy/site.env',
         '# 说明：当前交互固定使用私有 HTTPS ingress 单一入口；gateway host/host port 由统一 ingress 合同处理。',
@@ -308,7 +321,7 @@ def is_truthy_flag_value(value: object) -> bool:
     return str(value or '').strip().lower() in {'1', 'true', 'yes', 'on'}
 
 
-def validate_private_cidr_csv(value: str) -> str:
+def validate_ingress_source_cidr_csv(value: str) -> str:
     text = str(value or '').strip()
     if not text:
         return 'OPENCLAW_INGRESS_ALLOWED_SOURCE_CIDRS 必须提供至少一个 CIDR'
@@ -358,8 +371,8 @@ def validate_value(value: str, validator: dict[str, Any] | None) -> str:
         return validate_non_negative_int(value)
     if validator_type == 'positive_int':
         return validate_positive_int(value)
-    if validator_type == 'private_cidr_csv':
-        return validate_private_cidr_csv(value)
+    if validator_type == 'ingress_source_cidr_csv':
+        return validate_ingress_source_cidr_csv(value)
     if validator_type == 'literal_bool':
         return validate_literal_bool(value)
     if validator_type == 'enum':

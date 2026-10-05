@@ -95,7 +95,6 @@ def base_env(repo_root: Path, temp_dir: Path, extra_env: Mapping[str, str] | Non
 
 
 def _prepend_extension_dependency_paths(env: dict[str, str], repo_root: Path) -> None:
-    """将扩展源码和仓内离线 wheel 注入模块 smoke 子进程，保持测试与离线包真源一致。"""
     config_path = str(env.get(CONTROL_PLANE_CONFIG_ENV) or '').strip()
     if not config_path:
         return

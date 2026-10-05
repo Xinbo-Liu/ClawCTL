@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Object-reference support for documentation text contracts."""
+"""提供OpenClaw 文档子系统的生产实现。"""
 from __future__ import annotations
 
 from typing import Any
@@ -9,7 +9,7 @@ from openclaw.lib.repo.contracts import repo_contract_relpath
 
 
 class TextContractError(ValueError):
-    """Raised when a documentation text contract is malformed."""
+    """文档文本合同校验失败。"""
 
 
 def _string_list(value: Any) -> list[str]:

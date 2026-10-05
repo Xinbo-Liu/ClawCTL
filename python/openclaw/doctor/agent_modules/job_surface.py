@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
+from typing import Any
 
 from openclaw.control_plane.jobs.surface import inspect_job_surface
 from openclaw.control_plane.registry import load_registry
@@ -62,13 +63,16 @@ def resolve_config_path(
     )
 
 
-def main(argv: list[str] | None = None) -> int:
-    requested_config_path, control_plane_profile = parse_args(list(sys.argv[1:] if argv is None else argv))
-    config_path = resolve_config_path(
-        requested_config_path,
-        control_plane_profile=control_plane_profile,
-    )
-    registry = load_registry(config_path)
+def build_report(registry: dict[str, Any], *, repo_root: Path = ROOT_DIR) -> dict[str, Any]:
+    """检查已加载 registry 中 job manifest 的可派生冗余字段。
+
+    参数：
+        registry（dict[str, Any]）：已完成控制平面合并与校验的 registry。
+        repo_root（Path）：用于规整来源文件相对路径的仓库根目录。
+
+    返回：
+        dict[str, Any]：job 检查详情、违规项和总体状态。
+    """
     items: list[dict[str, object]] = []
     for job_payload in registry.get('jobs', []):
         if not isinstance(job_payload, dict):
@@ -78,20 +82,30 @@ def main(argv: list[str] | None = None) -> int:
             'jobId': str(inspection.get('jobId') or ''),
             'agentRef': str(inspection.get('agentRef') or ''),
             'moduleRef': str(inspection.get('moduleRef') or ''),
-            'path': str(Path(str(inspection.get('sourcePath') or '')).relative_to(ROOT_DIR)),
+            'path': str(Path(str(inspection.get('sourcePath') or '')).relative_to(repo_root)),
             'driftPaths': list(inspection.get('driftPaths') or []),
             'ok': bool(inspection.get('ok')),
         })
     offenders = [item for item in items if not bool(item.get('ok'))]
-    payload = {
+    return {
         'ok': not offenders,
         'jobCount': len(items),
         'offenderCount': len(offenders),
         'offenders': offenders,
         'items': items,
     }
+
+
+def main(argv: list[str] | None = None) -> int:
+    requested_config_path, control_plane_profile = parse_args(list(sys.argv[1:] if argv is None else argv))
+    config_path = resolve_config_path(
+        requested_config_path,
+        control_plane_profile=control_plane_profile,
+    )
+    registry = load_registry(config_path)
+    payload = build_report(registry)
     print(json.dumps(payload, ensure_ascii=False, indent=2))
-    return 0 if not offenders else 1
+    return 0 if bool(payload.get('ok')) else 1
 
 
 if __name__ == '__main__':

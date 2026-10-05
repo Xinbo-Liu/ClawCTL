@@ -11,6 +11,7 @@ from openclaw.lib.runtime.path_resolver import PathResolver
 
 
 class PathResolverInstance(Protocol):
+    """已加载的路径解析器实例。"""
     internal_views: tuple[str, ...]
     roots: dict[str, str]
     entries: dict[str, dict[str, Any]]
@@ -29,6 +30,7 @@ class PathResolverInstance(Protocol):
 
 
 class PathResolverFactory(Protocol):
+    """路径解析器工厂协议。"""
     @staticmethod
     def from_repo_root(repo_root: Path, *, config_path: Path | None = None) -> PathResolverInstance:
         ...

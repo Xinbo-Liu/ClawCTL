@@ -22,6 +22,8 @@ source "$ROOT_DIR/scripts/lib/registry_manifest_probe.sh"
 source "$ROOT_DIR/scripts/lib/repo_contracts.sh"
 # shellcheck source=../lib/docker_host_support_truth.sh
 source "$ROOT_DIR/scripts/lib/docker_host_support_truth.sh"
+# shellcheck source=../lib/docker_mtu_contract.sh
+source "$ROOT_DIR/scripts/lib/docker_mtu_contract.sh"
 
 OFFLINE_MODE=0
 ENV_FILE="${IMAGE_ENV_DEPLOY_ENV_PATH:-$ROOT_DIR/deploy/.env}"
@@ -39,6 +41,12 @@ CENTOS7_MIN_COMPOSE_VERSION=''
 CENTOS7_RECOMMENDED_COMPOSE_VERSION=''
 CENTOS7_REQUIRED_STORAGE_DRIVER=''
 CENTOS7_REQUIRED_COMMANDS=()
+UBUNTU2204_MIN_DOCKER_VERSION=''
+UBUNTU2204_RECOMMENDED_DOCKER_VERSION=''
+UBUNTU2204_MIN_COMPOSE_VERSION=''
+UBUNTU2204_RECOMMENDED_COMPOSE_VERSION=''
+UBUNTU2204_REQUIRED_STORAGE_DRIVER=''
+UBUNTU2204_REQUIRED_COMMANDS=()
 OFFICIAL_GATEWAY_ACCELERATION_REPOS=()
 OFFICIAL_GATEWAY_CANONICAL_REPO=''
 PYTHON_RUNTIME_ACCELERATION_REPOS=()
@@ -49,7 +57,6 @@ PROVIDER_API_ACCELERATION_BASE_URLS=()
 PROVIDER_API_CANONICAL_BASE_URLS=()
 DOCKER_REGISTRY_MIRRORS=()
 OPENCLAW_SUPPLY_CHAIN_SCRIPT="$ROOT_DIR/scripts/images/check_openclaw_supply_chain.sh"
-
 usage() {
   cat <<'USAGE' | sed "s|__HOST_SUPPORT_POLICY__|$HOST_SUPPORT_POLICY_REL_PATH|g"
 用法：
@@ -57,16 +64,16 @@ usage() {
 
 说明：
   - 本脚本只检查系统时间、Docker / Compose / DNS / HTTPS 与宿主机基础前提。
-  - 若宿主机尚未准备完成，先回 docs/getting-started/environment-setup.md 选择对应在线 / 离线准备命令；不要把 --all 当成所有场景的唯一后续动作。
+  - 若宿主机尚未准备完成，先执行 sudo bash ./scripts/setup/prepare_docker_host.sh --os auto --all --network-profile cn 或回 docs/getting-started/environment-setup.md 选择对应在线 / 离线准备命令；不要把 --all 当成所有场景的唯一后续动作。
   - 仓库内 JSON / 供应链真源统一通过 jq + curl 解析；本脚本不准备 host 控制面执行介质。
   - 本脚本不执行容器化 Python 静态治理；进入 host 控制面命令前必须单独执行 prepare_control_plane_medium.sh。
-  - 若 CentOS 7 初始机出现 `Cannot find a valid baseurl for repo: base/7/x86_64`，中国国内网络首轮部署先执行：sudo bash ./scripts/setup/prepare_docker_host.sh --all --network-profile cn；仅修复 repo 时执行：sudo bash ./scripts/setup/prepare_docker_host.sh --repair-centos7-vault-repos --network-profile cn
+  - 若 CentOS 7 legacy 初始机出现 `Cannot find a valid baseurl for repo: base/7/x86_64`，中国国内网络首轮部署先执行：sudo bash ./scripts/setup/prepare_docker_host.sh --os auto --all --network-profile cn；仅修复 repo 时执行：sudo bash ./scripts/setup/prepare_docker_host.sh --os centos7 --repair-centos7-vault-repos --network-profile cn
   - 对带 canonical / acceleration 分层的运行来源，脚本会先验证当前 selected runtime source；OpenClaw Gateway 的 digest 与候选仓库判定统一复用 check_openclaw_supply_chain.sh；Python / Nginx 只验证本地缓存与 Docker 传输链；若启用扩展声明了 provider / API 入口，也会按 active runtime source truth 一并探测。若 selected source 或当前传输链不可用，会继续探测候选来源并给出诊断，但仍阻止继续在线部署。
   - Python / Nginx 中国网络默认 pin 固定为 Daocloud tag@digest；宿主机预检只验证本地缓存与当前 selected source 传输链路，不在此阶段复做精确 tag@digest artifact 判定。
   - 候选 acceleration source 或 Docker registry mirror 探测通过只代表宿主机存在可用网络路径；本脚本保持只读，不改写 deploy env。后续在线 pull 由 pull_images.sh 按 PULL_GATEWAY_CANDIDATE_MODE=auto-switch|fail-fast|off 决定是否写入当前 deploy/.env 的候选覆盖值。
   - 运行后的来源限制由 Nginx allowlist 与基础设施边界证据共同闭合；本脚本只负责进入 bootstrap 前的宿主机前提。
   - private ingress 的 Nginx allowlist 与基础设施边界证据统一在部署后通过 check_ingress_boundary_evidence.sh 落盘。
-  - CentOS 7 宿主机支持策略真源固定为 __HOST_SUPPORT_POLICY__。
+  - Ubuntu 22.04 与 CentOS 7 宿主机支持策略真源固定为 __HOST_SUPPORT_POLICY__。
   - 通过后的默认衔接动作统一查看 docs/getting-started/quickstart.md。
 
 选项：
@@ -101,22 +108,18 @@ done
 IMAGE_ENV_DEPLOY_ENV_PATH="$ENV_FILE"
 export IMAGE_ENV_DEPLOY_ENV_PATH
 image_env_load
-
 fail() {
   local msg="$1"
   local code="${2:-1}"
   echo "[FAIL] $msg" >&2
   exit "$code"
 }
-
 warn() {
   echo "[WARN] $1"
 }
-
 note() {
   echo "[INFO] $1"
 }
-
 check_cmd() {
   local cmd="$1"
   if host_command_exists "$cmd"; then
@@ -124,17 +127,16 @@ check_cmd() {
   fi
   case "$cmd" in
     jq)
-      fail "缺少命令：jq；请先执行 sudo bash ./scripts/setup/prepare_docker_host.sh --install-base-tools" 20
+      fail "缺少命令：jq；请先执行 sudo bash ./scripts/setup/prepare_docker_host.sh --os auto --install-base-tools" 20
       ;;
     docker)
-      fail "缺少命令：docker；已安装 Docker/Compose 的环境请修复 PATH 后继续；未安装环境请人工安装 Docker Engine 与 compose plugin 后复跑；离线目标机请准备离线安装包与 deployment_images_*.tar，再按 image-preparation 文档导入。Ubuntu 22.04 推荐基线只做检测与指引，本脚本不会自动 apt 安装 Docker/Compose。" 20
+      fail "缺少命令：docker；已安装 Docker/Compose 的环境请修复 PATH 后继续；未安装环境请执行 sudo bash ./scripts/setup/prepare_docker_host.sh --os auto --all --network-profile cn 后复跑；离线目标机请准备离线安装包与 deployment_images_*.tar，再按 image-preparation 文档导入。" 20
       ;;
     *)
       fail "缺少命令：$cmd" 20
       ;;
   esac
 }
-
 host_command_path() {
   local cmd="$1"
   local candidate=''
@@ -150,17 +152,14 @@ host_command_path() {
   done
   return 1
 }
-
 host_command_exists() {
   host_command_path "$1" >/dev/null 2>&1
 }
-
 firewalld_zone_list_contains() {
   local zones="$1"
   local expected="$2"
   printf '%s\n' "$zones" | tr ' ' '\n' | grep -Fxq "$expected"
 }
-
 check_firewalld_docker_zone_contract() {
   local zones=''
   local target=''
@@ -179,31 +178,29 @@ check_firewalld_docker_zone_contract() {
   fi
   zones="$(firewall-cmd --permanent --get-zones 2>/dev/null || true)"
   if [[ -z "$zones" ]]; then
-    warn '无法读取 firewalld permanent zone 列表；若后续 Docker bridge / NAT 报 INVALID_ZONE: docker，请先以 root 复跑 prepare_docker_host.sh --open-firewall。'
+    warn '无法读取 firewalld permanent zone 列表；若后续 Docker bridge / NAT 报 INVALID_ZONE: docker，请先以 root 复跑 prepare_docker_host.sh --os auto --open-firewall。'
     return 0
   fi
   if ! firewalld_zone_list_contains "$zones" docker; then
-    fail "firewalld 正在运行，但 permanent docker zone 缺失；Docker compose 创建 bridge 网络时可能报 INVALID_ZONE: docker。请执行 sudo bash ./scripts/setup/prepare_docker_host.sh --open-firewall 后重试；若已执行过 apply_ingress_boundary_rules.sh，Docker/firewalld 修复后还需重新物化 ingress 边界证据。" 35
+    fail "firewalld 正在运行，但 permanent docker zone 缺失；Docker compose 创建 bridge 网络时可能报 INVALID_ZONE: docker。请执行 sudo bash ./scripts/setup/prepare_docker_host.sh --os auto --open-firewall 后重试；若已执行过 apply_ingress_boundary_rules.sh，Docker/firewalld 修复后还需重新物化 ingress 边界证据。" 35
   fi
   set +e
   target="$(firewall-cmd --permanent --zone=docker --get-target 2>/dev/null)"
   target_status=$?
   set -e
   if [[ "$target_status" -ne 0 || -z "$target" ]]; then
-    warn '无法读取 firewalld permanent docker zone target；若后续 Docker bridge / NAT 报 INVALID_ZONE: docker，请先以 root 复跑 prepare_docker_host.sh --open-firewall。'
+    warn '无法读取 firewalld permanent docker zone target；若后续 Docker bridge / NAT 报 INVALID_ZONE: docker，请先以 root 复跑 prepare_docker_host.sh --os auto --open-firewall。'
     return 0
   fi
   if [[ "$target" != "ACCEPT" ]]; then
-    fail "firewalld permanent docker zone target=${target:-<empty>}，应为 ACCEPT；请执行 sudo bash ./scripts/setup/prepare_docker_host.sh --open-firewall 后重试。" 35
+    fail "firewalld permanent docker zone target=${target:-<empty>}，应为 ACCEPT；请执行 sudo bash ./scripts/setup/prepare_docker_host.sh --os auto --open-firewall 后重试。" 35
   fi
   note 'firewalld docker zone 合同通过：permanent zone=docker，target=ACCEPT。'
 }
-
 probe_dns() {
   local host="$1"
   getent hosts "$host" >/dev/null 2>&1
 }
-
 probe_http_status() {
   local url="$1"
   local code=''
@@ -214,12 +211,10 @@ probe_http_status() {
   fi
   return 1
 }
-
 http_status_is_endpoint_reachable() {
   local code="$1"
   [[ "$code" =~ ^[2-4][0-9][0-9]$ ]]
 }
-
 append_named_array_item() {
   local array_name="$1"
   local value="$2"
@@ -239,7 +234,6 @@ append_named_array_item() {
     *) fail "append_named_array_item 不支持的数组名：$array_name" 19 ;;
   esac
 }
-
 print_named_array_items() {
   local array_name="$1"
   case "$array_name" in
@@ -258,7 +252,6 @@ print_named_array_items() {
     *) fail "print_named_array_items 不支持的数组名：$array_name" 19 ;;
   esac
 }
-
 append_unique_array_item() {
   local array_name="$1"
   local value="$2"
@@ -268,7 +261,6 @@ append_unique_array_item() {
   done < <(print_named_array_items "$array_name")
   append_named_array_item "$array_name" "$value"
 }
-
 resolve_path_from_dir() {
   local base_dir="$1"
   local rel_path="$2"
@@ -294,7 +286,6 @@ resolve_path_from_dir() {
     printf '%s/%s\n' "$(pwd)" "$rel_base"
   ) || fail "无法解析相对路径：$rel_path（base=$base_dir）" 19
 }
-
 resolve_extension_root_from_dir() {
   local current="$1"
   local extensions_root="$ROOT_DIR/agent/extensions"
@@ -309,7 +300,6 @@ resolve_extension_root_from_dir() {
   done
   return 1
 }
-
 load_control_plane_extension_state_with_jq() {
   check_cmd jq
   local current="$RESOLVED_CONFIG_PATH"
@@ -348,7 +338,6 @@ load_control_plane_extension_state_with_jq() {
   done
   [[ "${#CONTROL_PLANE_MANIFESTS_DIRS[@]}" -gt 0 ]] || fail "control-plane config 缺少 extensions.manifestsDirs：$RESOLVED_CONFIG_PATH" 19
 }
-
 load_active_runtime_source_strategy_paths() {
   local extension_id='' manifest_path='' fragment_rel='' manifests_dir=''
   ACTIVE_RUNTIME_SOURCE_STRATEGY_PATHS=()
@@ -367,8 +356,6 @@ load_active_runtime_source_strategy_paths() {
     ACTIVE_RUNTIME_SOURCE_STRATEGY_PATHS+=("$(resolve_path_from_dir "$(dirname "$manifest_path")" "$fragment_rel")")
   done
 }
-
-
 load_runtime_source_strategy_with_jq() {
   local strategy_path="$1"
   check_cmd jq
@@ -404,7 +391,6 @@ load_runtime_source_strategy_with_jq() {
   ' "$strategy_path")
   return 0
 }
-
 load_runtime_source_strategy() {
   local strategy_path='' runtime_source_strategy_path=''
   runtime_source_strategy_path="$(repo_contract_path runtime.source_strategy)"
@@ -423,7 +409,6 @@ load_runtime_source_strategy() {
     load_runtime_source_strategy_with_jq "$strategy_path"
   done
 }
-
 hydrate_openclaw_gateway_sources_from_contract() {
   OFFICIAL_GATEWAY_CANONICAL_REPO="$(openclaw_runtime_contract_gateway_canonical_repo)"
   OFFICIAL_GATEWAY_ACCELERATION_REPOS=()
@@ -433,7 +418,6 @@ hydrate_openclaw_gateway_sources_from_contract() {
     append_unique_array_item OFFICIAL_GATEWAY_ACCELERATION_REPOS "$repo"
   done < <(openclaw_runtime_contract_gateway_acceleration_repos)
 }
-
 probe_openclaw_gateway_candidate_repo_detail() {
   local repo="$1"
   local expected_digest="$2"
@@ -454,7 +438,6 @@ probe_openclaw_gateway_candidate_repo_detail() {
   fi
   return "$status"
 }
-
 probe_openclaw_gateway_source_group() {
   local label="$1"
   local fail_code="$2"
@@ -546,8 +529,7 @@ probe_openclaw_gateway_source_group() {
   fi
   fail "$label 不可达：$current_ref（$current_detail）。$guidance" "$fail_code"
 }
-
-docker_hub_repo_host() {
+docker_hub_registry_host() {
   local host="$1"
   case "$host" in
     docker.io|index.docker.io|registry-1.docker.io)
@@ -556,7 +538,6 @@ docker_hub_repo_host() {
   esac
   return 1
 }
-
 load_docker_registry_mirrors() {
   local mirror=''
   while IFS= read -r mirror; do
@@ -566,7 +547,6 @@ load_docker_registry_mirrors() {
     append_unique_array_item DOCKER_REGISTRY_MIRRORS "$mirror"
   done < <(docker info --format '{{range .RegistryConfig.Mirrors}}{{println .}}{{end}}' 2>/dev/null || true)
 }
-
 image_ref_replace_repo() {
   local image_ref="$1"
   local repo="$2"
@@ -588,7 +568,6 @@ image_ref_replace_repo() {
     printf '%s:%s' "$repo" "$tag"
   fi
 }
-
 parse_image_ref() {
   local image_ref="$1"
   local without_digest="$image_ref"
@@ -613,17 +592,14 @@ parse_image_ref() {
 %s
 ' "$host" "$repo_path" "$tag" "$digest"
 }
-
 image_present_locally() {
   local image_ref="$1"
   docker image inspect "$image_ref" >/dev/null 2>&1
 }
-
 http_status_is_registry_base_reachable() {
   local code="$1"
   [[ "$code" == '200' || "$code" == '401' || "$code" == '403' ]]
 }
-
 probe_registry_base_endpoint() {
   local base_url="$1"
   local detail_prefix="$2"
@@ -638,7 +614,6 @@ probe_registry_base_endpoint() {
   fi
   return 1
 }
-
 probe_runtime_image_transport_candidate() {
   local image_ref="$1"
   local prefer_mirrors="${2:-0}"
@@ -646,7 +621,7 @@ probe_runtime_image_transport_candidate() {
   mapfile -t __image_parts < <(parse_image_ref "$image_ref")
   host="${__image_parts[0]}"
   [[ -n "$host" ]] || return 1
-  if docker_hub_repo_host "$host"; then
+  if docker_hub_registry_host "$host"; then
     if [[ "$prefer_mirrors" == '1' ]]; then
       while IFS= read -r mirror; do
         [[ -n "$mirror" ]] || continue
@@ -669,7 +644,6 @@ probe_runtime_image_transport_candidate() {
   printf '%s' "$detail"
   return 0
 }
-
 probe_runtime_image_source_group() {
   local label="$1"
   local fail_code="$2"
@@ -718,11 +692,10 @@ probe_runtime_image_source_group() {
   done
 
   if (( ${#candidate_hits[@]} > 0 )); then
-    fail "$label 当前本地缺少镜像，且 Docker 传输链未就绪：$first_target；已检测到可用候选链路：${candidate_hits[*]}。继续在线部署前，先执行 check_docker_host_readiness.sh 定位 Docker 传输链；中国国内网络首轮部署执行 prepare_docker_host.sh --all --network-profile cn；仍受限时使用离线镜像归档。$guidance" "$fail_code"
+    fail "$label 当前本地缺少镜像，且 Docker 传输链未就绪：$first_target；已检测到可用候选链路：${candidate_hits[*]}。继续在线部署前，先执行 check_docker_host_readiness.sh 定位 Docker 传输链与 MTU；中国国内网络首轮部署执行 prepare_docker_host.sh --os auto --all --network-profile cn；仍受限时使用离线镜像归档。$guidance" "$fail_code"
   fi
   fail "$label 当前本地缺少镜像，且 Docker 传输链未就绪；已依次尝试：${attempted[*]}。$guidance" "$fail_code"
 }
-
 probe_endpoint_candidate() {
   local endpoint="$1"
   local host='' code=''
@@ -736,7 +709,6 @@ probe_endpoint_candidate() {
   fi
   return 1
 }
-
 probe_source_group() {
   local label="$1"
   local fail_code="$2"
@@ -777,7 +749,6 @@ probe_source_group() {
   fi
   fail "$label 不可达；已依次尝试：${attempted[*]}。$guidance" "$fail_code"
 }
-
 normalize_semver() {
   local raw="$1"
   raw="${raw#v}"
@@ -785,7 +756,6 @@ normalize_semver() {
   raw="${raw%%+*}"
   echo "$raw"
 }
-
 semver_gte() {
   local current="$1"
   local minimum="$2"
@@ -793,6 +763,23 @@ semver_gte() {
   [[ "$(printf '%s\n%s\n' "$minimum" "$current" | sort -V | head -n 1)" == "$minimum" ]]
 }
 
+# 职责：判断 Docker storage driver 是否位于允许集合。
+storage_driver_allowed() {
+  local current="$1"
+  shift || true
+  local allowed=''
+  for allowed in "$@"; do
+    [[ -n "$allowed" ]] || continue
+    [[ "$current" == "$allowed" ]] && return 0
+  done
+  return 1
+}
+
+# 职责：以逗号拼接数组，供错误信息展示。
+join_csv() {
+  local IFS=','
+  printf '%s\n' "$*"
+}
 load_host_support_policy() {
   [[ -f "$HOST_SUPPORT_POLICY_PATH" ]] || fail "缺少 CentOS 7 宿主机支持策略真源：$HOST_SUPPORT_POLICY_PATH" 19
   check_cmd jq
@@ -801,15 +788,30 @@ load_host_support_policy() {
   CENTOS7_MIN_COMPOSE_VERSION="$(docker_host_support_supported_centos7_section_value "$HOST_SUPPORT_POLICY_PATH" docker_compose minimum '')"
   CENTOS7_RECOMMENDED_COMPOSE_VERSION="$(docker_host_support_supported_centos7_section_value "$HOST_SUPPORT_POLICY_PATH" docker_compose recommended '')"
   CENTOS7_REQUIRED_STORAGE_DRIVER="$(docker_host_support_supported_centos7_scalar "$HOST_SUPPORT_POLICY_PATH" storage_driver_required '')"
+  mapfile -t CENTOS7_ALLOWED_STORAGE_DRIVERS < <(jq -r '.policies.supported_centos7.storage_drivers_allowed[]? // empty' "$HOST_SUPPORT_POLICY_PATH")
+  if ((${#CENTOS7_ALLOWED_STORAGE_DRIVERS[@]} == 0)) && [[ -n "$CENTOS7_REQUIRED_STORAGE_DRIVER" ]]; then
+    CENTOS7_ALLOWED_STORAGE_DRIVERS=("$CENTOS7_REQUIRED_STORAGE_DRIVER")
+  fi
   mapfile -t CENTOS7_REQUIRED_COMMANDS < <(jq -r '.policies.supported_centos7.required_commands[]? // empty' "$HOST_SUPPORT_POLICY_PATH")
+  UBUNTU2204_MIN_DOCKER_VERSION="$(docker_host_support_policy_section_value "$HOST_SUPPORT_POLICY_PATH" supported_ubuntu2204 docker_server minimum '')"
+  UBUNTU2204_RECOMMENDED_DOCKER_VERSION="$(docker_host_support_policy_section_value "$HOST_SUPPORT_POLICY_PATH" supported_ubuntu2204 docker_server recommended '')"
+  UBUNTU2204_MIN_COMPOSE_VERSION="$(docker_host_support_policy_section_value "$HOST_SUPPORT_POLICY_PATH" supported_ubuntu2204 docker_compose minimum '')"
+  UBUNTU2204_RECOMMENDED_COMPOSE_VERSION="$(docker_host_support_policy_section_value "$HOST_SUPPORT_POLICY_PATH" supported_ubuntu2204 docker_compose recommended '')"
+  UBUNTU2204_REQUIRED_STORAGE_DRIVER="$(jq -r '.policies.supported_ubuntu2204.storage_driver_required // empty' "$HOST_SUPPORT_POLICY_PATH")"
+  mapfile -t UBUNTU2204_ALLOWED_STORAGE_DRIVERS < <(jq -r '.policies.supported_ubuntu2204.storage_drivers_allowed[]? // empty' "$HOST_SUPPORT_POLICY_PATH")
+  if ((${#UBUNTU2204_ALLOWED_STORAGE_DRIVERS[@]} == 0)) && [[ -n "$UBUNTU2204_REQUIRED_STORAGE_DRIVER" ]]; then
+    UBUNTU2204_ALLOWED_STORAGE_DRIVERS=("$UBUNTU2204_REQUIRED_STORAGE_DRIVER")
+  fi
+  mapfile -t UBUNTU2204_REQUIRED_COMMANDS < <(docker_host_support_policy_required_commands "$HOST_SUPPORT_POLICY_PATH" supported_ubuntu2204)
   [[ -n "$CENTOS7_MIN_DOCKER_VERSION" ]] || fail "CentOS 7 宿主机支持策略缺少 docker_server.minimum：$HOST_SUPPORT_POLICY_PATH" 19
   [[ -n "$CENTOS7_MIN_COMPOSE_VERSION" ]] || fail "CentOS 7 宿主机支持策略缺少 docker_compose.minimum：$HOST_SUPPORT_POLICY_PATH" 19
-  [[ -n "$CENTOS7_REQUIRED_STORAGE_DRIVER" ]] || fail "CentOS 7 宿主机支持策略缺少 storage_driver_required：$HOST_SUPPORT_POLICY_PATH" 19
+  ((${#CENTOS7_ALLOWED_STORAGE_DRIVERS[@]} > 0)) || fail "CentOS 7 宿主机支持策略缺少 storage_driver_required/storage_drivers_allowed：$HOST_SUPPORT_POLICY_PATH" 19
   ((${#CENTOS7_REQUIRED_COMMANDS[@]} > 0)) || fail "CentOS 7 宿主机支持策略缺少 required_commands：$HOST_SUPPORT_POLICY_PATH" 19
+  [[ -n "$UBUNTU2204_MIN_DOCKER_VERSION" ]] || fail "Ubuntu 22.04 宿主机支持策略缺少 docker_server.minimum：$HOST_SUPPORT_POLICY_PATH" 19
+  [[ -n "$UBUNTU2204_MIN_COMPOSE_VERSION" ]] || fail "Ubuntu 22.04 宿主机支持策略缺少 docker_compose.minimum：$HOST_SUPPORT_POLICY_PATH" 19
+  ((${#UBUNTU2204_ALLOWED_STORAGE_DRIVERS[@]} > 0)) || fail "Ubuntu 22.04 宿主机支持策略缺少 storage_driver_required/storage_drivers_allowed：$HOST_SUPPORT_POLICY_PATH" 19
+  ((${#UBUNTU2204_REQUIRED_COMMANDS[@]} > 0)) || fail "Ubuntu 22.04 宿主机支持策略缺少 required_commands：$HOST_SUPPORT_POLICY_PATH" 19
 }
-
-
-
 extract_host() {
   local raw="$1"
   local host="$raw"
@@ -822,7 +824,6 @@ extract_host() {
   host="${host##*@}"
   echo "${host%%:*}"
 }
-
 detect_host_mode() {
   local os_id="" version_id="" pretty=""
   if [[ -f /etc/os-release ]]; then
@@ -843,21 +844,62 @@ detect_host_mode() {
     HOST_OS_PRETTY="${pretty:-CentOS Linux 7}"
     return
   fi
+  if [[ "$os_id" == "ubuntu" && "$version_id" == 22.04* ]]; then
+    HOST_MODE=supported_ubuntu2204
+    HOST_OS_PRETTY="${pretty:-Ubuntu 22.04}"
+    return
+  fi
   HOST_MODE=recommended
   HOST_OS_PRETTY="${pretty:-unknown}"
 }
-
 require_cmd_for_support_contract() {
   local cmd="$1"
-  host_command_exists "$cmd" || fail "CentOS 7 宿主机支持策略要求存在命令：$cmd" 26
+  local label="${2:-宿主机支持策略}"
+  host_command_exists "$cmd" || fail "$label 要求存在命令：$cmd" 26
 }
-
+check_docker_mtu_contract() {
+  local host_mtu='' daemon_mtu='' network_rows='' network='' network_mtu='' network_source='' blocking=0
+  host_mtu="$(openclaw_docker_mtu_host_default_route_mtu || true)"
+  if [[ -z "$host_mtu" ]]; then
+    warn '无法读取宿主默认路由 MTU；跳过 Docker MTU 合同检查。'
+    return 0
+  fi
+  note "宿主默认路由 MTU: $host_mtu"
+  daemon_mtu="$(openclaw_docker_mtu_daemon_json_value /etc/docker/daemon.json || true)"
+  if [[ "$daemon_mtu" =~ ^[0-9]+$ ]]; then
+    note "Docker daemon mtu: $daemon_mtu"
+    if (( daemon_mtu > host_mtu )); then
+      warn "Docker daemon mtu=$daemon_mtu 高于宿主默认路由 MTU=$host_mtu。"
+      blocking=1
+    fi
+  elif (( host_mtu < 1500 )); then
+    warn "宿主默认路由 MTU=$host_mtu 低于 1500，但 Docker daemon 未声明 mtu。"
+    blocking=1
+  else
+    note 'Docker daemon 未声明 mtu；宿主默认路由 MTU >= 1500，允许继续。'
+  fi
+  network_rows="$(openclaw_docker_mtu_bridge_network_rows "$daemon_mtu" || true)"
+  while IFS=$'\t' read -r network network_mtu network_source; do
+    [[ -n "$network" ]] || continue
+    note "Docker bridge network MTU: $network=$network_mtu source=$network_source"
+    if [[ "$network_mtu" =~ ^[0-9]+$ && "$network_mtu" -gt "$host_mtu" ]]; then
+      warn "Docker bridge network $network MTU=$network_mtu 高于宿主默认路由 MTU=$host_mtu。"
+      blocking=1
+    fi
+  done <<< "$network_rows"
+  if [[ "$blocking" == "1" ]]; then
+    fail "Docker MTU 合同未闭合；请执行 sudo OPENCLAW_DOCKER_NETWORK_MTU=$host_mtu bash ./scripts/setup/prepare_docker_host.sh --os auto --configure-daemon，并重新创建受影响 Docker bridge network 后重试。" 36
+  fi
+  note 'Docker MTU 合同通过。'
+}
 main() {
 detect_host_mode
 note "宿主机基线识别：$HOST_OS_PRETTY"
 note "HOST_MODE=$HOST_MODE"
 if [[ "$HOST_MODE" == "supported_centos7" ]]; then
   note "当前使用 CentOS 7 宿主机支持策略；必须通过额外宿主机预检后方可进入部署。"
+elif [[ "$HOST_MODE" == "supported_ubuntu2204" ]]; then
+  note "当前使用 Ubuntu 22.04 推荐宿主机支持策略；必须通过额外宿主机预检后方可进入部署。"
 else
   note "当前使用推荐宿主机基线。"
 fi
@@ -889,14 +931,16 @@ fi
 check_firewalld_docker_zone_contract
 
 if ! docker compose version >/dev/null 2>&1; then
-  fail "缺少 docker compose 插件，或插件不可用。已安装环境请修复 Docker CLI plugin 路径后继续；未安装环境请人工安装 compose plugin；离线环境请先准备 compose plugin 离线包。本脚本不在 Ubuntu 22.04 上自动 apt 安装 Docker/Compose。" 23
+  fail "缺少 docker compose 插件，或插件不可用。已安装环境请修复 Docker CLI plugin 路径后继续；未安装环境请执行 sudo bash ./scripts/setup/prepare_docker_host.sh --os auto --install-compose；离线环境请先准备 compose plugin 离线包。" 23
 fi
+
+check_docker_mtu_contract
 
 load_docker_registry_mirrors
 if (( ${#DOCKER_REGISTRY_MIRRORS[@]} > 0 )); then
   note "Docker registry mirrors: ${DOCKER_REGISTRY_MIRRORS[*]}"
 else
-  warn "当前 Docker daemon 未报告 registry-mirrors；若目标环境依赖中国网络镜像加速，首轮部署先执行 prepare_docker_host.sh --all --network-profile cn，单独修复 daemon 时执行 prepare_docker_host.sh --configure-daemon。"
+  warn "当前 Docker daemon 未报告 registry-mirrors；若目标环境依赖中国网络镜像加速，首轮部署先执行 prepare_docker_host.sh --os auto --all --network-profile cn，单独修复 daemon 或 MTU 时执行 prepare_docker_host.sh --os auto --configure-daemon。"
 fi
 
 if [[ "$OFFLINE_MODE" == "0" ]]; then
@@ -951,9 +995,9 @@ if [[ "$OFFLINE_MODE" == "0" ]]; then
     append_unique_array_item source_candidates_provider_api "endpoint|$endpoint"
   done
 
-  probe_openclaw_gateway_source_group "OpenClaw Gateway 镜像来源" 25 "中国国内网络首轮部署先执行 sudo bash ./scripts/setup/prepare_docker_host.sh --all --network-profile cn；readiness 只区分 selected source 不可达、candidate 可用与 digest 不一致。后续 pull_images.sh 默认用 PULL_GATEWAY_CANDIDATE_MODE=auto-switch 只改当前 deploy/.env；selected/candidate 都不可达时使用离线镜像归档。"
-  probe_runtime_image_source_group "Python 运行镜像来源" 25 source_candidates_python "若当前本地尚未准备 OPENCLAW_RUNTIME_PYTHON_IMAGE，中国国内网络先确认 sudo bash ./scripts/setup/prepare_docker_host.sh --all --network-profile cn 已完成；在线补齐执行 pull_images.sh，受限网络执行 load_deployment_images.sh 或使用离线镜像归档。"
-  probe_runtime_image_source_group "Nginx 运行镜像来源" 25 source_candidates_nginx "若当前本地尚未准备 NGINX_IMAGE，中国国内网络先确认 sudo bash ./scripts/setup/prepare_docker_host.sh --all --network-profile cn 已完成；在线补齐执行 pull_images.sh，受限网络执行 load_deployment_images.sh 或使用离线镜像归档。"
+  probe_openclaw_gateway_source_group "OpenClaw Gateway 镜像来源" 25 "中国国内网络首轮部署先执行 sudo bash ./scripts/setup/prepare_docker_host.sh --os auto --all --network-profile cn；readiness 只区分 selected source 不可达、candidate 可用与 digest 不一致，并在部署前检查 Docker MTU。后续 pull_images.sh 默认用 PULL_GATEWAY_CANDIDATE_MODE=auto-switch 切换当前 deploy/.env 的 Gateway 镜像引用、记录来源选择，并在拉取完成后移除未被当前部署选用的 Gateway 来源标签；selected/candidate 都不可达时使用离线镜像归档。"
+  probe_runtime_image_source_group "Python 运行镜像来源" 25 source_candidates_python "若当前本地尚未准备 OPENCLAW_RUNTIME_PYTHON_IMAGE，中国国内网络先确认 sudo bash ./scripts/setup/prepare_docker_host.sh --os auto --all --network-profile cn 已完成；在线补齐执行 pull_images.sh，受限网络执行 load_deployment_images.sh 或使用离线镜像归档。"
+  probe_runtime_image_source_group "Nginx 运行镜像来源" 25 source_candidates_nginx "若当前本地尚未准备 NGINX_IMAGE，中国国内网络先确认 sudo bash ./scripts/setup/prepare_docker_host.sh --os auto --all --network-profile cn 已完成；在线补齐执行 pull_images.sh，受限网络执行 load_deployment_images.sh 或使用离线镜像归档。"
   if (( ${#source_candidates_provider_api[@]} > 0 )); then
     probe_source_group "启用的 provider/API 入口" 25 source_candidates_provider_api "provider/API 入口真源来自当前 active profile 的 deploy env schema 与 extension.env/site.env 输入；本检查只校验网络连通性，不把 base URL 当作业务健康检查接口。"
   else
@@ -1006,9 +1050,9 @@ fi
 
 if [[ "$HOST_MODE" == "supported_centos7" ]]; then
   for cmd in "${CENTOS7_REQUIRED_COMMANDS[@]}"; do
-    require_cmd_for_support_contract "$cmd"
+    require_cmd_for_support_contract "$cmd" "CentOS 7 宿主机支持策略"
   done
-  [[ "$storage_driver" == "$CENTOS7_REQUIRED_STORAGE_DRIVER" ]] || fail "CentOS 7 宿主机支持策略要求 Docker Storage Driver=${CENTOS7_REQUIRED_STORAGE_DRIVER}，当前：${storage_driver:-<empty>}" 30
+  storage_driver_allowed "$storage_driver" "${CENTOS7_ALLOWED_STORAGE_DRIVERS[@]}" || fail "CentOS 7 宿主机支持策略要求 Docker Storage Driver ∈ [$(join_csv "${CENTOS7_ALLOWED_STORAGE_DRIVERS[@]}")]，当前：${storage_driver:-<empty>}" 30
   [[ -n "$server_version" ]] || fail "CentOS 7 宿主机支持策略要求可读取 Docker Server Version" 31
   [[ -n "$compose_version" ]] || fail "CentOS 7 宿主机支持策略要求可读取 Docker Compose Version" 32
   normalized_server_version="$(normalize_semver "$server_version")"
@@ -1023,6 +1067,27 @@ if [[ "$HOST_MODE" == "supported_centos7" ]]; then
   fi
   note "CentOS 7 宿主机支持策略已按真源校验：policy=$HOST_SUPPORT_POLICY_PATH，Docker>=${CENTOS7_MIN_DOCKER_VERSION}，Compose>=${CENTOS7_MIN_COMPOSE_VERSION}"
   note "CentOS 7 宿主机支持策略预检通过。"
+fi
+
+if [[ "$HOST_MODE" == "supported_ubuntu2204" ]]; then
+  for cmd in "${UBUNTU2204_REQUIRED_COMMANDS[@]}"; do
+    require_cmd_for_support_contract "$cmd" "Ubuntu 22.04 宿主机支持策略"
+  done
+  storage_driver_allowed "$storage_driver" "${UBUNTU2204_ALLOWED_STORAGE_DRIVERS[@]}" || fail "Ubuntu 22.04 宿主机支持策略要求 Docker Storage Driver ∈ [$(join_csv "${UBUNTU2204_ALLOWED_STORAGE_DRIVERS[@]}")]，当前：${storage_driver:-<empty>}" 30
+  [[ -n "$server_version" ]] || fail "Ubuntu 22.04 宿主机支持策略要求可读取 Docker Server Version" 31
+  [[ -n "$compose_version" ]] || fail "Ubuntu 22.04 宿主机支持策略要求可读取 Docker Compose Version" 32
+  normalized_server_version="$(normalize_semver "$server_version")"
+  normalized_compose_version="$(normalize_semver "$compose_version")"
+  semver_gte "$normalized_server_version" "$UBUNTU2204_MIN_DOCKER_VERSION" || fail "Ubuntu 22.04 宿主机支持策略要求 Docker Server Version >= ${UBUNTU2204_MIN_DOCKER_VERSION}，当前：${server_version:-<empty>}" 33
+  semver_gte "$normalized_compose_version" "$UBUNTU2204_MIN_COMPOSE_VERSION" || fail "Ubuntu 22.04 宿主机支持策略要求 Docker Compose Version >= ${UBUNTU2204_MIN_COMPOSE_VERSION}，当前：${compose_version:-<empty>}" 34
+  if [[ -n "$UBUNTU2204_RECOMMENDED_DOCKER_VERSION" && "$normalized_server_version" != "$UBUNTU2204_RECOMMENDED_DOCKER_VERSION" ]]; then
+    warn "Ubuntu 22.04 宿主机支持策略当前推荐 Docker Server Version=${UBUNTU2204_RECOMMENDED_DOCKER_VERSION}；当前为 ${server_version:-<empty>}。该版本仍允许继续，但不属于当前建议组合。"
+  fi
+  if [[ -n "$UBUNTU2204_RECOMMENDED_COMPOSE_VERSION" && "$normalized_compose_version" != "$UBUNTU2204_RECOMMENDED_COMPOSE_VERSION" ]]; then
+    warn "Ubuntu 22.04 宿主机支持策略当前推荐 Docker Compose Version=${UBUNTU2204_RECOMMENDED_COMPOSE_VERSION}；当前为 ${compose_version:-<empty>}。该版本仍允许继续，但不属于当前建议组合。"
+  fi
+  note "Ubuntu 22.04 宿主机支持策略已按真源校验：policy=$HOST_SUPPORT_POLICY_PATH，Docker>=${UBUNTU2204_MIN_DOCKER_VERSION}，Compose>=${UBUNTU2204_MIN_COMPOSE_VERSION}"
+  note "Ubuntu 22.04 宿主机支持策略预检通过。"
 fi
 
 note "宿主机前提检查完成；compose 渲染需在 bootstrap 之后单独执行。"

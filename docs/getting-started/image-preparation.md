@@ -37,17 +37,17 @@ bash ./scripts/doctor/check_docker_host_readiness.sh --offline
 - 目标机允许执行 `docker pull`；
 - 不需要把镜像归档转交到封闭网络。
 
-中国国内网络首轮部署在进入在线镜像路线前，先完成宿主机网络 profile：
+中国国内网络首次部署在进入在线镜像路线前，先完成宿主机网络 profile：
 
 ```bash
-sudo bash ./scripts/setup/prepare_docker_host.sh --all --network-profile cn
+sudo bash ./scripts/setup/prepare_docker_host.sh --os auto --all --network-profile cn
 bash ./scripts/doctor/check_docker_host_readiness.sh
 ```
 
 说明：
 
-- `--network-profile cn` 会把 CentOS 7 vault repo 与 Docker Yum repo 固定到 `aliyun_cn`，并继续写入 docker host 真源中的 registry-mirrors；
-- Python / Nginx 默认 pin 已固定为 Daocloud tag@digest；Docker daemon registry-mirrors 只作为补充传输加速；
+- `--network-profile cn` 会写入 docker host 真源中的 registry-mirrors；CentOS 7 legacy 路径还会把 vault repo 与 Docker Yum repo 固定到 `aliyun_cn`；
+- Python / Nginx 默认 pin 使用 Daocloud tag@digest；Docker daemon registry-mirrors 只作为补充传输加速；
 - official Gateway 默认 pin 使用 GHCR canonical 来源；GHCR 在中国国内网络不可达时，先按候选镜像站验证链切换，不直接改 mutable tag。
 
 ### 直接走离线路线
@@ -77,7 +77,7 @@ bash ./scripts/images/check_openclaw_overlay_contract.sh
 
 说明：
 
-- `show_deployment_image_status.sh` 用来核对当前 pin、compose 引用与本地镜像可用性；
+- `show_deployment_image_status.sh` 用来核对当前 pin、compose 引用、本地镜像可用性、Gateway 来源选择记录，以及等值 RepoDigest 来源标签；
 - `check_openclaw_overlay_contract.sh` 用来确认 compose 没有引入额外镜像链。
 
 ## 在线准备路径
@@ -112,9 +112,9 @@ bash ./scripts/images/verify_gateway_browser.sh
 
 说明：
 
-- `pull_images.sh` 默认使用 `PULL_GATEWAY_CANDIDATE_MODE=auto-switch`；当目标机处于 CN profile 且 official GHCR Gateway 有等值 candidate 时，只改写当前 `deploy/.env` 的 `OPENCLAW_OFFICIAL_GATEWAY_IMAGE=<candidate>:<tag>@<digest>`，并写出 `state/image_pull/gateway_source_selection.json`。`config/image_pins/openclaw.env` 仍保留 canonical official pin。
+- `pull_images.sh` 默认使用 `PULL_GATEWAY_CANDIDATE_MODE=auto-switch`；当目标机处于 CN profile 且 official GHCR Gateway 有等值 candidate 时，仅改写当前 `deploy/.env` 的 Gateway 镜像引用：`OPENCLAW_OFFICIAL_GATEWAY_IMAGE=<candidate>:<tag>@<digest>`，并写出 `state/image_pull/gateway_source_selection.json`。`config/image_pins/openclaw.env` 仍保留 canonical official pin；拉取完成后默认移除未被当前部署选用的 Gateway canonical/candidate 来源标签。如需保留本地多来源引用，设置 `PULL_CLEANUP_GATEWAY_SOURCE_ALIASES=0`；`show_deployment_image_status.sh` 会把仍存在的等值多来源状态标为 `alternate-registry-same-digest`。
 - 若 `state/image_pull/gateway_source_selection.json` 记录 `envRewritten=true`，必须在 `pull_images.sh` 后重新加载镜像 env 并重新渲染 `state/openclaw/control_plane/setup/docker-compose.effective.yml`；`one_click_deploy.sh` 会自动完成这一步，手工分步执行时必须显式执行上面的 `runtime mounts sync-compose`。
-- `check_deployment_image_contract.sh --compose-file ... --require-local` 会比较最终 compose 实际 image refs 与 selected refs，并在 `docker compose up` 前区分 candidate 已拉取但 compose 仍指 canonical、selected ref 未拉取、digest 不一致、registry 不可达，或 verified local refs 的合同 image id 证明缺失/不匹配。
+- `check_deployment_image_contract.sh --compose-file ... --require-local` 会比较最终 compose 实际 image refs 与选定镜像引用，并在 `docker compose up` 前区分 candidate 已拉取但 compose 仍指 canonical、当前选定镜像引用未拉取、digest 不一致、registry 不可达，或 verified local refs 的合同 image id 证明缺失/不匹配。
 - `PULL_GATEWAY_CANDIDATE_MODE=fail-fast` 会在发现等值 candidate 后失败并保留当前 env；`PULL_GATEWAY_CANDIDATE_MODE=off` 会跳过 candidate 判定。
 - `prepare_control_plane_medium.sh` 是 host 控制面执行介质的唯一显式入口；其内部统一委托 `ensure_control_plane_image.sh` 先复用本地 `OPENCLAW_CONTROL_PLANE_IMAGE`，本地缺失时先导入显式指定或自动发现的 `state/image_artifacts/deployment_images_*.tar`，归档未命中时再执行网络拉取。
 - 在线目标机切换到离线归档时，host 控制面入口由 `prepare_control_plane_medium.sh` 统一完成控制面镜像准备。
@@ -237,7 +237,7 @@ bash ./scripts/images/check_openclaw_release.sh
 bash ./scripts/doctor/check_docker_host_readiness.sh
 ```
 
-中国国内网络先确认宿主机已经执行 `sudo bash ./scripts/setup/prepare_docker_host.sh --all --network-profile cn`；默认在线拉取会在等值 candidate 可用时自动切换当前 `deploy/.env`，并写出 `state/image_pull/gateway_source_selection.json`。若 `check_docker_host_readiness.sh` 报 selected source 不可达但 candidate 可用，直接复跑 `pull_images.sh`；若 selected / candidate source 都不可达，不要继续硬拉，直接切换到离线路线。
+中国国内网络先确认宿主机已经执行 `sudo bash ./scripts/setup/prepare_docker_host.sh --os auto --all --network-profile cn`；默认在线拉取会在等值 candidate 可用时切换当前 `deploy/.env` 的 Gateway 镜像引用，写出 `state/image_pull/gateway_source_selection.json`，并在拉取完成后移除未被当前部署选用的 Gateway 来源标签。若 `check_docker_host_readiness.sh` 报 selected source 不可达但 candidate 可用，直接复跑 `pull_images.sh`；若 selected / candidate source 都不可达，不要继续硬拉，直接切换到离线路线。
 
 ### 覆盖合同失败
 
@@ -246,7 +246,7 @@ bash ./scripts/images/check_deployment_image_contract.sh --env-file deploy/.env 
 bash ./scripts/runtime/show_runtime_compose_config.sh
 ```
 
-先确认 compose 只引用 `source_strategy` 声明的 compose runtime 镜像集合，并确认控制面执行介质由 `OPENCLAW_CONTROL_PLANE_IMAGE` 独立治理。若提示 candidate 已拉取但 compose 仍指 canonical，重新加载镜像 env 并重渲染 effective compose；若提示 final compose image ref 本地不存在，先补拉 selected ref 或导入离线归档，不要等到 `docker_compose_up` 才失败。
+先确认 compose 只引用 `source_strategy` 声明的 compose runtime 镜像集合，并确认控制面执行介质由 `OPENCLAW_CONTROL_PLANE_IMAGE` 独立治理。若提示 candidate 已拉取但 compose 仍指 canonical，重新加载镜像 env 并重渲染 effective compose；若提示 final compose image ref 本地不存在，先补拉当前选定镜像引用或导入离线归档，不要等到 `docker_compose_up` 才失败。
 
 ### 浏览器校验失败
 

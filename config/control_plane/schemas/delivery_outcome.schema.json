@@ -1,0 +1,279 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://openclaw.local/control-plane/delivery_outcome.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "jobId",
+    "schedulerRunId",
+    "businessRunId",
+    "operation",
+    "status",
+    "failureClass",
+    "statusSignals",
+    "evidence",
+    "recoveries",
+    "details"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "type": "integer",
+      "const": 1
+    },
+    "jobId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "schedulerRunId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "businessRunId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "operation": {
+      "type": "string",
+      "enum": [
+        "send",
+        "retry",
+        "operator_verify"
+      ]
+    },
+    "status": {
+      "$ref": "#/definitions/status"
+    },
+    "failureClass": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "statusSignals": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "evidence": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/evidence"
+      }
+    },
+    "recoveries": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/recovery"
+      }
+    },
+    "details": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "targetOutcomes"
+      ],
+      "properties": {
+        "targetOutcomes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/targetOutcome"
+          }
+        }
+      }
+    }
+  },
+  "definitions": {
+    "status": {
+      "type": "string",
+      "enum": [
+        "sent",
+        "noop",
+        "retry_pending",
+        "rate_limited",
+        "failed",
+        "blocked",
+        "dry_run"
+      ]
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifactId",
+        "relativePath",
+        "sha256",
+        "generatedAt"
+      ],
+      "properties": {
+        "artifactId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "relativePath": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "generatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "recovery": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ofJobId",
+        "ofSchedulerRunId",
+        "businessRunId"
+      ],
+      "properties": {
+        "ofJobId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "ofSchedulerRunId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "businessRunId": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "targetOutcome": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "targetId",
+        "completionRole",
+        "status",
+        "reasonCode",
+        "proofType",
+        "evidenceRefs"
+      ],
+      "properties": {
+        "targetId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "completionRole": {
+          "type": "string",
+          "enum": [
+            "required",
+            "advisory"
+          ]
+        },
+        "status": {
+          "$ref": "#/definitions/status"
+        },
+        "reasonCode": {
+          "type": "string",
+          "minLength": 1
+        },
+        "proofType": {
+          "type": "string",
+          "enum": [
+            "provider_ack",
+            "operator_attestation",
+            "prior_sent",
+            "attempt_record",
+            "dry_run_record",
+            "none"
+          ]
+        },
+        "evidenceRefs": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "providerAck": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "httpStatus": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 599
+            },
+            "businessCode": {
+              "type": [
+                "string",
+                "integer",
+                "null"
+              ]
+            }
+          }
+        },
+        "priorSentProof": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "schedulerRunId",
+            "businessRunId",
+            "targetId",
+            "contentSha256",
+            "artifactPath"
+          ],
+          "properties": {
+            "schedulerRunId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "businessRunId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "targetId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "contentSha256": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "artifactPath": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "operatorAttestation": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "attemptSchedulerRunId",
+            "contentSha256",
+            "artifactPath"
+          ],
+          "properties": {
+            "attemptSchedulerRunId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "contentSha256": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "artifactPath": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      }
+    }
+  }
+}

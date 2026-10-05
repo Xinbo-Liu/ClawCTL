@@ -1,6 +1,9 @@
+"""为生成 Markdown 表格提供源码显示宽度对齐，并保留代码围栏外的非表格正文。"""
+
 from __future__ import annotations
 
 import re
+import unicodedata
 
 SEPARATOR_CELL_RE = re.compile(r'^:?-{3,}:?$')
 
@@ -83,7 +86,38 @@ def _extract_indent(line: str) -> str:
 
 
 def _display_width(text: str) -> int:
-    return len(text)
+    """按等宽显示列计算单元格宽度，中文/全角双宽并处理常见 emoji 修饰与连接组合。
+
+    参数：
+        text（str）：原始 Markdown 单元格源码，包含链接或内联代码的标记字符。
+
+    返回：
+        int：显示列数；组合标记和格式字符不单独占列，emoji 变体、连接符及肤色修饰并入前一字符簇。
+    """
+    width = 0
+    cluster_width = 0
+    cluster_base = ''
+    join_next = False
+    for char in text:
+        category = unicodedata.category(char)
+        if char == '\ufe0f' and cluster_base and unicodedata.category(cluster_base) in {'So', 'Sm', 'Sk'}:
+            cluster_width = max(cluster_width, 2)
+            continue
+        if '\U0001f3fb' <= char <= '\U0001f3ff' and cluster_width:
+            continue
+        if category in {'Mn', 'Mc', 'Me', 'Cf'}:
+            if char == '\u200d' and cluster_width:
+                join_next = True
+            continue
+        char_width = 2 if unicodedata.east_asian_width(char) in {'W', 'F'} else 1
+        if join_next:
+            cluster_width = max(cluster_width, char_width)
+            join_next = False
+        else:
+            width += cluster_width
+            cluster_width = char_width
+            cluster_base = char
+    return width + cluster_width
 
 
 def _parse_alignment(separator_cell: str) -> str:
@@ -149,7 +183,7 @@ def _format_table_block(lines: list[str], start_index: int) -> tuple[list[str], 
         rows.append(row_cells)
         cursor += 1
 
-    widths = [1] * len(header_cells)
+    widths = [{'left': 2, 'right': 2, 'center': 3}.get(alignment, 1) for alignment in alignments]
     for row in rows:
         for index, cell in enumerate(row):
             widths[index] = max(widths[index], _display_width(cell))
@@ -166,6 +200,14 @@ def _format_table_block(lines: list[str], start_index: int) -> tuple[list[str], 
 
 
 def format_markdown_tables(text: str) -> str:
+    """按显示宽度重排 Markdown 表格，并保持其他文本、围栏和文档换行约定。
+
+    参数：
+        text（str）：完整 Markdown 或独立生成区块。
+
+    返回：
+        str：对齐后的 Markdown；重复格式化返回相同内容，代码围栏内的示例表格不改写。
+    """
     newline = '\r\n' if '\r\n' in text else '\n'
     trailing_newline = text.endswith(('\n', '\r'))
     lines = text.splitlines()

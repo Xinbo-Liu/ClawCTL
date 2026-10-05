@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Static guard for the CentOS 7 host shell entrypoints that remain supported."""
+"""提供OpenClaw doctor子系统的生产实现。"""
 from __future__ import annotations
 
 import argparse
@@ -19,6 +19,7 @@ DEFAULT_CONFIG_PATH = repo_contract_path('governance.centos7_host_shell_guard')
 
 @dataclass(frozen=True)
 class Rule:
+    """CentOS 7 shell 兼容性规则。"""
     section: str
     rule_id: str
     description: str

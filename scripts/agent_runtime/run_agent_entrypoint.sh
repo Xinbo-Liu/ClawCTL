@@ -20,7 +20,6 @@ if [[ -z "$AGENT_REF" ]]; then
   exit 2
 fi
 shift || true
-
 resolve_host_agent_config_path() {
   if [[ -n "${OPENCLAW_CONTROL_PLANE_SERVICE_CONFIG_PATH:-}" || -n "${OPENCLAW_CONTROL_PLANE_PROFILE:-}" ]]; then
     openclaw_control_plane_resolve_config_path agent_platform
@@ -28,7 +27,6 @@ resolve_host_agent_config_path() {
   fi
   openclaw_control_plane_agent_config_path "$AGENT_REF"
 }
-
 resolve_container_agent_config_path() {
   if [[ -n "${OPENCLAW_CONTROL_PLANE_SERVICE_CONFIG_PATH:-}" || -n "${OPENCLAW_CONTROL_PLANE_PROFILE:-}" ]]; then
     openclaw_control_plane_container_config_path agent_platform

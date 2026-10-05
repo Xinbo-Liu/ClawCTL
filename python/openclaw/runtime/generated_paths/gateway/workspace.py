@@ -4,6 +4,7 @@ from __future__ import annotations
 from copy import deepcopy
 import json
 from pathlib import Path
+import shutil
 from typing import Any, Dict, List
 import time
 import uuid
@@ -451,6 +452,147 @@ def gateway_agent_state_dir_targets(registry: Dict[str, Any], resolver: PathReso
     return targets
 
 
+def _gateway_agent_root_paths(registry: Dict[str, Any], resolver: PathResolver) -> set[Path]:
+    """返回当前 registry 允许保留的 Gateway agent 根目录集合。
+
+    参数：
+        registry（Dict[str, Any]）：控制面 registry，用来确定 Gateway 可见 agent 清单。
+        resolver（PathResolver）：运行态路径解析器，用来把 Gateway state 根解析为宿主机绝对路径。
+
+    返回：
+        返回 set[Path]，表示当前 registry 声明的 Gateway agent 根目录集合。
+    """
+    projection = build_gateway_agent_projection(registry, resolver)
+    gateway_root = resolver.absolute_host_path('gateway_host_state_dir')
+    return {
+        gateway_root / 'agents' / _line_text(agent.get('id'))
+        for agent in projection
+        if _line_text(agent.get('id'))
+    }
+
+
+def _gateway_workspace_paths(registry: Dict[str, Any], resolver: PathResolver) -> set[Path]:
+    """返回当前 registry 允许保留的 Gateway workspace 目录集合。
+
+    参数：
+        registry（Dict[str, Any]）：控制面 registry，用来生成 Gateway agent/workspace 投影。
+        resolver（PathResolver）：运行态路径解析器，用来定位 Gateway state 下的 workspace 目录。
+
+    返回：
+        返回 set[Path]，表示当前 registry 声明的 Gateway workspace 目录集合。
+    """
+    projection = build_gateway_agent_projection(registry, resolver)
+    return {
+        _gateway_router_workspace_host_path(resolver)
+        if _line_text(agent.get('id')) == GATEWAY_MAIN_AGENT_ID
+        else _gateway_agent_workspace_host_path(_line_text(agent.get('id')), resolver)
+        for agent in projection
+        if _line_text(agent.get('id'))
+    }
+
+
+def _contains_gateway_generated_marker(path: Path) -> bool:
+    """判断目录是否包含 Gateway 运行态生成器写出的核心文件。
+
+    参数：
+        path（Path）：待检查目录；函数会读取目录或其 `agent/` 子目录下的核心文件。
+
+    返回：
+        返回 bool，表示候选目录是否能安全认定为 Gateway 派生产物。
+    """
+    candidate_roots = [path, path / 'agent']
+    for root in candidate_roots:
+        for filename in GATEWAY_AGENT_CORE_FILE_NAMES:
+            candidate = root / filename
+            if not candidate.is_file():
+                continue
+            try:
+                content = candidate.read_text(encoding='utf-8', errors='replace')
+            except OSError:
+                continue
+            if RENDER_GENERATED_RUNTIME_PATHS_CMD in content:
+                return True
+    return False
+
+
+def _remove_tree_under_gateway_root(gateway_root: Path, target: Path) -> None:
+    """删除 Gateway state 根内的单个派生目录。
+
+    参数：
+        gateway_root（Path）：Gateway state 根目录；删除边界必须落在该目录内部。
+        target（Path）：待删除的派生目录或符号链接。
+
+    异常：
+        当目标不在 Gateway state 根内或目标就是根目录时抛出 ValueError。
+
+    副作用：
+        删除 Gateway state 根内已确认为派生产物的目录或符号链接。
+    """
+    root_resolved = gateway_root.resolve()
+    target_resolved = target.resolve()
+    try:
+        relative = target_resolved.relative_to(root_resolved)
+    except ValueError as exc:
+        raise ValueError(f'Gateway stale state target escapes state root: {target}') from exc
+    if not relative.parts:
+        raise ValueError('Gateway stale state cleanup refused to remove state root')
+    if target.is_symlink():
+        target.unlink()
+    elif target.is_dir():
+        shutil.rmtree(target)
+
+
+def stale_gateway_agent_state_dirs(registry: Dict[str, Any], resolver: PathResolver) -> List[Path]:
+    """列出当前 registry 之外的 Gateway agent/workspace 派生目录。
+
+    参数：
+        registry（Dict[str, Any]）：当前控制面 registry，用来计算仍应保留的 Gateway 目录。
+        resolver（PathResolver）：运行态路径解析器，用来定位 Gateway state、agent 和 workspace 根。
+
+    返回：
+        返回 List[Path]，表示可由运行态生成器清理的旧 Gateway 派生目录。
+    """
+    gateway_root = resolver.absolute_host_path('gateway_host_state_dir')
+    expected_agent_roots = {path.resolve() for path in _gateway_agent_root_paths(registry, resolver)}
+    expected_workspaces = {path.resolve() for path in _gateway_workspace_paths(registry, resolver)}
+    stale: List[Path] = []
+
+    agents_root = gateway_root / 'agents'
+    if agents_root.is_dir():
+        for child in sorted(agents_root.iterdir(), key=lambda item: item.name):
+            if not child.is_dir() or child.resolve() in expected_agent_roots:
+                continue
+            if _contains_gateway_generated_marker(child):
+                stale.append(child)
+
+    if gateway_root.is_dir():
+        for child in sorted(gateway_root.iterdir(), key=lambda item: item.name):
+            if not child.is_dir() or not child.name.startswith('workspace-'):
+                continue
+            if child.resolve() in expected_workspaces:
+                continue
+            if _contains_gateway_generated_marker(child):
+                stale.append(child)
+    return stale
+
+
+def prune_stale_gateway_agent_state_dirs(registry: Dict[str, Any], resolver: PathResolver) -> List[Path]:
+    """按当前 registry 删除旧 Gateway agent/workspace 派生目录。
+
+    参数：
+        registry（Dict[str, Any]）：当前控制面 registry，用来判断哪些派生目录已经不再属于有效 agent。
+        resolver（PathResolver）：运行态路径解析器，用来定位 Gateway state 根和待清理目录。
+
+    返回：
+        返回 List[Path]，表示本次删除的旧 Gateway 派生目录。
+    """
+    gateway_root = resolver.absolute_host_path('gateway_host_state_dir')
+    removed = stale_gateway_agent_state_dirs(registry, resolver)
+    for path in removed:
+        _remove_tree_under_gateway_root(gateway_root, path)
+    return removed
+
+
 def _gateway_default_session_has_empty_transcript(session_store_path: Path, payload: Dict[str, Any]) -> bool:
     session_id = _line_text(payload.get('sessionId'))
     if not session_id:
@@ -508,6 +650,7 @@ def render_gateway_default_sessions(registry: Dict[str, Any], resolver: PathReso
 
 def render_gateway_agent_state_dirs(repo_root: Path, resolver: PathResolver, config_path: Path | None = None) -> None:
     registry = _load_registry(config_path or resolver.config_path)
+    prune_stale_gateway_agent_state_dirs(registry, resolver)
     for path in gateway_agent_state_dir_targets(registry, resolver):
         path.mkdir(parents=True, exist_ok=True)
     for path, content in gateway_healthcheck_script_targets(repo_root, resolver).items():

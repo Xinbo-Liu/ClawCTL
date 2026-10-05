@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Bundle artifact smoke helpers."""
+"""提供OpenClaw release子系统的生产实现。"""
 
 from __future__ import annotations
 

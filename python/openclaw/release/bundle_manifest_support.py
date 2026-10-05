@@ -15,7 +15,6 @@ GLOB_CHARS = set('*?[]')
 
 
 def read_json(path: Path) -> Any:
-    """读取 UTF-8 JSON 文件。"""
     import json
 
     return json.loads(path.read_text(encoding='utf-8'))
@@ -35,7 +34,6 @@ def _merge_unique_patterns(*groups: list[str]) -> list[str]:
 
 
 def load_manifest(*, error_factory: type[Exception]) -> dict[str, Any]:
-    """加载交付包治理 manifest，并合并本地残留排除真源。"""
     payload = read_json(MANIFEST_PATH)
     if not isinstance(payload, dict):
         raise error_factory(f'{MANIFEST_PATH.relative_to(ROOT_DIR)} top level must be an object')
@@ -58,7 +56,6 @@ def load_manifest(*, error_factory: type[Exception]) -> dict[str, Any]:
 
 
 def contains_glob(pattern: str) -> bool:
-    """判断 pattern 是否包含 glob 语法。"""
     return any(ch in pattern for ch in GLOB_CHARS)
 
 
@@ -70,7 +67,6 @@ def normalize_pattern(pattern: str) -> str:
 
 
 def iter_pattern_matches(pattern: str) -> list[str]:
-    """把 manifest include pattern 展开为仓库内文件列表。"""
     rel = normalize_pattern(pattern)
     if not rel:
         return []
@@ -85,7 +81,7 @@ def iter_pattern_matches(pattern: str) -> list[str]:
         return sorted(results)
     import glob
 
-    for raw in glob.glob(str(ROOT_DIR / rel), recursive=True):
+    for raw in glob.glob(str(ROOT_DIR / rel), recursive=True, include_hidden=True):
         path = Path(raw)
         if path.is_file():
             results.add(path.relative_to(ROOT_DIR).as_posix())
@@ -93,7 +89,6 @@ def iter_pattern_matches(pattern: str) -> list[str]:
 
 
 def match_any(rel_path: str, patterns: list[str]) -> bool:
-    """判断仓库相对路径是否命中任一 pattern。"""
     for raw in patterns:
         pattern = normalize_pattern(raw)
         if not pattern:
@@ -109,7 +104,6 @@ def match_any(rel_path: str, patterns: list[str]) -> bool:
 
 
 def default_shared_excludes(*, error_factory: type[Exception]) -> list[str]:
-    """返回本地残留策略派生的共享排除项，并补充 bundle 专属排除项。"""
     return _merge_unique_patterns(
         policy_bundle_shared_excludes(error_factory=error_factory),
         [
@@ -124,7 +118,6 @@ def default_shared_excludes(*, error_factory: type[Exception]) -> list[str]:
 
 
 def bundle_spec(bundle_id: str, manifest: dict[str, Any], *, error_factory: type[Exception]) -> dict[str, Any]:
-    """从 manifest 中读取单个 bundle 定义。"""
     spec = (manifest.get('bundles') or {}).get(bundle_id)
     if not isinstance(spec, dict):
         raise error_factory(f'unknown bundle: {bundle_id}')
@@ -134,7 +127,6 @@ def bundle_spec(bundle_id: str, manifest: dict[str, Any], *, error_factory: type
 
 
 def resolve_bundle_files(bundle_id: str, manifest: dict[str, Any], *, error_factory: type[Exception]) -> list[str]:
-    """解析 bundle 最终允许打包的文件集合。"""
     spec = bundle_spec(bundle_id, manifest, error_factory=error_factory)
     includes = [str(item).strip() for item in (spec.get('include') or []) if str(item).strip()]
     if not includes:
@@ -160,7 +152,6 @@ def resolve_bundle_files(bundle_id: str, manifest: dict[str, Any], *, error_fact
 
 
 def must_not_ship_hits(bundle_id: str, file_list: list[str], manifest: dict[str, Any], *, error_factory: type[Exception]) -> list[str]:
-    """返回已解析文件中命中 must_not_ship 规则的路径。"""
     spec = bundle_spec(bundle_id, manifest, error_factory=error_factory)
     raw_patterns = spec.get('must_not_ship')
     if raw_patterns is None:

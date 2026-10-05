@@ -17,26 +17,21 @@ source "$SETUP_FAILURE_SURFACE_LIB_ROOT/scripts/lib/repo_contracts.sh"
 unset SETUP_FAILURE_SURFACE_LIB_DIR
 repo_contract_assign_path SETUP_FAILURE_SURFACE_PATH governance.setup_failures
 SETUP_FAILURE_SURFACE_CACHE_PATH="${SETUP_FAILURE_SURFACE_CACHE_PATH:-}"
-
 setup_failure_surface_jq_available() {
   command -v jq >/dev/null 2>&1
 }
-
 setup_failure_surface_python_runner() {
   printf '%s\n' "${PYTHON_RUNNER:-$SETUP_FAILURE_SURFACE_LIB_ROOT/scripts/runtime/run_python_container.sh}"
 }
-
 setup_failure_surface_config_path() {
   openclaw_control_plane_resolve_config_path agent_platform
 }
-
 setup_failure_surface_cleanup() {
   if [[ -n "$SETUP_FAILURE_SURFACE_CACHE_PATH" ]] && [[ -f "$SETUP_FAILURE_SURFACE_CACHE_PATH" ]]; then
     rm -f "$SETUP_FAILURE_SURFACE_CACHE_PATH"
   fi
 }
 trap setup_failure_surface_cleanup EXIT
-
 setup_failure_surface_render_json() {
   local config_path runner tmp_file item=''
   local -a repo_python_env_args=()
@@ -61,7 +56,6 @@ setup_failure_surface_render_json() {
   rm -f "$tmp_file"
   return 1
 }
-
 setup_failure_surface_materialized_path() {
   if [[ -n "$SETUP_FAILURE_SURFACE_CACHE_PATH" ]] && [[ -f "$SETUP_FAILURE_SURFACE_CACHE_PATH" ]]; then
     printf '%s' "$SETUP_FAILURE_SURFACE_CACHE_PATH"
@@ -73,11 +67,9 @@ setup_failure_surface_materialized_path() {
   fi
   printf '%s' "$SETUP_FAILURE_SURFACE_PATH"
 }
-
 setup_failure_surface_doc_path() {
   setup_failure_surface_field "" "" doc_path
 }
-
 setup_failure_surface_field() {
   local entry="$1"
   local scenario="$2"
@@ -97,7 +89,6 @@ setup_failure_surface_field() {
   fi
   printf ''
 }
-
 setup_failure_surface_lines() {
   local entry="$1"
   local scenario="$2"

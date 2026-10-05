@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from openclaw.docs.support.doc_targets import require_nested_str
+from openclaw.docs.support.markdown_tables import format_markdown_tables
 from openclaw.lib.cli.examples import canonical_cli_command, host_wrapper_command
 from openclaw.lib.repo.layout import resolve_repo_root
 from openclaw.setup.deploy_env.support import (
@@ -26,12 +27,10 @@ DOC_SECTIONS_PATH = resolve_repo_root(Path(__file__)) / 'config' / 'deploy_env' 
 
 
 def _note(message: str) -> None:
-    """输出部署输入文档渲染过程提示。"""
     sys.stdout.write(f'[deploy_env_control_plane] {message}\n')
 
 
 def _load_doc_sections() -> dict[str, Any]:
-    """读取部署输入文档的固定章节文案配置。"""
     payload = json.loads(DOC_SECTIONS_PATH.read_text(encoding='utf-8'))
     if not isinstance(payload, dict):
         raise ValueError(f'{DOC_SECTIONS_PATH} 顶层必须为对象')
@@ -39,7 +38,6 @@ def _load_doc_sections() -> dict[str, Any]:
 
 
 def default_deployment_inputs_doc_path(schema: dict[str, Any], *, root_dir: Path) -> Path:
-    """从 deploy env schema 中解析默认生成文档路径。"""
     rel_path = require_nested_str(schema, ['generated_artifacts', 'deployment_inputs_doc'], prefix='deploy_env_control_plane', label='deployment_inputs_doc')
     return root_dir / rel_path
 
@@ -53,7 +51,6 @@ def _append_grouped_keys(
     values: dict[str, str] | None = None,
     include_doc_location: bool = False,
 ) -> list[str]:
-    """按 schema group 输出字段列表，并可附带填写位置。"""
     rows = [title, '']
     current_group = None
     for schema_field in fields:
@@ -79,7 +76,20 @@ def _append_grouped_keys(
 
 
 def build_deployment_inputs_doc(*, root_dir: Path, config_path: Path | None = None) -> tuple[dict[str, Any], str]:
-    """构建部署输入文档内容，扩展私有字段只保留中性填写入口。"""
+    """按所选 schema 生成平台输入说明、扩展入口和条件填写示例。
+
+    参数：
+        root_dir（Path）：生成入口的仓库上下文；配置读取沿用部署输入 loader 的真源选择。
+        config_path（Path | None）：所选 service 配置；缺省沿用 schema loader 的 profile 选择。
+    返回：
+        tuple[dict[str, Any], str]：已加载的完整 schema 和格式化的部署输入 Markdown。
+    异常：
+        ValueError：章节配置不是 JSON 对象，或所选 schema 不满足 loader 合同。
+        OSError：schema 或章节真源不可读取。
+        SystemExit：schema loader 拒绝无效的配置声明。
+    副作用：
+        只读取 schema 与章节真源，在内存中生成示例和说明，不读取部署 env 值或写入文件。
+    """
     schema = load_schema(config_path=config_path)
     doc_sections = _load_doc_sections()
     groups = {group['id']: group for group in schema.get('groups', [])}
@@ -135,9 +145,9 @@ def build_deployment_inputs_doc(*, root_dir: Path, config_path: Path | None = No
 
     minimal_example: list[str] = []
     for secret_key in deploy_site_secret_keys:
-        minimal_example.append(f'{secret_key}=<启用扩展要求的业务/API 密钥>')
+        minimal_example.append(f'{secret_key}=<该字段要求的业务/API 密钥>')
     minimal_example.extend([
-        'OPENCLAW_INGRESS_ALLOWED_SOURCE_CIDRS=<目标机实际看到的访问端来源 CIDR>,<目标机本机 full test 来源 CIDR>',
+        'OPENCLAW_INGRESS_ALLOWED_SOURCE_CIDRS=<目标机或上游记录实际观测来源 CIDR>,<目标机本机 full test 来源 CIDR>',
         'OPENCLAW_INGRESS_LISTEN_IP=<目标机 private ingress 绑定私网或 loopback IP>',
         'OPENCLAW_TLS_CN=<访问端真实使用的唯一主机名>',
         'OPENCLAW_TLS_MODE=self_signed',
@@ -155,7 +165,7 @@ def build_deployment_inputs_doc(*, root_dir: Path, config_path: Path | None = No
     model_required_note = (
         '启用的扩展声明了扩展内部业务/API 密钥；具体键名以对应扩展 README、deploy env schema 与 extension.env.example 为准。'
         if extension_secret_keys
-        else '正式默认运行配置不要求额外模型/API provider 密钥。'
+        else '所选运行配置不要求额外模型/API provider 密钥。'
     )
     provider_source_note = (
         f'{provider_source_refs} 是当前 active profile 暴露的模型/API HTTP 入口字段；填写位置和校验以 deploy env schema 为准，不属于 runtime image source strategy。'
@@ -172,13 +182,17 @@ def build_deployment_inputs_doc(*, root_dir: Path, config_path: Path | None = No
                 continue
             rendered_extension_env_locations.add(location)
             extension_env_commands.extend([
-                f'cp {location}.example {location}',
-                f'vim {location}',
+                'bash ./scripts/setup/check_extension_env_values.sh --profile <profile_id>',
+                'bash ./scripts/setup/apply_extension_env_values.sh --profile <profile_id> --init-from-example --set KEY=<value>',
             ])
     lines = [
         '# 部署输入说明',
         '',
-        '本文用于补齐 `deploy/site.env`、启用扩展时的扩展内部 `agent/extensions/<extension-id>/deploy/extension.env`，并说明 `deploy/.env` 中自动生成字段的来源。默认路径是 `self_signed + host_firewall`；切换 `provided_files` 或 `external_acl` 时，仅填写对应条件字段。',
+        '本页说明三类部署输入的填写位置与约束：`deploy/site.env`、启用扩展的 `agent/extensions/<extension-id>/deploy/extension.env` 与 `deploy/targets.d/<target_id>.env`，以及 `deploy/.env` 中自动生成字段的来源。',
+        '',
+        '部署输入文件使用 `apply_deploy_input_values.sh --profile <profile_id> --input <owner-only-env> --init` 按 active profile 自动路由；`--input-env-file <path>` 与 `--input <path>` 等价。写入前可用 `--validate-only` 检查脱敏路由、未知键和错位键；单项维护使用 site / extension / target 专用脚本。',
+        '',
+        '默认使用 `self_signed + host_firewall`；切换 `provided_files` 或 `external_acl` 时，填写对应条件字段。',
         '',
         model_required_note,
         '',
@@ -205,10 +219,13 @@ def build_deployment_inputs_doc(*, root_dir: Path, config_path: Path | None = No
         'bash ./scripts/setup/init_private_ingress.sh --platform windows -- 192.168.50.10 openclaw.internal.example',
         '```',
         '',
-        '2. 打开 `deploy/site.env`，按“第 2 步最小闭环”和下方字段说明补齐平台输入；启用扩展时，扩展字段只写入对应扩展内部 `agent/extensions/<extension-id>/deploy/extension.env`。',
+        '2. 部署输入文件按 active profile 自动路由；单项维护时，先补齐 `deploy/site.env` 平台输入，再用输出命令维护 extension 与 target 输入。',
         '',
         '```bash',
         'vim deploy/site.env',
+        'bash ./scripts/setup/prepare_control_plane_medium.sh',
+        'bash ./scripts/setup/apply_deploy_input_values.sh --validate-only --profile <profile_id> --input <owner-only-env>',
+        'bash ./scripts/setup/apply_deploy_input_values.sh --profile <profile_id> --input <owner-only-env> --init',
         *extension_env_commands,
         '```',
         '',
@@ -227,7 +244,7 @@ def build_deployment_inputs_doc(*, root_dir: Path, config_path: Path | None = No
         '```text',
         'OPENCLAW_INGRESS_LISTEN_IP=<目标机对访问端可达的私网 IP>',
         'OPENCLAW_TLS_CN=<访问端用于访问目标机的唯一主机名>',
-        'OPENCLAW_INGRESS_ALLOWED_SOURCE_CIDRS=<目标机实际看到的访问端源 IP>/32,<OPENCLAW_INGRESS_LISTEN_IP>/32',
+        'OPENCLAW_INGRESS_ALLOWED_SOURCE_CIDRS=<目标机或上游记录实际观测源 IP>/32,<OPENCLAW_INGRESS_LISTEN_IP>/32',
         '```',
         '',
         '## 公网来源经上游 ACL 接入',
@@ -237,7 +254,7 @@ def build_deployment_inputs_doc(*, root_dir: Path, config_path: Path | None = No
         '```text',
         'OPENCLAW_INGRESS_BOUNDARY_MODE=external_acl',
         'OPENCLAW_INGRESS_LISTEN_IP=<目标机私网IP>',
-        'OPENCLAW_INGRESS_ALLOWED_SOURCE_CIDRS=<目标机自检IP/32>,<上游设备私网IP/32或私网段>',
+        'OPENCLAW_INGRESS_ALLOWED_SOURCE_CIDRS=<目标机自检IP/32>,<目标机或上游记录实际观测来源CIDR>',
         'OPENCLAW_INGRESS_BOUNDARY_EVIDENCE_PATH=<目标机可读取的external_acl证据JSON>',
         '```',
         '',
@@ -279,7 +296,7 @@ def build_deployment_inputs_doc(*, root_dir: Path, config_path: Path | None = No
         *[f'- {str(item).strip()}' for item in list(doc_sections.get('auth_path') or []) if str(item).strip()],
         '',
     ])
-    return schema, '\n'.join(lines)
+    return schema, format_markdown_tables('\n'.join(lines))
 
 
 def render_deployment_inputs_doc(
@@ -289,7 +306,6 @@ def render_deployment_inputs_doc(
     mode: str = 'write',
     config_path: Path | None = None,
 ) -> int:
-    """按 write/check/stdout 模式渲染或校验部署输入文档。"""
     _, content = build_deployment_inputs_doc(root_dir=root_dir, config_path=config_path)
     existing = output_path.read_text(encoding='utf-8') if output_path.exists() else None
     if mode == 'stdout':
@@ -312,18 +328,6 @@ def render_site_env_example(
     *,
     mode: str = 'write',
 ) -> int:
-    """渲染或校验 `deploy/site.env.example`。
-
-    参数：
-        output_path: 要写入、校验或作为同步目标比对的模板路径。
-        mode: `write` 写入文件，`check` 只读比对，`stdout` 只打印生成内容。
-    返回：
-        同步或写入成功返回 0；`check` 或 `stdout` 模式发现目标文件漂移时返回 1。
-    副作用：
-        `write` 模式会创建父目录并以 UTF-8/LF 写出模板；`stdout` 模式会输出到标准输出。
-    失败：
-        模板真源不可读取、目标文件不可读写或路径权限不足时抛出底层异常。
-    """
     content = '\n'.join(build_site_env_template_lines()).rstrip() + '\n'
     existing = output_path.read_text(encoding='utf-8') if output_path.exists() else None
     if mode == 'stdout':

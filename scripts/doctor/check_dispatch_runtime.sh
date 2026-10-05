@@ -19,7 +19,6 @@ COMPOSE_FILE=""
 ENV_FILE=""
 OUTPUT_JSON=0
 SCHEDULER_TARGET="scheduler"
-
 usage() {
   cat <<'USAGE'
 用法：
@@ -31,11 +30,9 @@ usage() {
   - 默认读取当前运行画像 effective compose，缺失时回退 deploy/docker-compose.yml。
 USAGE
 }
-
 json_escape() {
   printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
 }
-
 fail() {
   local msg="$1"
   local code="${2:-2}"
@@ -48,11 +45,9 @@ fail() {
   fi
   exit "$code"
 }
-
 note() {
   [[ "$OUTPUT_JSON" == "1" ]] || echo "[check_dispatch_runtime] $*"
 }
-
 emit_no_dispatch_targets() {
   if [[ "$OUTPUT_JSON" == "1" ]]; then
     jq -n '{
@@ -107,7 +102,6 @@ if [[ -z "${OPENCLAW_CONTROL_PLANE_SERVICE_CONFIG_PATH:-}" ]]; then
   export OPENCLAW_CONTROL_PLANE_SERVICE_CONFIG_PATH
 fi
 runtime_compose_require_cli >/dev/null || fail "未检测到 docker" 3
-
 check_target() {
   local target="$1"
   local service_name=""

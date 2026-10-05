@@ -12,7 +12,6 @@ OFFLINE_MODE=0
 IMAGE_ARCHIVE_PATH=""
 ENV_FILE="$ROOT_DIR/deploy/.env"
 WARNINGS=0
-
 usage() {
   cat <<'USAGE'
 用法：
@@ -30,14 +29,12 @@ usage() {
   -h, --help              显示帮助
 USAGE
 }
-
 note() { printf '[INFO] %s\n' "$*"; }
 warn() { WARNINGS=1; printf '[WARN] %s\n' "$*"; }
 fail() { printf '[FAIL] %s\n' "$*" >&2; exit 2; }
-
 warn_missing_image_next_steps() {
   warn "在线 basic gate 中的镜像缺失是非阻塞项；one_click_deploy 会在镜像准备阶段按当前 env 执行 pull/load。"
-  warn "若拉取失败，先执行 bash ./scripts/doctor/check_docker_host_readiness.sh，确认 Docker daemon、registry-mirrors 与 selected runtime source；中国国内网络首轮部署先执行 sudo bash ./scripts/setup/prepare_docker_host.sh --all --network-profile cn。"
+  warn "若拉取失败，先执行 bash ./scripts/doctor/check_docker_host_readiness.sh，确认 Docker daemon、registry-mirrors、MTU 与 selected runtime source；中国国内网络首轮部署先执行 sudo bash ./scripts/setup/prepare_docker_host.sh --os auto --all --network-profile cn。"
   warn "需要手工补齐时执行 bash ./scripts/images/pull_images.sh；受限网络或离线目标机使用 export_deployment_images.sh 生成 deployment_images_*.tar 后执行 load_deployment_images.sh，或把归档放到 state/image_artifacts/。"
 }
 
@@ -74,7 +71,6 @@ export IMAGE_ENV_DEPLOY_ENV_PATH
 source "$ROOT_DIR/scripts/lib/deployment_images.sh"
 
 deployment_images_require_docker_ready || exit $?
-
 check_deployment_images() {
   local required=()
   local missing=()

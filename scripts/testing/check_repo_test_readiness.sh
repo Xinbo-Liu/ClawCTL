@@ -57,7 +57,7 @@ fi
 
 if ! command -v jq >/dev/null 2>&1; then
   fail '未检测到 jq；repo release gate 会把 jq 复制到临时工具覆盖层供检查容器使用。'
-  next_step '先安装 jq；CentOS 7 可执行 sudo bash ./scripts/setup/prepare_docker_host.sh --install-base-tools。'
+  next_step '先安装 jq；可执行 sudo bash ./scripts/setup/prepare_docker_host.sh --os auto --install-base-tools。'
   next_step '修复后重新执行 bash ./scripts/testing/check_repo_test_readiness.sh。'
   exit 2
 fi

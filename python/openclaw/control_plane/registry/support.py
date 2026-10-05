@@ -26,7 +26,6 @@ _AGENT_GROUP_RELEASE_CHECK_IDS = {
     'run_ledger',
     'recent_access',
     'required_evidence',
-    'acceptance_binding',
 }
 
 
@@ -287,7 +286,15 @@ def _validate_resolved_dependencies(
     jobs_by_id: dict[str, dict[str, Any]],
     resolved_orders: dict[str, int],
 ) -> None:
-    """校验 job 依赖列表与 resolvedOrder 约束。"""
+    """校验 job 依赖列表与 resolvedOrder 约束。
+
+    参数：
+        job_id（str）：job标识。
+        order（int）：order。
+        dependencies（list[dict[str, Any]]）：dependencies。
+        jobs_by_id（dict[str, dict[str, Any]]）：job 集合by标识。
+        resolved_orders（dict[str, int]）：resolvedorders。
+    """
     dep_ids: set[str] = set()
     for dep in dependencies:
         dep_id = str(dep.get('jobId') or '').strip() if isinstance(dep, dict) else ''

@@ -10,7 +10,7 @@ from openclaw.lib.repo.path_contracts import repo_anchored_path
 
 DEFAULT_CHANGE_CONTROL_DOC_TARGETS = (
     repo_anchored_path('docs/architecture/agent-governance.md'),
-    repo_anchored_path('docs/architecture/agent-module-governance.md'),
+    repo_anchored_path('agent/governance/module-governance.md'),
 )
 
 OPTIONAL_SURFACE_MARKERS = {

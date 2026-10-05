@@ -8,7 +8,8 @@ from openclaw.lib.cli.output import stdout_write, stderr_write
 from pathlib import Path
 from typing import Any
 
-from openclaw.docs.support.docs_registry import ROOT_DIR, load_registry, require_pages
+from openclaw.docs.support.docs_registry import ROOT_DIR, require_pages
+from openclaw.docs.validators.registry_context import load_validator_context
 
 
 def usage() -> str:
@@ -16,6 +17,7 @@ def usage() -> str:
         '用法：',
         '  bash ./scripts/docs/check_local_document_identity.sh',
         '  bash ./scripts/docs/check_local_document_identity.sh --stdout',
+        '  bash ./scripts/docs/check_local_document_identity.sh --config-path <control-plane-config-path>',
         '',
         '说明：',
         '  校验 workspace / tool 局部文档是否带有非正式入口声明并回链 docs/README.md。',
@@ -40,27 +42,23 @@ def check_page(page: dict[str, Any]) -> tuple[Path, list[str]]:
 
 def main(argv: list[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
-    stdout = False
-    for arg in args:
-        if arg == '--stdout':
-            stdout = True
-        elif arg in {'-h', '--help'}:
-            stdout_write(f'{usage()}\n')
-            return 0
-        else:
-            stderr_write(f'[check_local_document_identity][FAIL] 未知参数：{arg}\n')
-            stderr_write(f'{usage()}\n')
-            return 2
+    context = load_validator_context(
+        args,
+        usage_text=usage(),
+        error_prefix='[check_local_document_identity][FAIL]',
+        root_dir=ROOT_DIR,
+    )
+    if isinstance(context, int):
+        return context
     try:
-        registry = load_registry()
-        pages = [page for page in require_pages(registry) if isinstance(page.get('localIdentity'), dict)]
+        pages = [page for page in require_pages(context.registry) if isinstance(page.get('localIdentity'), dict)]
     except Exception as exc:
         stderr_write(f'[check_local_document_identity][FAIL] {exc}\n')
         return 1
     results = [check_page(page) for page in pages]
     errors = [error for _, item_errors in results for error in item_errors]
-    if stdout:
-        stdout_write(f'[check_local_document_identity] count={len(pages)}\n')
+    if context.stdout:
+        stdout_write(f'[check_local_document_identity] config={context.config_label} count={len(pages)}\n')
         for file_path, item_errors in results:
             stdout_write(f'- {file_path.relative_to(ROOT_DIR)} errors={len(item_errors)}\n')
     if errors:

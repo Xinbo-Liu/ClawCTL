@@ -16,7 +16,8 @@ from openclaw.lib.io.json_access import json_array, json_object
 from openclaw.lib.repo.layout import resolve_repo_root
 from openclaw.lib.runtime.state import resolve_state_root
 from openclaw.lib.runtime.time import now_in_app_tz, now_utc, parse_iso_datetime, utc_iso
-from openclaw.scheduler.runtime import resolve_timezone
+from openclaw.scheduler.engine import prune_scheduler_state_jobs
+from openclaw.scheduler.cron import resolve_timezone
 
 
 def parse_preview_time(value: str | None, timezone_name: str) -> datetime:
@@ -39,6 +40,7 @@ def load_scheduler_state(state_root: Path, registry: dict[str, Any]) -> dict[str
         state = {'schemaVersion': 1, 'jobs': {}}
     if not isinstance(state.get('jobs'), dict):
         state['jobs'] = {}
+    prune_scheduler_state_jobs(state, registry)
     return state
 
 

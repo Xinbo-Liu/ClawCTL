@@ -77,6 +77,7 @@ if [[ "$COMPOSE_FILE_EXPLICIT" != '1' ]]; then
   COMPOSE_FILE="$(runtime_compose_default_file "$ROOT_DIR" "$ENV_FILE")"
 fi
 runtime_container_require_docker >/dev/null
+runtime_container_load_target_registry_cache || fail '无法加载 runtime target registry'
 if [[ ${#TARGETS[@]} -eq 0 ]]; then
   mapfile -t TARGETS < <(runtime_known_targets)
 fi

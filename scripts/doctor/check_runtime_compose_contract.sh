@@ -17,7 +17,6 @@ PYTHON_RUNNER="$ROOT_DIR/scripts/runtime/run_python_container.sh"
 ENV_FILE="$ROOT_DIR/deploy/.env"
 COMPOSE_FILE=""
 COMPOSE_FILE_EXPLICIT=0
-
 usage() {
   cat <<'USAGE'
 用法：
@@ -33,7 +32,6 @@ usage() {
   -h, --help               显示帮助
 USAGE
 }
-
 fail() {
   echo "[FAIL] $*" >&2
   exit 2

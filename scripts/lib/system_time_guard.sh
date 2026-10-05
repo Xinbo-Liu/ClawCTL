@@ -22,24 +22,19 @@ SYSTEM_TIME_GUARD_MAX_STEP_SECONDS="${SYSTEM_TIME_GUARD_MAX_STEP_SECONDS:-$SYSTE
 SYSTEM_TIME_GUARD_MIN_REFERENCE_COUNT="${SYSTEM_TIME_GUARD_MIN_REFERENCE_COUNT:-$SYSTEM_TIME_GUARD_DEFAULT_MIN_REFERENCE_COUNT}"
 SYSTEM_TIME_GUARD_MAX_REFERENCE_SKEW_SECONDS="${SYSTEM_TIME_GUARD_MAX_REFERENCE_SKEW_SECONDS:-$SYSTEM_TIME_GUARD_DEFAULT_MAX_REFERENCE_SKEW_SECONDS}"
 SYSTEM_TIME_GUARD_TIMEZONE="${SYSTEM_TIME_GUARD_TIMEZONE:-$SYSTEM_TIME_GUARD_DEFAULT_TIMEZONE}"
-
 system_time_guard_note() {
   echo "[system_time][INFO] $1"
 }
-
 system_time_guard_warn() {
   echo "[system_time][WARN] $1"
 }
-
 system_time_guard_fail() {
   echo "[system_time][FAIL] $1" >&2
   return "${2:-24}"
 }
-
 system_time_guard_is_uint() {
   [[ "${1:-}" =~ ^[0-9]+$ ]]
 }
-
 system_time_guard_abs_delta() {
   local left="$1"
   local right="$2"
@@ -49,16 +44,13 @@ system_time_guard_abs_delta() {
     printf '%s\n' "$(( right - left ))"
   fi
 }
-
 system_time_guard_current_epoch() {
   date -u +%s 2>/dev/null
 }
-
 system_time_guard_format_epoch() {
   local epoch="$1"
   date -u -d "@$epoch" '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || printf '%s\n' "$epoch"
 }
-
 system_time_guard_reference_urls() {
   if [[ -n "${OPENCLAW_SYSTEM_TIME_REFERENCE_URLS:-}" ]]; then
     # shellcheck disable=SC2086
@@ -67,10 +59,9 @@ system_time_guard_reference_urls() {
   fi
   printf '%s\n' "${SYSTEM_TIME_GUARD_DEFAULT_REFERENCE_URLS[@]}"
 }
-
 system_time_guard_reference_epoch() {
   command -v curl >/dev/null 2>&1 || {
-    system_time_guard_fail '缺少 curl；无法获取外部 HTTP Date 时间基准。请先执行 sudo bash ./scripts/setup/prepare_docker_host.sh --install-base-tools。' 24
+    system_time_guard_fail '缺少 curl；无法获取外部 HTTP Date 时间基准。请先执行 sudo bash ./scripts/setup/prepare_docker_host.sh --os auto --install-base-tools。' 24
     return $?
   }
   local url=''
@@ -128,7 +119,6 @@ system_time_guard_reference_epoch() {
   done
   system_time_guard_fail '无法选择 HTTP Date 中位数参考源；请检查参考源返回值。' 24
 }
-
 system_time_guard_parse_check_args() {
   SYSTEM_TIME_GUARD_OFFLINE=0
   SYSTEM_TIME_GUARD_MAX_DRIFT_SECONDS="$SYSTEM_TIME_GUARD_DEFAULT_MAX_DRIFT_SECONDS"
@@ -188,7 +178,6 @@ system_time_guard_parse_check_args() {
   (( SYSTEM_TIME_GUARD_MIN_EPOCH <= SYSTEM_TIME_GUARD_MAX_EPOCH )) || { system_time_guard_fail "--min-epoch 不得晚于 --max-epoch：${SYSTEM_TIME_GUARD_MIN_EPOCH} > ${SYSTEM_TIME_GUARD_MAX_EPOCH}" 2; return $?; }
   (( SYSTEM_TIME_GUARD_MIN_REFERENCE_COUNT >= 1 )) || { system_time_guard_fail "--min-reference-count 必须大于 0：$SYSTEM_TIME_GUARD_MIN_REFERENCE_COUNT" 2; return $?; }
 }
-
 system_time_guard_validate_local_epoch() {
   local now_epoch="$1"
   local min_epoch="$2"
@@ -207,7 +196,6 @@ system_time_guard_validate_local_epoch() {
     return $?
   fi
 }
-
 system_time_guard_print_timedatectl_status() {
   command -v timedatectl >/dev/null 2>&1 || return 0
   local timezone=''
@@ -219,7 +207,6 @@ system_time_guard_print_timedatectl_status() {
   [[ -n "$timezone$ntp$synchronized" ]] || return 0
   system_time_guard_note "timedatectl: timezone=${timezone:-<unknown>} ntp=${ntp:-<unknown>} synchronized=${synchronized:-<unknown>}"
 }
-
 system_time_guard_check() {
   system_time_guard_parse_check_args "$@" || return $?
   local now_epoch=''
@@ -253,7 +240,6 @@ system_time_guard_check() {
   fi
   system_time_guard_note "系统时间校验通过：drift=${drift_seconds}s max=${SYSTEM_TIME_GUARD_MAX_DRIFT_SECONDS}s references=${reference_count:-unknown} reference_skew=${reference_skew:-unknown}s source=$reference_source"
 }
-
 system_time_guard_start_ntp() {
   if command -v timedatectl >/dev/null 2>&1; then
     timedatectl set-timezone "$SYSTEM_TIME_GUARD_TIMEZONE" || system_time_guard_warn "timedatectl set-timezone $SYSTEM_TIME_GUARD_TIMEZONE 未生效。"
@@ -276,11 +262,10 @@ system_time_guard_start_ntp() {
     chronyc -a makestep >/dev/null 2>&1 || system_time_guard_warn 'chronyc makestep 未完成；继续按 HTTP Date 基准校验。'
   fi
 }
-
 system_time_guard_step_to_reference_if_needed() {
   [[ "$SYSTEM_TIME_GUARD_OFFLINE" == "0" ]] || return 0
   command -v curl >/dev/null 2>&1 || {
-    system_time_guard_fail '缺少 curl；无法获取外部 HTTP Date 时间基准并校时。请先执行 sudo bash ./scripts/setup/prepare_docker_host.sh --install-base-tools。' 24
+    system_time_guard_fail '缺少 curl；无法获取外部 HTTP Date 时间基准并校时。请先执行 sudo bash ./scripts/setup/prepare_docker_host.sh --os auto --install-base-tools。' 24
     return $?
   }
   local reference=''
@@ -312,7 +297,6 @@ system_time_guard_step_to_reference_if_needed() {
     hwclock --systohc --utc >/dev/null 2>&1 || system_time_guard_warn 'hwclock --systohc --utc 未完成；系统时间已校正，但硬件时钟可能未同步。'
   fi
 }
-
 system_time_guard_update() {
   local raw_args=("$@")
   local filtered_args=()

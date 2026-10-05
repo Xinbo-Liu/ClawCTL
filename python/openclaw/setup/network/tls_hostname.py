@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""TLS access hostname validation shared by deploy inputs and ingress rendering."""
+"""提供OpenClaw setup子系统的生产实现。"""
 from __future__ import annotations
 
 import ipaddress

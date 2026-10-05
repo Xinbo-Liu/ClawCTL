@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
+from typing import Any
 
 from openclaw.control_plane.modules.lifecycle import inspect_module_optional_surfaces
 from openclaw.control_plane.registry import load_registry
@@ -62,13 +63,15 @@ def resolve_config_path(
     )
 
 
-def main(argv: list[str] | None = None) -> int:
-    requested_config_path, control_plane_profile = parse_args(list(sys.argv[1:] if argv is None else argv))
-    config_path = resolve_config_path(
-        requested_config_path,
-        control_plane_profile=control_plane_profile,
-    )
-    registry = load_registry(config_path)
+def build_report(registry: dict[str, Any]) -> dict[str, Any]:
+    """检查已加载 registry 中正式模块的模板化可选面。
+
+    参数：
+        registry（dict[str, Any]）：已完成控制平面合并与校验的 registry。
+
+    返回：
+        dict[str, Any]：模块检查详情、违规项和总体状态。
+    """
     items: list[dict[str, object]] = []
     for module in registry.get('agentModules', []):
         if not isinstance(module, dict):
@@ -91,15 +94,25 @@ def main(argv: list[str] | None = None) -> int:
             'ok': not boilerplate_surfaces,
         })
     offenders = [item for item in items if not bool(item.get('ok'))]
-    payload = {
+    return {
         'ok': not offenders,
         'moduleCount': len(items),
         'offenderCount': len(offenders),
         'offenders': offenders,
         'items': items,
     }
+
+
+def main(argv: list[str] | None = None) -> int:
+    requested_config_path, control_plane_profile = parse_args(list(sys.argv[1:] if argv is None else argv))
+    config_path = resolve_config_path(
+        requested_config_path,
+        control_plane_profile=control_plane_profile,
+    )
+    registry = load_registry(config_path)
+    payload = build_report(registry)
     print(json.dumps(payload, ensure_ascii=False, indent=2))
-    return 0 if not offenders else 1
+    return 0 if bool(payload.get('ok')) else 1
 
 
 if __name__ == '__main__':

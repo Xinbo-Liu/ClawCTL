@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Config selection and repository path helpers."""
+"""提供OpenClaw lib子系统的生产实现。"""
 from __future__ import annotations
 
 import os

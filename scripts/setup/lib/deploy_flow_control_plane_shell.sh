@@ -206,29 +206,36 @@ deploy_assert_deployment_acceptance_ready_for_evidence() {
   fi
 }
 
+# 渲染平台 full-test manifest；部署验收不再合并插件自管理检查。
 deploy_testing_manifest_json_for_env() {
-  local config_path=''
-  config_path="$(deploy_active_control_plane_config_path_for_env "$ENV_FILE")" || return $?
-  OPENCLAW_CONTROL_PLANE_SERVICE_CONFIG_PATH="$config_path" \
-    bash "$OPENCLAW_PYTHON_TOOL" setup flow full-test-surface json
+  bash "$OPENCLAW_PYTHON_TOOL" setup flow full-test-surface json
 }
 
+# 从平台 full-test manifest 读取 deployment acceptance 要求的 run ledger jobs。
 deploy_required_run_ledger_jobs() {
   local manifest_json=''
   if ! manifest_json="$(deploy_testing_manifest_json_for_env)"; then
-    echo '[deploy_flow_control_plane][FAIL] 无法渲染当前 active profile 的 full-test manifest，不能判断 required run ledger jobs' >&2
+    echo '[deploy_flow_control_plane][FAIL] 无法渲染平台 full-test manifest，不能判断 required run ledger jobs' >&2
     return 2
   fi
-  jq -r '.acceptance_reference.required_run_ledger_jobs[]? // empty' <<<"$manifest_json" 2>/dev/null || true
+  if ! jq -e '(.acceptance_reference.required_run_ledger_jobs? // []) | type == "array"' <<<"$manifest_json" >/dev/null; then
+    echo '[deploy_flow_control_plane][FAIL] 平台 full-test manifest 的 acceptance_reference.required_run_ledger_jobs 必须是数组' >&2
+    return 2
+  fi
+  jq -r '.acceptance_reference.required_run_ledger_jobs[]? // empty' <<<"$manifest_json"
 }
 
+# 仅当平台验收声明 run ledger jobs 时执行一次控制面作业。
 deploy_run_control_plane_once_if_required() {
   local required_jobs=''
   required_jobs="$(deploy_required_run_ledger_jobs)" || return $?
-  [[ -n "$required_jobs" ]] || return 0
+  if [[ -z "$required_jobs" ]]; then
+    log '[SKIP] control_plane_run_all_once：平台 deployment acceptance 未声明 required run ledger jobs'
+    return 0
+  fi
   flow_set_var CURRENT_STAGE_NAME control_plane_run_all_once
   log "[STEP] control_plane_run_all_once"
-  log "[INFO] 当前 deployment acceptance 声明 required run ledger jobs: $(printf '%s' "$required_jobs" | paste -sd, -)"
+  log "[INFO] 平台 deployment acceptance 声明 required run ledger jobs: $(printf '%s' "$required_jobs" | paste -sd, -)"
   log "[INFO] 执行 scheduler run-all-once 生成本机真实 run ledger；发送动作按当前 target 配置执行。若该环境不允许发送，请使用 --skip-acceptance 启动服务，并在允许执行 required jobs 后闭合 deployment acceptance。"
   bash "$ROOT_DIR/scripts/control_plane/run_control_plane_run_all_once.sh"
   log "[OK] control_plane_run_all_once"

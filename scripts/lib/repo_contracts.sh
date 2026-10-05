@@ -9,7 +9,6 @@ __openclaw_repo_contracts_root="$(openclaw_repo_root_from "$__openclaw_repo_cont
 if [[ "${OPENCLAW_REPO_CONTRACTS_SH_LOADED_ROOT:-}" == "$__openclaw_repo_contracts_root" ]]; then
   return 0 2>/dev/null || exit 0
 fi
-
 repo_contracts_shell_path() {
   local raw_path="${1-}"
   if command -v cygpath >/dev/null 2>&1 && [[ "$raw_path" =~ ^[A-Za-z]:[\\/].*$ ]]; then
@@ -27,16 +26,13 @@ OPENCLAW_REPO_CONTRACTS_TRUTH_REL_PATH='config/governance/support/repo_contracts
 OPENCLAW_REPO_CONTRACTS_CACHE_LOADED_ROOT=''
 declare -gA OPENCLAW_REPO_CONTRACT_REL_PATHS=()
 declare -gA OPENCLAW_REPO_CONTRACT_FORMATS=()
-
 repo_contracts_truth_path() {
   printf '%s/%s\n' "$OPENCLAW_REPO_CONTRACTS_ROOT_DIR" "$OPENCLAW_REPO_CONTRACTS_TRUTH_REL_PATH"
 }
-
 repo_contracts_trim_cr() {
   local value="${1-}"
   printf '%s' "${value%$'\r'}"
 }
-
 repo_contracts_trim_text() {
   local value=''
   value="$(repo_contracts_trim_cr "${1-}")"
@@ -44,18 +40,15 @@ repo_contracts_trim_text() {
   value="${value%"${value##*[![:space:]]}"}"
   printf '%s' "$value"
 }
-
 repo_contracts_require_jq() {
   command -v jq >/dev/null 2>&1 && return 0
   echo '[repo_contracts][FAIL] missing jq' >&2
   return 127
 }
-
 repo_contracts_shell_quote() {
   local value="${1-}"
   printf '%q' "$value"
 }
-
 repo_contracts_truth_records_awk() {
   local truth_path="$1"
   awk '
@@ -141,7 +134,6 @@ repo_contracts_truth_records_awk() {
     }
   ' "$truth_path"
 }
-
 repo_contracts_truth_assignments() {
   local truth_path='' output=''
   truth_path="$(repo_contracts_truth_path)"
@@ -261,7 +253,6 @@ repo_contracts_truth_assignments() {
     return 97
   }
 }
-
 repo_contracts_load_cache() {
   local assignments=''
   if [[ "${OPENCLAW_REPO_CONTRACTS_CACHE_LOADED_ROOT:-}" == "$OPENCLAW_REPO_CONTRACTS_ROOT_DIR" ]]; then
@@ -283,7 +274,6 @@ repo_contracts_load_cache() {
   }
   OPENCLAW_REPO_CONTRACTS_CACHE_LOADED_ROOT="$OPENCLAW_REPO_CONTRACTS_ROOT_DIR"
 }
-
 repo_contract_validate_var_name() {
   local target_var="${1-}"
   [[ "$target_var" != __openclaw_repo_contract_* ]] || {
@@ -295,7 +285,6 @@ repo_contract_validate_var_name() {
     return 97
   }
 }
-
 repo_contract_assign_relpath() {
   local __openclaw_repo_contract_id="$2"
   local __openclaw_repo_contract_rel_path=''
@@ -308,7 +297,6 @@ repo_contract_assign_relpath() {
   }
   printf -v "$1" '%s' "$__openclaw_repo_contract_rel_path"
 }
-
 repo_contract_assign_path() {
   local __openclaw_repo_contract_id="$2"
   local __openclaw_repo_contract_rel_path=''
@@ -321,7 +309,6 @@ repo_contract_assign_path() {
   }
   printf -v "$1" '%s' "$OPENCLAW_REPO_CONTRACTS_ROOT_DIR/$__openclaw_repo_contract_rel_path"
 }
-
 repo_contract_default_relpath() {
   local target_var="$1"
   local contract_id="$2"
@@ -329,7 +316,6 @@ repo_contract_default_relpath() {
   [[ -n "${!target_var:-}" ]] && return 0
   repo_contract_assign_relpath "$target_var" "$contract_id"
 }
-
 repo_contract_default_path() {
   local target_var="$1"
   local contract_id="$2"
@@ -337,13 +323,11 @@ repo_contract_default_path() {
   [[ -n "${!target_var:-}" ]] && return 0
   repo_contract_assign_path "$target_var" "$contract_id"
 }
-
 repo_contract_relpath() {
   local rel_path=''
   repo_contract_assign_relpath rel_path "$1" || return $?
   printf '%s\n' "$rel_path"
 }
-
 repo_contract_path() {
   local abs_path=''
   repo_contract_assign_path abs_path "$1" || return $?

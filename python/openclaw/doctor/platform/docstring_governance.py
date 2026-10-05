@@ -44,11 +44,9 @@ class PublicItem:
 
     @property
     def baseline_key(self) -> str:
-        """返回 item 级基线使用的稳定键，避免只按文件总数递进留下新增接口漏洞。"""
         return f'{self.kind}:{self.qualname}'
 
     def to_json(self) -> dict[str, Any]:
-        """返回稳定 JSON 结构，供报告和基线文件复用。"""
         return {
             'qualname': self.qualname,
             'kind': self.kind,
@@ -59,17 +57,14 @@ class PublicItem:
 
 
 def _repo_rel(path: Path, repo_root: Path) -> str:
-    """把绝对路径转换成仓库内 POSIX 路径，便于跨平台比较。"""
     return path.resolve().relative_to(repo_root.resolve()).as_posix()
 
 
 def _has_chinese(value: str | None) -> bool:
-    """判断说明文本是否包含中文语义，而不是只有英文专有名词。"""
     return bool(value and CHINESE_TEXT_RE.search(value))
 
 
 def _is_excluded(path: Path, repo_root: Path) -> bool:
-    """判断 Python 文件是否属于测试或测试基础设施等非平台生产范围。"""
     rel_parts = Path(_repo_rel(path, repo_root)).parts
     for excluded in DEFAULT_EXCLUDE_PARTS:
         if rel_parts[: len(excluded)] == excluded:
@@ -78,7 +73,6 @@ def _is_excluded(path: Path, repo_root: Path) -> bool:
 
 
 def iter_platform_python_files(repo_root: Path, roots: Iterable[str] = DEFAULT_ROOTS) -> list[Path]:
-    """列出平台生产 Python 文件，排除测试包以保持基线聚焦部署与控制面主路径。"""
     files: list[Path] = []
     for root in roots:
         root_path = (repo_root / root).resolve()
@@ -92,7 +86,6 @@ def iter_platform_python_files(repo_root: Path, roots: Iterable[str] = DEFAULT_R
 
 
 def _public_function_items(nodes: Iterable[ast.stmt], prefix: str = '') -> list[PublicItem]:
-    """从模块或类的一层子节点提取公共函数说明状态，不把局部闭包当成公共接口。"""
     items: list[PublicItem] = []
     for node in nodes:
         if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
@@ -113,11 +106,11 @@ def _public_function_items(nodes: Iterable[ast.stmt], prefix: str = '') -> list[
     return items
 
 
-def collect_file_metrics(path: Path, repo_root: Path) -> dict[str, Any]:
-    """解析单个 Python 文件，返回模块、类、公共函数和公共方法的说明覆盖状态。"""
+def collect_file_metrics(path: Path, repo_root: Path, *, tree: ast.Module | None = None) -> dict[str, Any]:
     rel_path = _repo_rel(path, repo_root)
-    source = path.read_text(encoding='utf-8')
-    tree = ast.parse(source, filename=rel_path)
+    if tree is None:
+        source = path.read_text(encoding='utf-8')
+        tree = ast.parse(source, filename=rel_path)
     module_doc = ast.get_docstring(tree)
     public_items: list[PublicItem] = [
         PublicItem(
@@ -160,9 +153,23 @@ def collect_file_metrics(path: Path, repo_root: Path) -> dict[str, Any]:
     }
 
 
-def build_report(repo_root: Path = ROOT_DIR) -> dict[str, Any]:
-    """生成当前平台 Python 注释覆盖报告，不读取或修改运行态状态。"""
-    files = [collect_file_metrics(path, repo_root) for path in iter_platform_python_files(repo_root)]
+def build_report_from_parsed_files(repo_root: Path, parsed_files: dict[Path, ast.Module]) -> dict[str, Any]:
+    """基于共享 AST 缓存构建平台 docstring 覆盖报告。
+
+    参数：
+        repo_root（Path）：仓库根目录，用于生成稳定相对路径。
+        parsed_files（dict[Path, ast.Module]）：文件绝对路径到已解析 AST 的映射。
+
+    返回：
+        dict[str, Any]：平台公开项覆盖统计、逐文件详情与生成时间。
+
+    副作用：
+        读取当前 UTC 时间写入报告元数据，不修改仓库文件。
+    """
+    files = [
+        collect_file_metrics(path, repo_root, tree=tree)
+        for path, tree in sorted(parsed_files.items(), key=lambda item: str(item[0]))
+    ]
     summary = {
         'files': len(files),
         'publicItems': sum(int(item['publicItems']) for item in files),
@@ -184,8 +191,15 @@ def build_report(repo_root: Path = ROOT_DIR) -> dict[str, Any]:
     }
 
 
+def build_report(repo_root: Path = ROOT_DIR) -> dict[str, Any]:
+    parsed_files = {
+        path: ast.parse(path.read_text(encoding='utf-8'), filename=_repo_rel(path, repo_root))
+        for path in iter_platform_python_files(repo_root)
+    }
+    return build_report_from_parsed_files(repo_root, parsed_files)
+
+
 def build_baseline_payload(report: dict[str, Any]) -> dict[str, Any]:
-    """从当前报告生成可提交的基线文件，后续只允许指标持平或提升。"""
     return {
         'schemaVersion': 1,
         'kind': 'openclaw_platform_docstring_baseline',
@@ -221,7 +235,6 @@ def build_baseline_payload(report: dict[str, Any]) -> dict[str, Any]:
 
 
 def baseline_shard_key(rel_path: str) -> str:
-    """按 python/openclaw 顶层包给基线分片，避免单个巨大 JSON 长期膨胀。"""
     parts = [part for part in str(rel_path).replace('\\', '/').split('/') if part]
     if len(parts) >= 3 and parts[0] == 'python' and parts[1] == 'openclaw':
         if parts[2].endswith('.py'):
@@ -231,7 +244,6 @@ def baseline_shard_key(rel_path: str) -> str:
 
 
 def build_sharded_baseline_payloads(report: dict[str, Any]) -> tuple[dict[str, Any], dict[str, dict[str, Any]]]:
-    """把完整基线拆成 index 与顶层包 shard，读取时仍可合并为旧结构。"""
     monolithic = build_baseline_payload(report)
     shard_files: dict[str, dict[str, Any]] = {}
     for rel_path, file_baseline in sorted(monolithic['fileBaselines'].items()):
@@ -263,14 +275,12 @@ def build_sharded_baseline_payloads(report: dict[str, Any]) -> tuple[dict[str, A
 
 
 def load_baseline(path: Path = DEFAULT_BASELINE_PATH) -> dict[str, Any]:
-    """读取注释治理基线；支持单文件和分片目录两种输入形态。"""
     if path.is_dir():
         return load_sharded_baseline(path)
     return load_monolithic_baseline(path)
 
 
 def load_monolithic_baseline(path: Path) -> dict[str, Any]:
-    """读取单文件基线，并校验顶层结构可用于递进比较。"""
     payload = json.loads(path.read_text(encoding='utf-8'))
     if int(payload.get('schemaVersion') or 0) != 1:
         raise ValueError(f'平台注释治理基线 schemaVersion 不支持：{path}')
@@ -281,7 +291,6 @@ def load_monolithic_baseline(path: Path) -> dict[str, Any]:
 
 
 def load_sharded_baseline(path: Path) -> dict[str, Any]:
-    """读取分片基线目录，并合并为递进比较使用的标准结构。"""
     index_path = path / SHARD_INDEX_NAME
     index_payload = json.loads(index_path.read_text(encoding='utf-8'))
     if int(index_payload.get('schemaVersion') or 0) != 1:
@@ -327,7 +336,6 @@ def load_sharded_baseline(path: Path) -> dict[str, Any]:
 
 
 def compare_with_baseline(report: dict[str, Any], baseline: dict[str, Any]) -> list[str]:
-    """比较当前报告与基线，返回所有新增退化项。"""
     issues: list[str] = []
     current_by_path = {str(item['path']): item for item in report.get('files') or []}
     baseline_by_path = dict(baseline.get('fileBaselines') or {})
@@ -374,7 +382,6 @@ def compare_with_baseline(report: dict[str, Any], baseline: dict[str, Any]) -> l
 
 
 def _issue_path(issue: str) -> str:
-    """从退化说明中提取仓库路径，用于报告分组。"""
     for prefix in HIGH_PRIORITY_PREFIXES:
         index = issue.find(prefix)
         if index >= 0:
@@ -388,7 +395,6 @@ def _issue_path(issue: str) -> str:
 
 
 def issue_groups(issues: list[str]) -> dict[str, Any]:
-    """把退化项按新增缺口和高优先模块分组，便于报告定位递进风险。"""
     new_gap_issues = [issue for issue in issues if '新增' in issue]
     high_priority_issues = [
         issue
@@ -402,13 +408,11 @@ def issue_groups(issues: list[str]) -> dict[str, Any]:
 
 
 def _write_json(path: Path, payload: dict[str, Any]) -> None:
-    """以 UTF-8 和稳定缩进写出 JSON 基线，保证中文说明可读。"""
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + '\n', encoding='utf-8', newline='\n')
 
 
 def write_baseline(path: Path, report: dict[str, Any], *, format_name: str = 'auto') -> None:
-    """写出单文件或分片基线；auto 按路径后缀选择，目录默认使用分片。"""
     selected_format = format_name
     if selected_format == 'auto':
         selected_format = 'monolithic' if path.suffix == '.json' else 'sharded'
@@ -427,7 +431,6 @@ def write_baseline(path: Path, report: dict[str, Any], *, format_name: str = 'au
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
-    """解析命令行参数，区分报告、递进门禁和基线生成三种用途。"""
     parser = argparse.ArgumentParser(description='检查平台 Python 公共接口中文 docstring 覆盖基线。')
     parser.add_argument('--repo-root', default=str(ROOT_DIR))
     parser.add_argument('--baseline', default=str(DEFAULT_BASELINE_PATH))
@@ -439,7 +442,6 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
 
 
 def main(argv: list[str] | None = None) -> int:
-    """执行平台注释治理扫描，并按请求输出 JSON 或人类可读摘要。"""
     args = parse_args(list(sys.argv[1:] if argv is None else argv))
     repo_root = Path(args.repo_root).resolve()
     report = build_report(repo_root)

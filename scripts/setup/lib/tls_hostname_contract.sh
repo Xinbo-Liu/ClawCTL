@@ -7,7 +7,6 @@ fi
 OPENCLAW_TLS_HOSTNAME_CONTRACT_SH_LOADED=1
 
 OPENCLAW_TLS_HOSTNAME_ERROR='必须是 ASCII DNS 主机名，拒绝 IP、IPv4 dotted-quad 形态、通配符、下划线、空白、尾随点、空 label、超长 label 和非 DNS label 字符'
-
 openclaw_tls_hostname_error() {
   local value="${1-}"
   if [[ -z "$value" ]]; then
@@ -62,11 +61,9 @@ openclaw_tls_hostname_error() {
   done
   printf '\n'
 }
-
 openclaw_tls_hostname_is_valid() {
   [[ -z "$(openclaw_tls_hostname_error "${1-}")" ]]
 }
-
 openclaw_tls_hostname_require() {
   local value="${1-}"
   local label="${2:-OPENCLAW_TLS_CN}"

@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 # 用途：修复运行态与仓库内关键目录权限，避免部署后残留宽权限。
 set -euo pipefail
-
 usage() {
   cat <<'USAGE'
 用法：

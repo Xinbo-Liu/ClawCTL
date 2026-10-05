@@ -76,7 +76,6 @@ def _build_attach_plan(
     model_profile_ref: str,
     job_file_prefix: str,
 ) -> tuple[dict[str, Any], list[dict[str, Any]], Path, Path]:
-    """生成 attach 的 staged write 计划。"""
     normalized_module_ref = str(module_ref or '').strip()
     normalized_operation_ref = str(operation_ref or '').strip()
     normalized_job_id = str(job_id or '').strip()
@@ -196,13 +195,11 @@ def _build_attach_plan(
 
 
 def plan_agent_module_attach(**kwargs: Any) -> dict[str, Any]:
-    """生成 module attach 计划。"""
     plan, _, _, _ = _build_attach_plan(**kwargs)
     return plan
 
 
 def apply_agent_module_attach(**kwargs: Any) -> dict[str, Any]:
-    """落盘执行 module attach 计划。"""
     plan, writes, _, config_path = _build_attach_plan(**kwargs)
     apply_staged_writes(writes=writes, config_path=config_path)
     return {**plan, 'mode': 'apply'}
@@ -216,7 +213,6 @@ def _build_detach_plan(
     job_id: str,
     operation_ref: str,
 ) -> tuple[dict[str, Any], list[dict[str, Any]], Path, Path]:
-    """生成 detach 的 staged write 计划。"""
     normalized_module_ref = str(module_ref or '').strip()
     normalized_job_id = str(job_id or '').strip()
     normalized_operation_ref = str(operation_ref or '').strip()
@@ -286,13 +282,11 @@ def _build_detach_plan(
 
 
 def plan_agent_module_detach(**kwargs: Any) -> dict[str, Any]:
-    """生成 module detach 计划。"""
     plan, _, _, _ = _build_detach_plan(**kwargs)
     return plan
 
 
 def apply_agent_module_detach(**kwargs: Any) -> dict[str, Any]:
-    """落盘执行 module detach 计划。"""
     plan, writes, _, config_path = _build_detach_plan(**kwargs)
     apply_staged_writes(writes=writes, config_path=config_path)
     return {**plan, 'mode': 'apply'}

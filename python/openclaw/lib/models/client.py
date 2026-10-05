@@ -27,6 +27,7 @@ class ModelClientError(RuntimeError):
 
 @dataclass(frozen=True)
 class ModelResponse:
+    """模型调用响应。"""
     profile_ref: str
     provider: str
     model_ref: str

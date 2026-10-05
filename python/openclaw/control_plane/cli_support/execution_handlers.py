@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Execution-oriented control-plane CLI handlers."""
+"""提供OpenClaw 控制平面子系统的生产实现。"""
 from __future__ import annotations
 
 import argparse
@@ -22,7 +22,7 @@ from openclaw.control_plane.registry import (
 )
 from openclaw.lib.io.json_access import json_object
 from openclaw.lib.runtime.time import app_timezone_name
-from openclaw.scheduler.runtime import candidate_due, dependency_block_reason, ensure_job_state, refresh_next_scheduled, runtime_job_key
+from openclaw.scheduler.engine import candidate_due, dependency_block_reason, ensure_job_state, refresh_next_scheduled, runtime_job_key
 
 
 def _qualify_ref_for_extension(ref: str | None, extension_id: str | None) -> str:
@@ -34,7 +34,6 @@ def _qualify_ref_for_extension(ref: str | None, extension_id: str | None) -> str
 
 
 def cmd_due_preview(args: argparse.Namespace) -> int:
-    """预览当前到期 job 的调度判断结果。"""
     registry = cli_support._load_registry_from_args(args)
     defaults = json_object(registry.get('defaults'))
     default_tz = str(defaults.get('timezone') or app_timezone_name()).strip()
@@ -84,7 +83,6 @@ def cmd_due_preview(args: argparse.Namespace) -> int:
 
 
 def cmd_resolve_job_command(args: argparse.Namespace) -> int:
-    """解析单个 job 的最终执行命令。"""
     registry = cli_support._load_registry_from_args(args)
     job_ref = _qualify_ref_for_extension(args.job_id, getattr(args, 'extension', ''))
     command = resolve_job_command(registry, job_ref)
@@ -96,7 +94,6 @@ def cmd_resolve_job_command(args: argparse.Namespace) -> int:
 
 
 def cmd_resolve_job_plan(args: argparse.Namespace) -> int:
-    """解析单个 job 的执行计划。"""
     registry = cli_support._load_registry_from_args(args)
     job_ref = _qualify_ref_for_extension(args.job_id, getattr(args, 'extension', ''))
     plan = resolve_job_execution_plan(registry, job_ref)
@@ -108,7 +105,6 @@ def cmd_resolve_job_plan(args: argparse.Namespace) -> int:
 
 
 def cmd_resolve_target_operation(args: argparse.Namespace) -> int:
-    """解析 target operation 的最终执行命令。"""
     registry = cli_support._load_registry_from_args(args)
     passthrough = cli_support._passthrough_args(args.passthrough)
     resolved_target_binding_ref = resolve_target_binding_ref_for_operation(
@@ -135,7 +131,6 @@ def cmd_resolve_target_operation(args: argparse.Namespace) -> int:
 
 
 def cmd_run_target_operation(args: argparse.Namespace) -> int:
-    """执行 target operation。"""
     registry = cli_support._load_registry_from_args(args)
     passthrough = cli_support._passthrough_args(args.passthrough)
     resolved_target_binding_ref = resolve_target_binding_ref_for_operation(
@@ -157,7 +152,6 @@ def cmd_run_target_operation(args: argparse.Namespace) -> int:
 
 
 def cmd_run_agent_runtime(args: argparse.Namespace) -> int:
-    """执行已注册的 agent runtime。"""
     with cli_support._control_plane_config_override(cli_support._config_path_from_args(args)):
         registry = cli_support._load_registry_from_args(args)
         passthrough = cli_support._passthrough_args(args.passthrough)

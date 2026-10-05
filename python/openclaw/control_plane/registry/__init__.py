@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Public control-plane registry API."""
+"""提供OpenClaw 控制平面子系统的生产实现。"""
 from __future__ import annotations
 
 from pathlib import Path

@@ -266,7 +266,8 @@ class DispatchOperationResolutionTest(unittest.TestCase):
         self.assertEqual(payload.get('status'), 'pass')
         commands = [call.args[0] for call in run_mock.call_args_list]
         self.assertEqual(len(commands), 2)
-        for command in commands:
+        operation_run_ids: set[str] = set()
+        for call, command in zip(run_mock.call_args_list, commands, strict=True):
             self.assertEqual(command[0], sys.executable)
             self.assertEqual(command[3:6], ['control-plane', 'runtime', 'run-agent-runtime'])
             self.assertIn('--config-path', command)
@@ -274,6 +275,13 @@ class DispatchOperationResolutionTest(unittest.TestCase):
             self.assertIn('--target', command)
             self.assertIn(PROBE_TARGET_REF, command)
             self.assertIn('--', command)
+            child_env = call.kwargs['env']
+            operation_run_id = str(child_env.get('OPENCLAW_CONTROL_PLANE_SCHEDULER_RUN_ID') or '')
+            self.assertTrue(operation_run_id.startswith('target-operation-'))
+            self.assertEqual(child_env.get('OPENCLAW_CONTROL_PLANE_RUN_ID'), operation_run_id)
+            operation_run_ids.add(operation_run_id)
+        self.assertEqual(len(operation_run_ids), 2)
+        self.assertTrue(all(str(row.get('operation_run_id') or '').startswith('target-operation-') for row in payload['operations']))
 
     def test_verify_target_can_use_scheduler_execution_surface(self) -> None:
         opts = dispatch_operations_surface.parse_args([

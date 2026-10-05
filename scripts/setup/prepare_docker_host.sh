@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 用途：统一准备 CentOS 7 存量老系统路径 Docker 宿主机；支持 CentOS 7 vault repo 修复、预工具安装、Docker / Compose 安装、daemon 基线与防火墙开放。
+# 用途：统一准备 Docker 宿主机；Ubuntu 22.04 是新部署推荐基线，CentOS 7 是存量 legacy 路径。
 set -euo pipefail
 
 __openclaw_script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
@@ -11,6 +11,8 @@ source "$ROOT_DIR/scripts/setup/lib/setup_flow_handoff.sh"
 source "$ROOT_DIR/scripts/setup/lib/setup_cli_common.sh"
 # shellcheck source=../lib/docker_host_support_truth.sh
 source "$ROOT_DIR/scripts/lib/docker_host_support_truth.sh"
+# shellcheck source=../lib/docker_mtu_contract.sh
+source "$ROOT_DIR/scripts/lib/docker_mtu_contract.sh"
 # shellcheck source=../lib/system_time_guard.sh
 source "$ROOT_DIR/scripts/lib/system_time_guard.sh"
 HOST_SUPPORT_POLICY_PATH="$(docker_host_support_truth_path)"
@@ -29,11 +31,12 @@ FORCE_REPAIR_REPOS=0
 CENTOS7_VAULT_SOURCE="${OPENCLAW_CENTOS7_VAULT_SOURCE:-all}"
 DOCKER_REPO_SOURCE="${OPENCLAW_DOCKER_CENTOS_REPO_SOURCE:-all}"
 NETWORK_PROFILE="${OPENCLAW_DEPLOY_NETWORK_PROFILE:-auto}"
+HOST_OS_TARGET="${OPENCLAW_DOCKER_HOST_OS:-auto}"
+DOCKER_NETWORK_MTU="${OPENCLAW_DOCKER_NETWORK_MTU:-auto}"
 CENTOS7_VAULT_SOURCE_EXPLICIT=0
 DOCKER_REPO_SOURCE_EXPLICIT=0
 [[ -n "${OPENCLAW_CENTOS7_VAULT_SOURCE:-}" ]] && CENTOS7_VAULT_SOURCE_EXPLICIT=1
 [[ -n "${OPENCLAW_DOCKER_CENTOS_REPO_SOURCE:-}" ]] && DOCKER_REPO_SOURCE_EXPLICIT=1
-
 usage() {
   local purpose=''
   local examples=''
@@ -93,6 +96,7 @@ USAGE
 
 选项：
   --all                             执行完整宿主机准备流程。
+  --os <auto|ubuntu22.04|centos7>   指定宿主机准备分支，默认 auto。
   --offline                         仅跳过外网探测 / 在线仓库刷新；不适用于在线安装预工具、Docker、Compose。
   --repair-centos7-vault-repos      强制把 CentOS 7 Base repo 切到已登记 vault 候选源。
   --centos7-vault-source <id|all>   选择 CentOS 7 vault repo；默认 all，按 official -> aliyun_cn -> tuna_cn 自动回退。
@@ -103,30 +107,25 @@ USAGE
   --install-docker                  安装 Docker Engine 建议版本。
   --install-compose                 安装 Docker Compose V2 插件。
   --docker-repo-source <id|all>      选择 Docker Yum repo；默认 all，按 official -> aliyun_cn -> tuna_cn 自动回退。
-  --configure-daemon                写入 /etc/docker/daemon.json 并重启 Docker。
+  --configure-daemon                写入 /etc/docker/daemon.json 并重启 Docker；OPENCLAW_DOCKER_NETWORK_MTU=auto|<int> 控制 Docker MTU。
   --open-firewall                   若 firewalld 正在运行，先预开放 80/443，并收口 Docker permanent docker zone；host_firewall 的来源限制需在 one_click_config 后通过 apply_ingress_boundary_rules.sh 物化。
   -h, --help                        显示帮助。
 USAGE
   setup_help_surface_guarantee_text
 }
-
 note() {
   echo "[prepare_docker_host][INFO] $1"
 }
-
 warn() {
   echo "[prepare_docker_host][WARN] $1"
 }
-
 fail() {
   echo "[prepare_docker_host][FAIL] $1" >&2
   exit "${2:-2}"
 }
-
 require_root() {
   [[ "$(id -u)" == "0" ]] || fail '当前脚本需要 root 权限；请使用 sudo bash ./scripts/setup/prepare_docker_host.sh ...' 30
 }
-
 require_cmd() {
   local cmd="$1"
   command -v "$cmd" >/dev/null 2>&1 || fail "缺少命令：$cmd" 31
@@ -137,7 +136,6 @@ COMPOSE_VERSION="$(docker_host_support_supported_centos7_section_value "$HOST_SU
 DOCKER_RPM_VERSION="${DOCKER_VERSION}-1.el7"
 COMPOSE_RPM_VERSION="${COMPOSE_VERSION}-1.el7"
 JQ_DIRECT_BINARY_VERSION="1.7.1"
-
 compose_download_sha256() {
   case "$(compose_arch_suffix)" in
     x86_64)
@@ -149,7 +147,6 @@ compose_download_sha256() {
       ;;
   esac
 }
-
 jq_download_sha256() {
   local asset_name=''
   asset_name="$(select_jq_download_asset)"
@@ -163,7 +160,6 @@ jq_download_sha256() {
       ;;
   esac
 }
-
 verify_download_sha256() {
   local file_path="$1"
   local expected_sha256="$2"
@@ -174,7 +170,6 @@ verify_download_sha256() {
   actual_sha256="$(sha256sum "$file_path" | awk '{print $1}')"
   [[ "$actual_sha256" == "$expected_sha256" ]] || fail "$label 下载校验失败：期望 $expected_sha256，实际 $actual_sha256。已拒绝安装未校验二进制。" 43
 }
-
 is_centos7() {
   if [[ -f /etc/os-release ]]; then
     # shellcheck disable=SC1091
@@ -184,7 +179,46 @@ is_centos7() {
   fi
   [[ -f /etc/centos-release ]] && grep -Eq 'CentOS( Linux)? release 7' /etc/centos-release
 }
-
+is_ubuntu2204() {
+  if [[ -f /etc/os-release ]]; then
+    # shellcheck disable=SC1091
+    source /etc/os-release
+    [[ "${ID:-}" == "ubuntu" && "${VERSION_ID:-}" == 22.04* ]]
+    return
+  fi
+  return 1
+}
+detect_docker_host_os() {
+  if is_ubuntu2204; then
+    printf 'ubuntu22.04\n'
+    return 0
+  fi
+  if is_centos7; then
+    printf 'centos7\n'
+    return 0
+  fi
+  printf 'unsupported\n'
+}
+resolve_docker_host_os() {
+  local detected=''
+  detected="$(detect_docker_host_os)"
+  case "$HOST_OS_TARGET" in
+    ''|auto)
+      HOST_OS_TARGET="$detected"
+      ;;
+    ubuntu22.04|ubuntu2204|ubuntu)
+      HOST_OS_TARGET='ubuntu22.04'
+      ;;
+    centos7|centos)
+      HOST_OS_TARGET='centos7'
+      ;;
+    *)
+      fail "不支持的 --os：$HOST_OS_TARGET；可选 auto|ubuntu22.04|centos7。" 2
+      ;;
+  esac
+  [[ "$detected" != 'unsupported' ]] || fail '当前宿主机不是受支持的 Ubuntu 22.04 或 CentOS 7；请改用维护期内 Linux 并补充支持策略后再执行。' 32
+  [[ "$detected" == "$HOST_OS_TARGET" ]] || fail "--os=$HOST_OS_TARGET 与实际宿主机不一致（detected=$detected）。" 32
+}
 compose_arch_suffix() {
   local arch=''
   arch="$(uname -m)"
@@ -200,11 +234,9 @@ compose_arch_suffix() {
       ;;
   esac
 }
-
 compose_plugin_path() {
   printf '/usr/local/lib/docker/cli-plugins/docker-compose\n'
 }
-
 compose_download_url() {
   if [[ -n "${OPENCLAW_COMPOSE_DOWNLOAD_URL:-}" ]]; then
     printf '%s\n' "${OPENCLAW_COMPOSE_DOWNLOAD_URL}"
@@ -214,7 +246,6 @@ compose_download_url() {
   arch_suffix="$(compose_arch_suffix)"
   printf 'https://github.com/docker/compose/releases/download/v%s/docker-compose-linux-%s\n' "$COMPOSE_VERSION" "$arch_suffix"
 }
-
 current_compose_version() {
   local output=''
   local version=''
@@ -235,33 +266,27 @@ current_compose_version() {
   fi
   return 1
 }
-
 compose_version_is_recommended() {
   local version=''
   version="$(current_compose_version || true)"
   [[ "$version" == "$COMPOSE_VERSION" ]]
 }
-
 compose_rpm_version() {
   rpm -q --qf '%{VERSION}\n' docker-compose-plugin 2>/dev/null || true
 }
-
 compose_rpm_is_recommended() {
   [[ "$(compose_rpm_version)" == "$COMPOSE_VERSION" ]]
 }
-
 remove_local_compose_plugin() {
   local plugin_path=''
   plugin_path="$(compose_plugin_path)"
   [[ -f "$plugin_path" ]] || return 0
   rm -f "$plugin_path"
 }
-
 verify_compose_installation() {
   docker compose version >/dev/null 2>&1 || fail 'Docker Compose 插件已安装，但 docker compose 命令仍不可用。' 37
   compose_version_is_recommended || fail "Docker Compose 插件版本不符合建议值：期望 $COMPOSE_VERSION，实际 $(current_compose_version || echo '<unknown>')。" 37
 }
-
 install_compose_via_binary_fallback() {
   require_cmd curl
   local plugin_path=''
@@ -281,7 +306,6 @@ install_compose_via_binary_fallback() {
   mv -f "$partial_path" "$plugin_path"
   chmod 0755 "$plugin_path"
 }
-
 select_jq_download_asset() {
   local arch=''
   arch="$(uname -m)"
@@ -297,7 +321,6 @@ select_jq_download_asset() {
       ;;
   esac
 }
-
 verify_base_tool_commands() {
   local missing=()
   local cmd=''
@@ -311,7 +334,6 @@ verify_base_tool_commands() {
     fail "宿主机预工具安装未完成；仍缺少命令：${missing[*]}。CentOS 7 常见原因是 jq 不在默认 Base 仓库；脚本已尝试 EPEL / 直接二进制补装。请检查上方安装日志并重新执行 --install-base-tools。" 40
   fi
 }
-
 install_jq_via_direct_binary() {
   require_cmd curl
   local asset_name=''
@@ -329,7 +351,6 @@ install_jq_via_direct_binary() {
   mv -f "$partial_target" "$target"
   chmod 0755 "$target"
 }
-
 ensure_jq_installed() {
   if command -v jq >/dev/null 2>&1; then
     return 0
@@ -368,7 +389,6 @@ ensure_jq_installed() {
   install_jq_via_direct_binary
   command -v jq >/dev/null 2>&1 || fail 'jq 补装失败；请检查网络出口或手工提供 jq 后重试。' 42
 }
-
 yum_makecache_maybe_repair() {
   [[ "$OFFLINE_MODE" == "1" ]] && return 0
   local cache_log=""
@@ -390,7 +410,6 @@ yum_makecache_maybe_repair() {
   rm -f "$cache_log"
   fail 'yum makecache fast 失败；请先修复仓库配置。' 33
 }
-
 centos7_vault_candidate_lines() {
   if [[ -n "${OPENCLAW_CENTOS7_VAULT_BASE_URL:-}" ]]; then
     printf '%s\t%s\n' "${OPENCLAW_CENTOS7_VAULT_SOURCE:-override}" "$OPENCLAW_CENTOS7_VAULT_BASE_URL"
@@ -404,7 +423,6 @@ centos7_vault_candidate_lines() {
     fi
   done < <(docker_host_support_supported_centos7_vault_repo_candidates "$HOST_SUPPORT_POLICY_PATH")
 }
-
 write_centos7_base_repo() {
   local repo_dir="$1"
   local base_url="${2%/}"
@@ -438,7 +456,6 @@ enabled=0
 gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-CentOS-7
 REPO
 }
-
 repair_centos7_vault_repos() {
   is_centos7 || fail '仅 CentOS 7 需要执行 vault repo 修复。' 34
   local repo_dir='/etc/yum.repos.d'
@@ -466,8 +483,43 @@ repair_centos7_vault_repos() {
   done
   fail "CentOS 7 vault repo 修复失败；已尝试：$attempted_repos。中国国内网络优先执行 --network-profile cn，单独修复 repo 时可显式执行 --centos7-vault-source aliyun_cn；内网 vault 可设置 OPENCLAW_CENTOS7_VAULT_BASE_URL。" 34
 }
-
-install_base_tools() {
+ubuntu_apt_update() {
+  [[ "$OFFLINE_MODE" == "1" ]] && fail '--offline 模式下不能执行在线 apt 更新；请先准备本地 apt 源或取消 --offline。' 35
+  require_cmd apt-get
+  DEBIAN_FRONTEND=noninteractive apt-get update
+}
+install_base_tools_ubuntu() {
+  [[ "$OFFLINE_MODE" == "1" ]] && fail '--offline 模式下不能执行在线 apt 安装；请先准备本地 apt 源或取消 --offline。' 35
+  ubuntu_apt_update
+  DEBIAN_FRONTEND=noninteractive apt-get install -y \
+    acl \
+    ca-certificates \
+    chrony \
+    curl \
+    debianutils \
+    dnsutils \
+    git \
+    iproute2 \
+    iptables \
+    jq \
+    less \
+    lsof \
+    net-tools \
+    openssl \
+    rsync \
+    tar \
+    unzip \
+    vim \
+    wget \
+    zip
+  verify_base_tool_commands
+  note 'Ubuntu 22.04 预工具安装完成。'
+  note "jq 路径：$(command -v jq)"
+  note "dig 路径：$(command -v dig)"
+  note "ss 路径：$(command -v ss)"
+  note "ip 路径：$(command -v ip)"
+}
+install_base_tools_centos7() {
   [[ "$OFFLINE_MODE" == "1" ]] && fail '--offline 模式下不能执行在线 yum 安装；请先准备本地仓库或取消 --offline。' 35
   yum_makecache_maybe_repair
   yum install -y \
@@ -502,7 +554,13 @@ install_base_tools() {
   note "ss 路径：$(command -v ss)"
   note "ip 路径：$(command -v ip)"
 }
-
+install_base_tools() {
+  case "$HOST_OS_TARGET" in
+    ubuntu22.04) install_base_tools_ubuntu ;;
+    centos7) install_base_tools_centos7 ;;
+    *) fail "当前 OS 不支持安装预工具：$HOST_OS_TARGET" 35 ;;
+  esac
+}
 configure_kernel() {
   update_system_time
   cat > /etc/modules-load.d/br_netfilter.conf <<'EOF2'
@@ -517,13 +575,11 @@ EOF2
   sysctl --system >/dev/null
   note '时区、系统时间、内核模块与 sysctl 准备完成。'
 }
-
 update_system_time() {
   local args=(--timezone "$DEFAULT_TIMEZONE")
   [[ "$OFFLINE_MODE" == "1" ]] && args+=(--offline)
   system_time_guard_update "${args[@]}" || fail '系统时间自动校验 / 更新失败；请先修复 NTP、网络时间基准或使用 --offline 明确跳过外部基准。' 44
 }
-
 preflight_system_time_before_network_install() {
   [[ "$OFFLINE_MODE" == "1" ]] && return 0
   command -v curl >/dev/null 2>&1 || {
@@ -533,7 +589,6 @@ preflight_system_time_before_network_install() {
   note '执行网络安装前系统时间预校验。'
   system_time_guard_update --timezone "$DEFAULT_TIMEZONE" || fail '网络安装前系统时间预校验失败；请先修复 NTP / HTTP Date 参考端点，或设置 OPENCLAW_SYSTEM_TIME_REFERENCE_URLS 指向当前网络可达端点后重试。' 44
 }
-
 docker_repo_candidate_lines() {
   if [[ -n "${OPENCLAW_DOCKER_CENTOS_REPO_URL:-}" ]]; then
     printf '%s\t%s\n' "${OPENCLAW_DOCKER_CENTOS_REPO_SOURCE:-override}" "$OPENCLAW_DOCKER_CENTOS_REPO_URL"
@@ -547,8 +602,15 @@ docker_repo_candidate_lines() {
     fi
   done < <(docker_host_support_supported_centos7_docker_repo_candidates "$HOST_SUPPORT_POLICY_PATH")
 }
-
-install_docker() {
+install_docker_ubuntu() {
+  [[ "$OFFLINE_MODE" == "1" ]] && fail '--offline 模式下不能执行在线 Docker 安装；请先准备离线 deb 包或取消 --offline。' 36
+  ubuntu_apt_update
+  DEBIAN_FRONTEND=noninteractive apt-get install -y docker.io
+  systemctl enable --now docker
+  docker version >/dev/null
+  note 'Ubuntu 22.04 Docker Engine 已安装并启动。'
+}
+install_docker_centos7() {
   [[ "$OFFLINE_MODE" == "1" ]] && fail '--offline 模式下不能执行在线 Docker 安装；请先准备离线 RPM 或取消 --offline。' 36
   if ! (yum_makecache_maybe_repair); then
     warn 'Docker 安装前 yum makecache 预热失败；继续进入 Docker Yum repo 候选循环，由每个候选源独立刷新并给出最终错误。'
@@ -587,8 +649,34 @@ install_docker() {
   done
   fail "Docker Engine 安装失败；已尝试 Docker Yum repo：$attempted_repos。中国国内网络优先执行 --network-profile cn，单独修复 Docker repo 时可显式执行 --docker-repo-source aliyun_cn；内网制品源可设置 OPENCLAW_DOCKER_CENTOS_REPO_URL。" 36
 }
-
-install_compose() {
+install_docker() {
+  case "$HOST_OS_TARGET" in
+    ubuntu22.04) install_docker_ubuntu ;;
+    centos7) install_docker_centos7 ;;
+    *) fail "当前 OS 不支持安装 Docker：$HOST_OS_TARGET" 36 ;;
+  esac
+}
+install_compose_ubuntu() {
+  [[ "$OFFLINE_MODE" == "1" ]] && fail '--offline 模式下不能在线安装 Compose 插件；请先准备离线 deb 包或取消 --offline。' 37
+  require_cmd docker
+  if docker compose version >/dev/null 2>&1; then
+    note "Ubuntu 22.04 Docker Compose 插件已存在：$(docker compose version --short 2>/dev/null || docker compose version)"
+    return 0
+  fi
+  ubuntu_apt_update
+  if DEBIAN_FRONTEND=noninteractive apt-get install -y docker-compose-v2; then
+    docker compose version >/dev/null 2>&1 || fail 'docker-compose-v2 已安装，但 docker compose 命令仍不可用。' 37
+    note 'Ubuntu 22.04 Docker Compose V2 已通过 docker-compose-v2 安装。'
+    return 0
+  fi
+  if DEBIAN_FRONTEND=noninteractive apt-get install -y docker-compose-plugin; then
+    docker compose version >/dev/null 2>&1 || fail 'docker-compose-plugin 已安装，但 docker compose 命令仍不可用。' 37
+    note 'Ubuntu 22.04 Docker Compose V2 已通过 docker-compose-plugin 安装。'
+    return 0
+  fi
+  fail 'Ubuntu 22.04 Docker Compose V2 安装失败；请检查 apt 源是否提供 docker-compose-v2 或 docker-compose-plugin。' 37
+}
+install_compose_centos7() {
   [[ "$OFFLINE_MODE" == "1" ]] && fail '--offline 模式下不能在线安装 Compose 插件；请先准备本地 RPM / YUM 源，或取消 --offline 后重新执行。' 37
   require_cmd docker
 
@@ -621,37 +709,57 @@ install_compose() {
   verify_compose_installation
   note "Docker Compose 插件已通过二进制回退安装；建议版本：$COMPOSE_VERSION"
 }
-
+install_compose() {
+  case "$HOST_OS_TARGET" in
+    ubuntu22.04) install_compose_ubuntu ;;
+    centos7) install_compose_centos7 ;;
+    *) fail "当前 OS 不支持安装 Compose：$HOST_OS_TARGET" 37 ;;
+  esac
+}
 backup_if_exists() {
   local path="$1"
   if [[ -f "$path" ]]; then
     cp -a "$path" "${path}.bak.$(date +%Y%m%d%H%M%S)"
   fi
 }
-
 json_escape_string() {
   local value="$1"
   value="${value//\\/\\\\}"
   value="${value//\"/\\\"}"
   printf '%s' "$value"
 }
-
 docker_registry_mirror_lines() {
   if [[ -n "${OPENCLAW_DOCKER_REGISTRY_MIRRORS:-}" ]]; then
     printf '%s\n' "$OPENCLAW_DOCKER_REGISTRY_MIRRORS" | tr ',;' '\n' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//' | awk 'NF'
     return 0
   fi
-  docker_host_support_supported_centos7_registry_mirrors "$HOST_SUPPORT_POLICY_PATH"
+  case "$HOST_OS_TARGET" in
+    ubuntu22.04)
+      docker_host_support_policy_registry_mirrors "$HOST_SUPPORT_POLICY_PATH" supported_ubuntu2204
+      ;;
+    centos7)
+      docker_host_support_supported_centos7_registry_mirrors "$HOST_SUPPORT_POLICY_PATH"
+      ;;
+    *)
+      docker_host_support_supported_centos7_registry_mirrors "$HOST_SUPPORT_POLICY_PATH"
+      ;;
+  esac
 }
-
 configure_daemon() {
   local mirrors=()
   local mirror=''
   local index=0
+  local requested_mtu=''
   mkdir -p /etc/docker
   backup_if_exists /etc/docker/daemon.json
   mapfile -t mirrors < <(docker_registry_mirror_lines)
   (( ${#mirrors[@]} > 0 )) || fail 'Docker daemon registry-mirrors 候选为空；请检查 docker_host.json 或 OPENCLAW_DOCKER_REGISTRY_MIRRORS。' 45
+  if ! requested_mtu="$(openclaw_docker_mtu_requested_value "$DOCKER_NETWORK_MTU")"; then
+    fail "OPENCLAW_DOCKER_NETWORK_MTU 无效：$DOCKER_NETWORK_MTU" 45
+  fi
+  if [[ -n "$requested_mtu" ]]; then
+    openclaw_docker_mtu_validate "$requested_mtu" || fail "OPENCLAW_DOCKER_NETWORK_MTU 无效：$DOCKER_NETWORK_MTU" 45
+  fi
   {
     cat <<'EOF2'
 {
@@ -674,21 +782,28 @@ EOF2
     "max-size": "100m",
     "max-file": "3"
   },
+EOF2
+    if [[ -n "$requested_mtu" ]]; then
+      printf '  "mtu": %s,\n' "$requested_mtu"
+    fi
+    cat <<'EOF2'
   "storage-driver": "overlay2"
 }
 EOF2
   } > /etc/docker/daemon.json
   systemctl restart docker
-  note "Docker daemon 配置已写入并完成重启；registry-mirrors=${mirrors[*]}"
+  if [[ -n "$requested_mtu" ]]; then
+    note "Docker daemon 配置已写入并完成重启；registry-mirrors=${mirrors[*]}；mtu=$requested_mtu"
+  else
+    note "Docker daemon 配置已写入并完成重启；registry-mirrors=${mirrors[*]}；mtu=未写入（宿主默认路由 MTU >= 1500 或未配置）"
+  fi
 }
-
 firewalld_permanent_zone_exists() {
   local zone="$1"
   firewall-cmd --permanent --get-zones 2>/dev/null | tr ' ' '\n' | grep -Fxq "$zone"
 }
 
 DOCKER_FIREWALLD_ZONE_CHANGED=0
-
 ensure_docker_firewalld_zone() {
   local target=''
   firewalld_permanent_zone_exists docker || {
@@ -703,7 +818,6 @@ ensure_docker_firewalld_zone() {
     note '已把 firewalld docker zone target 设置为 ACCEPT。'
   fi
 }
-
 smoke_test_docker_bridge_network() {
   local network_name="openclaw-firewalld-smoke-$$"
   local err_file=''
@@ -721,7 +835,7 @@ smoke_test_docker_bridge_network() {
     err="$(cat "$err_file" 2>/dev/null || true)"
     rm -f "$err_file"
     if printf '%s' "$err" | grep -q 'INVALID_ZONE.*docker'; then
-      fail "Docker bridge NAT 烟测失败：firewalld 缺少可用 docker zone（$err）。请重新执行 sudo bash ./scripts/setup/prepare_docker_host.sh --open-firewall，或按 troubleshooting 的 INVALID_ZONE 修复段处理。" 48
+      fail "Docker bridge NAT 烟测失败：firewalld 缺少可用 docker zone（$err）。请重新执行 sudo bash ./scripts/setup/prepare_docker_host.sh --os auto --open-firewall，或按 troubleshooting 的 INVALID_ZONE 修复段处理。" 48
     fi
     fail "Docker bridge NAT 烟测失败：$err" 48
   fi
@@ -729,7 +843,6 @@ smoke_test_docker_bridge_network() {
   docker network rm "$network_name" >/dev/null 2>&1 || warn "Docker bridge 烟测网络清理失败：$network_name"
   note 'Docker bridge / firewalld NAT 烟测通过。'
 }
-
 open_firewall_ports() {
   if ! command -v firewall-cmd >/dev/null 2>&1; then
     warn '未检测到 firewall-cmd；跳过 firewalld 端口开放。'
@@ -751,7 +864,6 @@ open_firewall_ports() {
   smoke_test_docker_bridge_network
   note 'firewalld 预开放 80/443 完成；host_firewall 的来源限制需后续通过 apply_ingress_boundary_rules.sh 继续收口。'
 }
-
 apply_network_profile_defaults() {
   local profile="$NETWORK_PROFILE"
   local vault_source=''
@@ -782,7 +894,6 @@ apply_network_profile_defaults() {
   [[ "$CENTOS7_VAULT_SOURCE_EXPLICIT" == "1" ]] || CENTOS7_VAULT_SOURCE="$vault_source"
   [[ "$DOCKER_REPO_SOURCE_EXPLICIT" == "1" ]] || DOCKER_REPO_SOURCE="$docker_source"
 }
-
 main() {
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -791,6 +902,11 @@ while [[ $# -gt 0 ]]; do
       ;;
     --offline)
       OFFLINE_MODE=1
+      ;;
+    --os)
+      [[ $# -ge 2 ]] || fail '--os 缺少参数值。' 2
+      HOST_OS_TARGET="$2"
+      shift
       ;;
     --repair-centos7-vault-repos)
       RUN_REPAIR_REPOS=1
@@ -845,8 +961,6 @@ while [[ $# -gt 0 ]]; do
   shift
 done
 
-apply_network_profile_defaults
-
 if [[ "$RUN_ALL" == "1" ]]; then
   RUN_REPAIR_REPOS=1
   RUN_INSTALL_BASE_TOOLS=1
@@ -862,17 +976,23 @@ if [[ "$RUN_REPAIR_REPOS$RUN_INSTALL_BASE_TOOLS$RUN_UPDATE_SYSTEM_TIME$RUN_CONFI
   exit 2
 fi
 
+resolve_docker_host_os
+apply_network_profile_defaults
+
 if [[ "$OFFLINE_MODE" == "1" && ( "$RUN_ALL" == "1" || "$RUN_INSTALL_BASE_TOOLS" == "1" || "$RUN_INSTALL_DOCKER" == "1" || "$RUN_INSTALL_COMPOSE" == "1" ) ]]; then
-  fail '--offline 不能用于在线安装预工具 / Docker / Compose；离线新机请先挂载本地 RPM / YUM 源，然后不要传 --offline，按安装步骤分步执行。当前脚本对 Compose 的唯一安装策略为 RPM 优先、二进制下载后备路径；若当前机器已经具备 Docker / Compose，仅执行 --configure-kernel --configure-daemon --open-firewall。' 38
+  fail '--offline 不能用于在线安装预工具 / Docker / Compose；离线新机请先挂载本地 RPM / YUM 或 apt 源，然后不要传 --offline，按安装步骤分步执行。当前机器已经具备 Docker / Compose 时，仅执行 --configure-kernel --configure-daemon --open-firewall。' 38
 fi
 
 require_root
 note "仓库根目录：$ROOT_DIR"
-note "部署网络 profile：$NETWORK_PROFILE；CentOS 7 vault source=$CENTOS7_VAULT_SOURCE；Docker Yum repo source=$DOCKER_REPO_SOURCE。"
-if is_centos7; then
-  note '检测到 CentOS 7 宿主机。'
+note "宿主机 OS 分支：$HOST_OS_TARGET"
+note "部署网络 profile：$NETWORK_PROFILE；CentOS 7 vault source=$CENTOS7_VAULT_SOURCE；Docker Yum repo source=$DOCKER_REPO_SOURCE；Docker MTU=$DOCKER_NETWORK_MTU。"
+if [[ "$HOST_OS_TARGET" == "centos7" ]]; then
+  note '检测到 CentOS 7 legacy 宿主机。'
+elif [[ "$HOST_OS_TARGET" == "ubuntu22.04" ]]; then
+  note '检测到 Ubuntu 22.04 推荐宿主机。'
 else
-  warn '当前宿主机不是 CentOS 7；repo 修复逻辑会按需跳过。'
+  warn "当前宿主机分支未识别：$HOST_OS_TARGET。"
 fi
 
 if [[ "$RUN_INSTALL_BASE_TOOLS$RUN_INSTALL_DOCKER$RUN_INSTALL_COMPOSE" != "000" || ( "$RUN_REPAIR_REPOS" == "1" && "$FORCE_REPAIR_REPOS" != "1" ) ]]; then

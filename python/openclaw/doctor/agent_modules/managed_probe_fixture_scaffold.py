@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Extension-scaffold helpers for the managed probe fixture."""
+"""提供OpenClaw doctor子系统的生产实现。"""
 from __future__ import annotations
 
 from pathlib import Path
@@ -38,10 +38,10 @@ PROBE_RUNTIME_ENTRY_ID = 'probe_dispatch_out_dir'
 PROBE_DIAGNOSTIC_ACTION = 'run_probe'
 PROBE_TEST_GROUP_ID = 'probe_pipeline'
 PROBE_CHECK_ID = 'probe_chain_contract'
-PROBE_RELEASE_CHECK_ID = 'agent_module_smoke_tests_agent_probe'
+PROBE_RELEASE_CHECK_ID = 'agent_governance_baseline_agent_probe'
 PROBE_CHANGE_CONTROL_DOC_PATHS = (
     repo_anchored_path('docs/architecture/agent-governance.md'),
-    repo_anchored_path('docs/architecture/agent-module-governance.md'),
+    repo_anchored_path('agent/governance/module-governance.md'),
 )
 
 
@@ -200,6 +200,12 @@ def extension_row(extension_id: str) -> dict[str, Any]:
 
 
 def update_index(repo_root: Path, extension_id: str) -> None:
+    """更新index。
+
+    参数：
+        repo_root（Path）：仓库根目录。
+        extension_id（str）：扩展标识。
+    """
     index_path = repo_root / 'agent' / 'extensions' / 'index.json'
     payload = read_json(index_path) if index_path.exists() else {'extensions': []}
     rows = payload.get('extensions')
@@ -225,6 +231,17 @@ def write_control_plane_manifests(
     testing_manifest_path: Path,
     diagnostic_surface_path: Path,
 ) -> None:
+    """写入控制面平面manifests。
+
+    参数：
+        repo_root（Path）：仓库根目录。
+        extension_id（str）：扩展标识。
+        service_path（Path）：服务路径。
+        manifest_path（Path）：manifest路径。
+        runtime_paths_path（Path）：运行态路径集合路径。
+        testing_manifest_path（Path）：testingmanifest路径。
+        diagnostic_surface_path（Path）：diagnostic展示面路径。
+    """
     write_json(
         service_path,
         {
@@ -302,42 +319,22 @@ def write_control_plane_manifests(
     write_json(
         testing_manifest_path,
         {
-            'valid_groups': [PROBE_TEST_GROUP_ID],
-            'groups': [
-                {
-                    'id': PROBE_TEST_GROUP_ID,
-                    'title': 'Probe Pipeline Checks',
-                    'selectable': True,
-                    'summary': 'Validate the managed probe extension pipeline contract.',
-                }
-            ],
-            'checks': [
-                {
-                    'id': PROBE_CHECK_ID,
-                    'group': PROBE_TEST_GROUP_ID,
-                    'title': 'Probe chain contract',
-                    'summary': 'Validate the managed probe job, group, model and target assembly.',
-                }
-            ],
             'release_gate_checks': [
                 {
                     'id': PROBE_RELEASE_CHECK_ID,
-                    'title': 'agent_probe module smoke checks',
-                    'summary': 'Run the managed probe module smoke checks.',
+                    'title': 'agent_probe governance baseline checks',
+                    'summary': 'Validate the managed probe registry and agent governance structure.',
+                    'lane': 'static',
+                    'timeoutSeconds': 120,
                     'command': {
-                        'script': 'scripts/doctor/check_agent_module_smoke_tests.sh',
+                        'script': 'scripts/doctor/check_agent_governance_baseline.sh',
                         'args': [
-                            '--extension',
-                            '{extension_id}',
+                            '--control-plane-profile',
+                            '{profile_id}',
                         ],
                     },
                 }
             ],
-            'execution_order': [PROBE_TEST_GROUP_ID],
-            'acceptance_reference': {
-                'required_checks': [PROBE_CHECK_ID],
-                'required_run_ledger_jobs': [PROBE_JOB_REF],
-            }
         },
     )
     write_json(
@@ -379,6 +376,19 @@ def write_module_fixture(
     operations: dict[str, Any],
     filesystem_write: list[str],
 ) -> None:
+    """写入modulefixture。
+
+    参数：
+        extension_id（str）：扩展标识。
+        module_dir（Path）：module目录。
+        module_ref（str）：moduleref。
+        runtime_module（str）：运行态module。
+        source_paths（list[str]）：来源路径集合。
+        entrypoint_kind（str）：entrypoint类型。
+        external_dispatch（bool）：externaldispatch。
+        operations（dict[str, Any]）：operations。
+        filesystem_write（list[str]）：filesystem写入。
+    """
     title = 'Probe Dispatcher' if module_ref == PROBE_PRIMARY_MODULE_REF else 'Probe Helper'
     write_json(
         module_dir / 'module.json',

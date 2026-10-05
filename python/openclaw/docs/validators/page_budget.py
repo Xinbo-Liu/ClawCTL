@@ -7,7 +7,9 @@ import sys
 from openclaw.lib.cli.output import stdout_write, stderr_write
 from typing import Any
 
-from openclaw.docs.support.docs_registry import ROOT_DIR, load_registry, require_pages
+from openclaw.docs.support.docs_registry import ROOT_DIR, require_pages
+from openclaw.docs.validators.registry_context import load_validator_context
+from openclaw.docs.support.shared_cache import read_text
 
 
 def usage() -> str:
@@ -15,6 +17,7 @@ def usage() -> str:
         '用法：',
         '  bash ./scripts/docs/check_documentation_page_budget.sh',
         '  bash ./scripts/docs/check_documentation_page_budget.sh --stdout',
+        '  bash ./scripts/docs/check_documentation_page_budget.sh --config-path <control-plane-config-path>',
         '',
         '说明：',
         '  校验 task 页必须声明 pageBudget，且所有声明 pageBudget 的页面仍处于预算内，避免入口页再次膨胀。',
@@ -38,7 +41,7 @@ def check_page(page: dict[str, Any]) -> list[str]:
     max_lines = int(budget.get('maxLines') or 0)
     if max_lines <= 0:
         return []
-    current = line_count(file_path.read_text(encoding='utf-8'))
+    current = line_count(read_text(file_path))
     if current > max_lines:
         return [f'{rel_path} 超出页面预算：允许最多 {max_lines} 行，当前 {current} 行']
     return []
@@ -46,30 +49,31 @@ def check_page(page: dict[str, Any]) -> list[str]:
 
 def main(argv: list[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
-    stdout = False
-    for arg in args:
-        if arg == '--stdout':
-            stdout = True
-        elif arg in {'-h', '--help'}:
-            stdout_write(f'{usage()}\n')
-            return 0
-        else:
-            stderr_write(f'[check_documentation_page_budget][FAIL] 未知参数：{arg}\n')
-            stderr_write(f'{usage()}\n')
-            return 2
+    context = load_validator_context(
+        args,
+        usage_text=usage(),
+        error_prefix='[check_documentation_page_budget][FAIL]',
+        root_dir=ROOT_DIR,
+    )
+    if isinstance(context, int):
+        return context
     try:
-        registry = load_registry()
-        pages = [page for page in require_pages(registry) if isinstance(page.get('pageBudget'), dict) or str(page.get('role') or '').strip() == 'task']
+        pages = [
+            page
+            for page in require_pages(context.registry)
+            if isinstance(page.get('pageBudget'), dict) or str(page.get('role') or '').strip() == 'task'
+        ]
     except Exception as exc:
         stderr_write(f'[check_documentation_page_budget][FAIL] {exc}\n')
         return 1
     errors: list[str] = []
     for page in pages:
         errors.extend(check_page(page))
-    if stdout:
-        stdout_write(f'[check_documentation_page_budget] count={len(pages)}\n')
+    if context.stdout:
+        stdout_write(f'[check_documentation_page_budget] config={context.config_label} count={len(pages)}\n')
         for page in pages:
-            stdout_write(f"- {page['path']} maxLines={page['pageBudget'].get('maxLines')}\n")
+            budget = page.get('pageBudget') if isinstance(page.get('pageBudget'), dict) else {}
+            stdout_write(f"- {page['path']} maxLines={budget.get('maxLines')}\n")
     if errors:
         stderr_write('[check_documentation_page_budget] 页面预算校验失败：\n')
         for error in errors:

@@ -5,6 +5,8 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
+import subprocess
 import sys
 import tempfile
 import zipfile
@@ -28,6 +30,8 @@ from openclaw.release.bundle_runtime_checks import (
 
 FIXED_ZIP_TIMESTAMP = (2026, 1, 1, 0, 0, 0)
 ARTIFACT_SMOKE_ACTIVE_ENV = 'OPENCLAW_BUNDLE_ARTIFACT_SMOKE_ACTIVE'
+GIT_INDEX_SNAPSHOT_ENV = 'OPENCLAW_BUNDLE_GIT_INDEX_SNAPSHOT'
+GIT_INDEX_ROOT_ENV = 'OPENCLAW_BUNDLE_GIT_INDEX_ROOT'
 LIKELY_BINARY_SUFFIXES = {
     '.7z',
     '.bin',
@@ -60,35 +64,29 @@ class BundleGovernanceError(RuntimeError):
 
 
 def _fail(prefix: str, message: str) -> None:
-    """抛出交付包治理错误。"""
     raise SystemExit(f'[{prefix}][FAIL] {message}')
 
 
 def load_manifest() -> dict[str, Any]:
-    """加载 bundle manifest。"""
     return manifest_load_manifest(error_factory=BundleGovernanceError)
 
 
 def bundle_spec(bundle_id: str, manifest: dict[str, Any] | None = None) -> dict[str, Any]:
-    """返回指定 bundle 的规格定义。"""
     payload = load_manifest() if manifest is None else manifest
     return manifest_bundle_spec(bundle_id, payload, error_factory=BundleGovernanceError)
 
 
 def resolve_bundle_files(bundle_id: str, manifest: dict[str, Any] | None = None) -> list[str]:
-    """解析 bundle 最终纳入的文件列表。"""
     payload = load_manifest() if manifest is None else manifest
     return manifest_resolve_bundle_files(bundle_id, payload, error_factory=BundleGovernanceError)
 
 
 def must_not_ship_hits(bundle_id: str, file_list: list[str], manifest: dict[str, Any] | None = None) -> list[str]:
-    """计算 bundle 命中的 must-not-ship 路径。"""
     payload = load_manifest() if manifest is None else manifest
     return manifest_must_not_ship_hits(bundle_id, file_list, payload, error_factory=BundleGovernanceError)
 
 
 def _normalize_bundle_bytes(rel_path: str, data: bytes) -> bytes:
-    """规范化体积预算配置。"""
     if b'\r\n' not in data:
         return data
     if b'\x00' in data:
@@ -100,28 +98,130 @@ def _normalize_bundle_bytes(rel_path: str, data: bytes) -> bytes:
 
 
 def _bundle_file_bytes(rel_path: str) -> bytes:
-    """统计单个 bundle 文件大小。"""
     return _normalize_bundle_bytes(rel_path, (ROOT_DIR / rel_path).read_bytes())
 
 
+def _parse_git_index_file_modes(data: bytes) -> dict[str, str]:
+    """解析 `git ls-files --stage -z` 的 NUL 记录。
+
+    参数：
+        data（bytes）：Git 输出的原始字节；路径内的制表符和换行保留为路径内容。
+
+    返回：
+        dict[str, str]：仓库相对路径到 Git index mode 的映射；空索引返回空映射。
+
+    异常：
+        BundleGovernanceError：记录缺少字段、含未合并项，或文件模式不是 ASCII 文本。
+
+    副作用：
+        无；不访问文件、Git 或环境变量。
+    """
+    modes: dict[str, str] = {}
+    for record in data.split(b'\0'):
+        if not record:
+            continue
+        if b'\t' not in record:
+            raise BundleGovernanceError('Git 索引记录格式不合法；请检查工作树后重新导出')
+        metadata, rel_path = record.split(b'\t', 1)
+        parts = metadata.split()
+        if len(parts) != 3 or parts[2] != b'0':
+            raise BundleGovernanceError('Git 索引含未合并或不合法记录；请解决工作树问题后重新导出')
+        try:
+            mode = parts[0].decode('ascii')
+        except UnicodeDecodeError as exc:
+            raise BundleGovernanceError('Git 索引文件模式不是合法 ASCII 文本') from exc
+        modes[rel_path.decode('utf-8', errors='surrogateescape')] = mode
+    return modes
+
+
+def _git_index_file_modes() -> dict[str, str]:
+    """读取绑定当前仓库的索引快照，或直接读取 Git index 的文件模式。
+
+    环境输入：
+        OPENCLAW_BUNDLE_GIT_INDEX_SNAPSHOT：宿主捕获的原始 NUL 快照文件路径。
+        OPENCLAW_BUNDLE_GIT_INDEX_ROOT：快照对应的仓库根目录；与快照路径同时声明。
+
+    返回：
+        dict[str, str]：仓库相对路径到 Git index mode 的映射；未传快照且无 Git 目录的源码包返回空映射。
+
+    异常：
+        BundleGovernanceError：快照参数不完整、仓库根绑定不匹配、快照不可读，或直接 Git 读取失败、记录不合法。
+
+    副作用：
+        读取显式快照文件；未传快照时可调用 `git ls-files --stage -z`。不修改文件或索引。
+    """
+    if GIT_INDEX_SNAPSHOT_ENV in os.environ or GIT_INDEX_ROOT_ENV in os.environ:
+        snapshot = os.environ.get(GIT_INDEX_SNAPSHOT_ENV, '')
+        snapshot_root = os.environ.get(GIT_INDEX_ROOT_ENV, '')
+        if not snapshot or not snapshot_root:
+            raise BundleGovernanceError('Git 索引快照必须同时声明非空文件路径与仓库根绑定')
+        try:
+            bound_root = Path(snapshot_root).resolve()
+            current_root = ROOT_DIR.resolve()
+        except (OSError, ValueError, RuntimeError) as exc:
+            raise BundleGovernanceError('无法解析 Git 索引快照的仓库根绑定') from exc
+        if bound_root != current_root:
+            raise BundleGovernanceError('Git 索引快照的仓库根绑定不匹配当前交付源码')
+        try:
+            data = Path(snapshot).read_bytes()
+        except (OSError, ValueError) as exc:
+            raise BundleGovernanceError('无法读取绑定当前仓库的 Git 索引快照') from exc
+        return _parse_git_index_file_modes(data)
+    if not (ROOT_DIR / '.git').exists():
+        return {}
+    try:
+        proc = subprocess.run(
+            ['git', 'ls-files', '--stage', '-z'],
+            cwd=ROOT_DIR,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            check=False,
+        )
+    except OSError as exc:
+        raise BundleGovernanceError('无法读取交付源码的 Git 索引；请准备 Git 后重新导出') from exc
+    if proc.returncode != 0:
+        raise BundleGovernanceError(f'读取交付源码 Git 索引失败（exit={proc.returncode}）；请检查工作树后重新导出')
+    return _parse_git_index_file_modes(proc.stdout)
+
+
+def _zip_external_mode(rel_path: str, git_index_modes: dict[str, str]) -> int:
+    """计算交付文件写入 ZIP 的 Unix 模式。
+
+    参数：
+        rel_path（str）：仓库内的交付文件相对路径，用于查找索引和读取文件权限。
+        git_index_modes（dict[str, str]）：已读取的 Git 索引模式；空映射时按文件实际权限处理。
+
+    返回：
+        int：已跟踪普通文件采用索引的 100644 或 100755；其余文件保留 stat 模式的低 16 位。
+
+    异常：
+        OSError：需要读取文件权限时，文件不存在或不可访问。
+    """
+    git_mode = git_index_modes.get(rel_path)
+    if git_mode == '100755':
+        return 0o100755
+    if git_mode == '100644':
+        return 0o100644
+    return (ROOT_DIR / rel_path).stat().st_mode & 0xFFFF
+
+
 def compute_bom(file_list: list[str]) -> list[dict[str, Any]]:
-    """计算 bundle BOM。"""
     rows: list[dict[str, Any]] = []
+    git_index_modes = _git_index_file_modes()
     for rel in file_list:
-        src = ROOT_DIR / rel
         bundle_bytes = _bundle_file_bytes(rel)
         digest = hashlib.sha256(bundle_bytes).hexdigest()
         rows.append({
             'path': rel,
             'bytes': len(bundle_bytes),
-            'mode': oct(src.stat().st_mode & 0o777),
+            'mode': oct(_zip_external_mode(rel, git_index_modes) & 0o7777),
             'sha256': digest,
         })
     return rows
 
 
 def _write_zip(bundle_id: str, file_list: list[str], output_path: Path) -> dict[str, Any]:
-    """写出 zip 包。"""
+    git_index_modes = _git_index_file_modes()
     output_path.parent.mkdir(parents=True, exist_ok=True)
     if output_path.exists():
         output_path.unlink()
@@ -130,7 +230,7 @@ def _write_zip(bundle_id: str, file_list: list[str], output_path: Path) -> dict[
             src = ROOT_DIR / rel
             info = zipfile.ZipInfo(rel, date_time=FIXED_ZIP_TIMESTAMP)
             info.compress_type = zipfile.ZIP_DEFLATED
-            info.external_attr = (src.stat().st_mode & 0xFFFF) << 16
+            info.external_attr = _zip_external_mode(rel, git_index_modes) << 16
             archive.writestr(
                 info,
                 _bundle_file_bytes(rel),
@@ -154,7 +254,6 @@ def _write_zip(bundle_id: str, file_list: list[str], output_path: Path) -> dict[
 
 
 def validate_bundle(bundle_id: str, manifest: dict[str, Any] | None = None) -> dict[str, Any]:
-    """校验 bundle allowlist、禁止路径、预算与 smoke。"""
     payload = load_manifest() if manifest is None else manifest
     file_list = resolve_bundle_files(bundle_id, payload)
     spec = bundle_spec(bundle_id, payload)
@@ -196,7 +295,6 @@ def validate_bundle(bundle_id: str, manifest: dict[str, Any] | None = None) -> d
 
 
 def default_output_name(bundle_id: str, manifest: dict[str, Any] | None = None) -> str:
-    """生成 bundle 默认输出文件名。"""
     payload = load_manifest() if manifest is None else manifest
     spec = bundle_spec(bundle_id, payload)
     prefix = str(spec.get('outputPrefix') or bundle_id.replace('-', '_')).strip()
@@ -206,13 +304,11 @@ def default_output_name(bundle_id: str, manifest: dict[str, Any] | None = None) 
 
 
 def write_json(path: Path, payload: dict[str, Any] | list[Any]) -> None:
-    """写出 JSON 文件。"""
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + '\n', encoding='utf-8')
 
 
 def cmd_list_bundles(_: argparse.Namespace) -> int:
-    """列出可用 bundle。"""
     payload = load_manifest()
     rows = []
     for bundle_id, spec in (payload.get('bundles') or {}).items():
@@ -224,7 +320,6 @@ def cmd_list_bundles(_: argparse.Namespace) -> int:
 
 
 def cmd_manifest(args: argparse.Namespace) -> int:
-    """输出 bundle manifest。"""
     payload = load_manifest()
     bundle_id = str(args.bundle or '').strip()
     if not bundle_id:
@@ -237,7 +332,6 @@ def cmd_manifest(args: argparse.Namespace) -> int:
 
 
 def cmd_build(args: argparse.Namespace) -> int:
-    """构建 bundle 并输出 zip / BOM / size manifest。"""
     payload = load_manifest()
     bundle_id = str(args.bundle or '').strip()
     if not bundle_id:
@@ -279,7 +373,6 @@ def cmd_build(args: argparse.Namespace) -> int:
 
 
 def cmd_validate(args: argparse.Namespace) -> int:
-    """校验 bundle 治理规则。"""
     payload = load_manifest()
     bundles = [str(item).strip() for item in (args.bundle or []) if str(item).strip()]
     if args.all or not bundles:
@@ -291,7 +384,6 @@ def cmd_validate(args: argparse.Namespace) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    """构建 bundle_governance CLI 解析器。"""
     parser = argparse.ArgumentParser(description='交付包 allowlist/体积治理工具')
     subparsers = parser.add_subparsers(dest='command', required=True)
 
@@ -317,7 +409,6 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
-    """bundle_governance CLI 主入口。"""
     parser = build_parser()
     args = parser.parse_args(argv)
     try:

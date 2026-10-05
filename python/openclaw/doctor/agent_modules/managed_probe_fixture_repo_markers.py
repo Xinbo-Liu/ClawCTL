@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Repo-marker and file-copy helpers for the managed probe fixture."""
+"""提供OpenClaw doctor子系统的生产实现。"""
 from __future__ import annotations
 
 import json
@@ -142,7 +142,7 @@ def ensure_repo_markers(repo_root: Path, base_repo_root: Path) -> None:
     )
     for rel_path in (
         'docs/architecture/agent-governance.md',
-        'docs/architecture/agent-module-governance.md',
+        'agent/governance/module-governance.md',
         'docs/architecture/control-plane-baseline.md',
     ):
         copy_if_missing(

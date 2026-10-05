@@ -65,32 +65,6 @@ full_test_resolve_extension_root_from_dir() {
   return 1
 }
 
-full_test_config_declares_testing_manifest_fragments() {
-  local config_path="$1"
-  local config_dir='' enabled_ids='' raw_dir='' manifests_dir='' manifest='' extension_id='' fragment_path=''
-  command -v jq >/dev/null 2>&1 || return 0
-  [[ -f "$config_path" ]] || return 0
-  config_dir="$(cd "$(dirname "$config_path")" && pwd -P)" || return 0
-  enabled_ids="$(jq -r '.extensions.enabledExtensionIds[]? // empty' "$config_path" 2>/dev/null || true)"
-  [[ -n "$enabled_ids" ]] || return 1
-  while IFS= read -r raw_dir; do
-    [[ -n "$raw_dir" ]] || continue
-    manifests_dir="$(full_test_resolve_path_from_dir "$config_dir" "$raw_dir" 2>/dev/null || true)"
-    [[ -n "$manifests_dir" && -d "$manifests_dir" ]] || continue
-    for manifest in "$manifests_dir"/*.json; do
-      [[ -f "$manifest" ]] || continue
-      extension_id="$(jq -r '.id // empty' "$manifest" 2>/dev/null || true)"
-      [[ -n "$extension_id" ]] || continue
-      if ! grep -Fxq "$extension_id" <<< "$enabled_ids"; then
-        continue
-      fi
-      fragment_path="$(jq -r '.surfaceFragments.testingManifestPath // empty' "$manifest" 2>/dev/null || true)"
-      [[ -z "$fragment_path" ]] || return 0
-    done
-  done < <(jq -r '.extensions.manifestsDirs[]? // empty' "$config_path" 2>/dev/null || true)
-  return 1
-}
-
 full_test_testing_manifest_fast_path_allowed() {
   command -v jq >/dev/null 2>&1 || return 1
   full_test_testing_manifest_json >/dev/null
@@ -116,37 +90,8 @@ full_test_active_config_path_for_manifest() {
     openclaw_control_plane_resolve_config_path "$profile" "$selected" "$explicit_profile"
 }
 
-full_test_testing_manifest_fragment_paths() {
-  local config_path="$1"
-  local config_dir='' enabled_ids='' raw_dir='' manifests_dir='' manifest='' extension_id='' fragment_path='' resolved_fragment=''
-  [[ -f "$config_path" ]] || return 0
-  config_dir="$(cd "$(dirname "$config_path")" && pwd -P)" || return 0
-  enabled_ids="$(jq -r '.extensions.enabledExtensionIds[]? // empty' "$config_path" 2>/dev/null || true)"
-  [[ -n "$enabled_ids" ]] || return 0
-  while IFS= read -r raw_dir; do
-    [[ -n "$raw_dir" ]] || continue
-    manifests_dir="$(full_test_resolve_path_from_dir "$config_dir" "$raw_dir" 2>/dev/null || true)"
-    [[ -n "$manifests_dir" && -d "$manifests_dir" ]] || continue
-    for manifest in "$manifests_dir"/*.json; do
-      [[ -f "$manifest" ]] || continue
-      extension_id="$(jq -r '.id // empty' "$manifest" 2>/dev/null || true)"
-      [[ -n "$extension_id" ]] || continue
-      if ! grep -Fxq "$extension_id" <<< "$enabled_ids"; then
-        continue
-      fi
-      fragment_path="$(jq -r '.surfaceFragments.testingManifestPath // empty' "$manifest" 2>/dev/null || true)"
-      [[ -n "$fragment_path" ]] || continue
-      resolved_fragment="$(full_test_resolve_path_from_dir "$(dirname "$manifest")" "$fragment_path" 2>/dev/null || true)"
-      [[ -n "$resolved_fragment" && -f "$resolved_fragment" ]] || continue
-      printf '%s\n' "$resolved_fragment"
-    done
-  done < <(jq -r '.extensions.manifestsDirs[]? // empty' "$config_path" 2>/dev/null || true)
-}
-
 full_test_testing_manifest_json() {
-  local base_path='' config_path='' manifest_json=''
-  local config_status=0
-  local -a fragment_paths=()
+  local base_path='' manifest_json=''
   if [[ -n "$FULL_TEST_TESTING_MANIFEST_JSON_CACHE" ]]; then
     printf '%s\n' "$FULL_TEST_TESTING_MANIFEST_JSON_CACHE"
     return 0
@@ -154,44 +99,7 @@ full_test_testing_manifest_json() {
   command -v jq >/dev/null 2>&1 || return 1
   base_path="$(full_test_manifest_path)"
   [[ -f "$base_path" ]] || return 1
-  set +e
-  config_path="$(full_test_active_config_path_for_manifest)"
-  config_status=$?
-  set -e
-  if [[ "$config_status" -eq 0 ]]; then
-    mapfile -t fragment_paths < <(full_test_testing_manifest_fragment_paths "$config_path")
-  elif [[ "$config_status" -ne 3 ]]; then
-    return "$config_status"
-  fi
-  manifest_json="$(jq -s '
-    def append_unique($left; $right):
-      reduce ((($left // []) + ($right // []))[]) as $item
-        ([]; if index($item) then . else . + [$item] end);
-    def append_rows($left; $right):
-      reduce ((($left // []) + ($right // []))[]) as $item
-        ([]; if (($item | type) != "object") then .
-             elif any(.[]; .id == $item.id) then .
-             else . + [$item] end);
-    reduce .[] as $item ({};
-      .schema_version = (.schema_version // $item.schema_version)
-      | .title = (.title // $item.title)
-      | .paths = ((.paths // {}) * ($item.paths // {}))
-      | .valid_groups = append_unique(.valid_groups; $item.valid_groups)
-      | .groups = append_rows(.groups; $item.groups)
-      | .checks = append_rows(.checks; $item.checks)
-      | .release_gate_checks = append_rows(.release_gate_checks; $item.release_gate_checks)
-      | .entrypoints = append_rows(.entrypoints; $item.entrypoints)
-      | .summary_topics = append_unique(.summary_topics; $item.summary_topics)
-      | .execution_order = append_unique(.execution_order; $item.execution_order)
-      | .acceptance_contract = (.acceptance_contract // $item.acceptance_contract)
-      | .acceptance_reference = ((.acceptance_reference // {}) * ($item.acceptance_reference // {}))
-      | .acceptance_reference.required_checks = append_unique(.acceptance_reference.required_checks; (($item.acceptance_reference // {}).required_checks // []))
-      | .acceptance_reference.required_run_ledger_jobs = append_unique(.acceptance_reference.required_run_ledger_jobs; (($item.acceptance_reference // {}).required_run_ledger_jobs // []))
-      | .acceptance_reference.entrypoints = append_rows(.acceptance_reference.entrypoints; (($item.acceptance_reference // {}).entrypoints // []))
-      | .acceptance_reference.artifacts = append_rows(.acceptance_reference.artifacts; (($item.acceptance_reference // {}).artifacts // []))
-      | .acceptance_reference.scenarios = append_rows(.acceptance_reference.scenarios; (($item.acceptance_reference // {}).scenarios // []))
-    )
-  ' "$base_path" "${fragment_paths[@]}")" || return 1
+  manifest_json="$(jq '.' "$base_path")" || return 1
   [[ -n "$manifest_json" ]] || return 1
   FULL_TEST_TESTING_MANIFEST_JSON_CACHE="$manifest_json"
   printf '%s\n' "$manifest_json"

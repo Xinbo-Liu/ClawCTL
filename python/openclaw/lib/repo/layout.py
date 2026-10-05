@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Repository path helpers exposed from one public module."""
+"""提供OpenClaw lib子系统的生产实现。"""
 from __future__ import annotations
 
 from .config_selection import (
@@ -44,6 +44,7 @@ from .repo_root import (
     RepoRootResolutionError,
     candidate_repo_roots,
     looks_like_repo_root,
+    relative_path_within_root,
     resolve_repo_file,
     resolve_repo_root,
 )

@@ -35,7 +35,7 @@
 3. 子包内统一使用短文件名，不保留重复前缀。
 4. shell wrapper、CLI registry、配置规则、文档真源一律指向正式模块路径，不保留 Python 模块 alias。
 5. `python/openclaw/` 顶层不得保留占位子包 `domains/`、`extensions/`、`modules/`；业务域与扩展实现必须落在正式 extension 包或既有治理子树内。
-6. 仓库级 Python bootstrap 真源固定为 `config/governance/support/repo_python_bootstrap.env`、`lib/repo/bootstrap.py` 与 `lib/runtime/execution.py`；bootstrap 环境、`python/sitecustomize.py` 与仓库根 `openclaw/` 导入桥共同禁写字节码并传递 `PYTHONDONTWRITEBYTECODE=1`，仓库级 Python 入口不得生成 `__pycache__` 或 `.pyc` 工作区残留；仓库根 `openclaw/` 包负责把导入入口接到 `python/` 下的正式包目录，`openclaw.testing.repo_host` 模块负责命名 suite 与 repo unittest 参数装配。
+6. 仓库级 Python bootstrap 真源固定为 `config/governance/support/repo_python_bootstrap.env`、`lib/repo/bootstrap.py` 与 `lib/runtime/execution.py`；bootstrap 环境、`python/sitecustomize.py` 与仓库根 `openclaw/` 导入桥共同禁写字节码并传递 `PYTHONDONTWRITEBYTECODE=1`，仓库级 Python 入口不得生成 `__pycache__` 或 `.pyc` 工作区残留；正式仓库回归由 `scripts/testing/run_repo_unittest.sh` 调用控制面容器内的 `openclaw.testing.repo_unittest`。
 7. `python/openclaw/` 顶层只允许登记的正式子包与 `__init__.py`、`cli.py`、`cli_registry.py`，新增顶层子包必须同步更新本合同与守卫。
 
 ## 正式布局
@@ -139,7 +139,7 @@
   - 必需子包存在。
   - 职责前缀不得进入根层。
   - 核心实现层不得泄漏具体业务扩展名：守卫从 `agent/extensions/index.json` 与扩展 Python 包目录派生受管扩展 ID、业务域名和业务包名；非测试 `python/openclaw/`、核心 `scripts/`、base 与 agent_platform 配置只允许平台中性合同。
-- 业务扩展目录、业务扩展自测、目标态文档与明确的 absent-surface 规则是合法真源，不作为核心实现层业务名泄漏处理；`agent/extensions/<extension-id>/tests/` 内的 package marker 只用于字节码守卫，不属于 agent authoring 面。
+- 业务扩展目录与业务扩展自测在各自 owner 下维护，不纳入基座业务名泄漏检查；基座登记的项目文档同样保持平台中性。`agent/extensions/<extension-id>/tests/` 内的 package marker 只用于字节码守卫，不属于 agent authoring 面。
 - 对应回归测试固定落在 `python/openclaw/tests/governance/test_package_layout.py`。
 
 ## 相关入口

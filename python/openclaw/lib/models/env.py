@@ -10,6 +10,7 @@ from openclaw.lib.io.json_access import json_object
 
 @dataclass(frozen=True)
 class ModelEnvSpec:
+    """模型 profile 派生的环境变量需求。"""
     name: str
     required: bool
     secret: bool

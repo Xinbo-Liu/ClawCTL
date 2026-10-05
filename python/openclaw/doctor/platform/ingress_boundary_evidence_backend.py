@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Structured helpers for ingress boundary evidence shell entrypoints."""
+"""提供OpenClaw doctor子系统的生产实现。"""
 from __future__ import annotations
 
 import argparse

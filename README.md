@@ -1,133 +1,85 @@
 # ClawCTL
 
-当前版本 / Current version: `0.1.0`
+## 项目是什么
 
-许可口径 / License posture: source-available, non-commercial by default. 商业使用、客户交付、SaaS、托管服务、收费集成或经营性部署必须事先取得书面商业授权。This is not an OSI-approved open source license.
+ClawCTL 帮助技术团队将 OpenClaw 与业务智能体从“能够运行”，推进到可部署、可扩展、可验收、可持续维护。它面向私有部署，把配置、调度、运行验收、故障处理和交付治理连接起来，帮助维护者持续确认系统如何运行、任务是否完成，以及升级后能否接手。
 
-ClawCTL 是 OpenClaw 运行基座的控制面与交付治理仓库，用于部署、校验和值守一个私有 OpenClaw runtime boundary：private HTTPS ingress、official Gateway 接入、Python control plane、scheduler、internal API、runtime evidence、release gate 和 managed agent extension 合同。
+这里的 **OpenClaw** 是执行智能体与会话的运行时；**基座**是围绕该运行时提供部署、调度、状态查询、证据和运维的公共能力；**扩展**是在基座合同内接入具体模块、通道或业务流程的受管包。本公开仓库交付平台基座及其治理资料，不附带业务扩展；接入后的具体业务价值由对应扩展文档说明。
 
-ClawCTL is a source-available, non-commercial base control plane for deploying and operating an OpenClaw runtime with private ingress, Gateway integration, scheduler automation, internal API checks, release governance, and managed agent extensions.
+当前实现与正式支持边界以下文和对应合同页为准；长期方向见 [VISION.md](VISION.md)，版本信息以 [pyproject.toml](pyproject.toml) 为准。
 
-## What You Can Build / 可落地项
+## 解决哪些实际困难
 
-| 场景 / Scenario | ClawCTL 提供什么 / What ClawCTL provides |
-|---|---|
-| 私有 OpenClaw runtime 边界 / Private runtime boundary | Nginx private HTTPS ingress、Gateway token auth、内网访问控制、证书与入口配置合同 |
-| 基座控制面 / Base control plane | `agent_platform` profile、registry validation、scheduler、internal API、runtime path contracts |
-| 发布治理 / Release governance | Docker release gate、clean delivery bundle、stack lock verify、第三方声明与非商业许可材料 |
-| 扩展开发 / Extension authoring | `agent/extensions/<extension-id>/` 的 managed extension 目录、manifest、env、profile 与 lifecycle 合同 |
-| 部署验收 / Deployment acceptance | one-click 部署链、runtime evidence、client access acceptance、diagnostics 与 troubleshooting 文档 |
-| 运维接手 / Operations handoff | service status、logs、doctor scripts、maintenance map、security boundary 和 upgrade runbook |
+智能体能够调用模型或通信渠道后，持续运行仍有五类工作需要处理：
 
-## What It Is Not / 边界说明
+- 部署配置散落在脚本和人工输入中，难以重复部署或确认当前有效配置。
+- 模块、模型、通道和权限缺少一致的接入规则，组合能力时容易混淆归属。
+- 任务状态与输出产物分离，单次进程成功不能解释任务是否完成。
+- 失败现场缺少统一查询和证据，排障、恢复与交接依赖原作者。
+- 升级涉及源码、镜像、扩展和依赖，难以核对交付内容与运行组合。
 
-- ClawCTL 不内置业务 agent、业务 profile、业务 job、业务模型或业务 listener。
-- ClawCTL 不是 SaaS 产品，也不是完整业务解决方案交付包。
-- ClawCTL 不是 OSI 意义上的开源项目；默认只授予非商业源码审阅、学习、评估、验证、内部测试与备份权利。
-- 商业使用、经营性部署、客户交付、收费服务、托管服务、二开分销和再许可都需要书面商业授权。
+## 基座提供哪些能力
 
-## Runtime Shape / 默认运行面
+| 实际困难         | 基座能力                                              | 可观察结果                                                 |
+|------------------|-------------------------------------------------------|------------------------------------------------------------|
+| 部署配置分散     | profile 选择、部署输入校验、配置渲染和阶段化部署      | 能区分人工输入、有效配置和运行状态，按阶段执行和恢复部署   |
+| 接入规则缺失     | registry/schema 校验、模块与扩展 owner 合同、依赖装配 | 能核对启用集合、对象来源、权限和依赖，阻断冲突或越界装配   |
+| 任务与产物难追踪 | scheduler、运行账本、产物合同和验收证据               | 能回溯任务执行、输出产物与接受结论，区分技术成功和合同接受 |
+| 失败难定位       | 服务状态、日志、diagnostics、恢复和值守入口           | 能按健康状态、失败分类和证据选择排查或恢复步骤             |
+| 升级交付难验收   | stack lock、release gate 和交付包清单检查             | 能核对版本、来源、依赖和实际文件清单，再进行目标机验收     |
 
-默认 profile 是 `agent_platform`，只启用平台基座能力，不携带业务对象。
+这些是智能体持续运行的公共基础。具体输入、业务决策、外部发送和业务成果由所选扩展定义和验证。
+
+## 如何工作
 
 ```mermaid
 flowchart LR
-    Browser["Browser or private client"] --> Ingress["private HTTPS ingress"]
-    Ingress --> Gateway["OpenClaw official Gateway"]
-    Ingress --> API["internal API"]
-    Scheduler["control-plane scheduler"] --> Evidence["runtime evidence"]
-    Scheduler --> Registry["registry and profiles"]
-    Registry --> Extensions["managed extensions"]
+    Client["浏览器或私有客户端"] --> Ingress["private HTTPS ingress"]
+    Ingress --> Gateway["OpenClaw Gateway"]
+    Ingress --> API["只读 internal API"]
     Gateway --> Runtime["OpenClaw runtime"]
+    Profile["profile 与 registry"] --> Scheduler["control-plane scheduler"]
+    Scheduler --> Extension["显式启用的受管扩展"]
+    Scheduler --> Record["运行账本、产物与证据"]
+    Extension --> Record
+    Record --> API
 ```
 
-默认平台服务对象：
+private ingress 提供统一外部入口，Gateway 承接运行时接入与 token 认证。Python control plane 解析 profile 和扩展合同，scheduler 驱动已启用任务；API、运行账本和证据为验收与维护提供观察面。结构合同见 [控制平面基线](docs/architecture/control-plane-baseline.md)，配置、部署和证据之间的关系见 [平台主路径](docs/architecture/platform-main-path.md)。
 
-- `openclaw-private-ingress`: 唯一宿主机 HTTPS 入口。
-- `openclaw-official-gateway`: OpenClaw runtime 接入与 Gateway token 认证。
-- `openclaw-internal-api`: 内部只读控制面 API。
-- `openclaw-control-plane-scheduler`: Python 调度器，驱动 evidence、dispatch、diagnostics 与 recovery 表面。
+## 当前支持与边界
 
-配置真源：
+- 默认运行 profile 为 `agent_platform`，只启用平台能力；仓内扩展通过正式 profile、有效自动发现 profile 或仓内合同 service 的显式 `--config-path` 接入。
+- 默认服务为 private ingress、official Gateway、internal API 和 control-plane scheduler；受支持执行环境以 [支持边界](docs/architecture/supported-deployment-boundary.md) 为准。
+- 经 ingress 暴露的 internal API 为 GET 只读查询面；写操作由正式 CLI、部署流程或扩展合同承接。
+- 基座负责公共装配、调度、隔离、诊断和证据机制。扩展负责自身业务合同、模型与 provider 依赖、业务配置及业务验收。
+- 仓库可托管受管扩展，目录存在不会自动启用；具体能力和组合入口见 [扩展目录](agent/extensions/README.md)。
+- 仓库测试不能替代目标机服务、外部投递和业务闭环验收。网络、凭据与运行权限要求见 [安全边界](docs/operations/security-boundary.md)。
 
-- `config/control_plane/service.json`: base control-plane 内核配置。
-- `config/control_plane/profiles/agent_platform.service.json`: 默认平台 profile。
-- `config/control_plane/extensions.d/agent_platform.json`: 平台 extension。
-- `deploy/docker-compose.yml`: private ingress、Gateway、internal API 与 scheduler 的默认运行编排。
+## 从哪里开始
 
-## Quick Start / 快速验证
+| 任务     | 阅读入口                                                                                                                                                               |
+|----------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| 技术评估 | [新维护者最小理解路径](docs/architecture/maintainer-minimal-path.md)、[支持边界](docs/architecture/supported-deployment-boundary.md)                                   |
+| 首次部署 | [快速开始](docs/getting-started/quickstart.md)、[部署输入](docs/getting-started/deployment-inputs.md)、[宿主机准备](docs/getting-started/environment-setup.md)         |
+| 扩展开发 | [Agent 治理目录](agent/README.md)、[扩展挂载合同](docs/architecture/explicit-extension-packages.md)、[配置目录](config/control_plane/README.md)                        |
+| 运行维护 | [服务与验收](docs/operations/runtime-service-reference.md)、[运行产物参考](docs/operations/runtime-artifacts-reference.md)、[排障](docs/operations/troubleshooting.md) |
+| 项目维护 | [维护事实总览](docs/operations/maintenance-map.md)、[Stack 升级手册](docs/operations/stack-upgrade-runbook.md)、[脚本索引](scripts/README.md)                          |
 
-正式验证入口固定通过控制面容器执行，不需要生产密钥。完整 Docker release gate 需要 Linux Docker 环境。
+完整任务导航见 [docs/README.md](docs/README.md)。部署步骤和验证命令由对应任务页统一维护。正式 Python 命令通过控制面容器执行；仓库结构验证可使用不含生产凭据的配置，完整 release gate 需要 Linux Docker 环境。
 
-```bash
-bash ./scripts/runtime/run_openclaw_python_tool.sh control-plane validate registry --control-plane-profile agent_platform
-bash ./scripts/runtime/run_openclaw_python_tool.sh control-plane stack verify --json --strict-release
-bash ./scripts/testing/check_repo_test_readiness.sh
-```
+## 交付材料如何选择
 
-完整发布门禁：
+交付内容由 [bundle manifest](config/governance/release/bundle_manifest.json) 的实际清单决定。默认运行 profile 与源码交付范围分别由运行配置和包清单确定。
 
-```bash
-bash ./scripts/doctor/run_repo_release_gate.sh --json
-bash ./scripts/setup/export_clean_delivery_bundle.sh --bundle full-source-governance --check-only
-```
+| 交付包                   | 用途                           | 包含内容                                                                             | 配套要求                                                                               |
+|--------------------------|--------------------------------|--------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------|
+| `runtime-core`           | 部署已完成准备的精简运行主链路 | 运行配置、control plane 与最小 runtime 脚本；裁剪 docs、setup、doctor 和开发治理资料 | 首次准备、配置和维护使用完整仓库源码或正式完整源码治理包；接入扩展时另备源码与匹配依赖 |
+| `ops-toolkit`            | 安装、运维、排障和治理检查     | 安装与诊断工具、治理资产和运维文档；裁剪 getting-started 与 architecture 文档        | 配套完整仓库源码或正式完整源码治理包中的部署与架构资料                                 |
+| `full-source-governance` | 完整基座源码、文档和治理交付   | 基座源码、文档、配置与工具，不附带业务扩展                                           | 镜像与访问条件按部署资料准备；部署输入和凭据在目标机维护                               |
 
-`pyproject.toml` 暴露两个等价 console script 名称：`openclaw` 和 `clawctl`。正式发布门禁仍以控制面容器入口为准。
+导出前核对所选包的文件清单、锁定版本和配置闭合；目标机仍需按 [快速开始](docs/getting-started/quickstart.md) 与 [运行验收](docs/operations/runtime-service-reference.md) 完成部署检查。
 
-## Repository Map / 仓库地图
+## 许可与第三方材料
 
-| 路径 / Path | 用途 / Purpose |
-|---|---|
-| `python/openclaw/` | Python control plane、scheduler、internal API、runtime checks、release governance |
-| `config/control_plane/` | base service、profile registry、schemas、object policies、platform extension |
-| `deploy/` | Docker Compose、Nginx ingress、site env example、TLS helper scripts |
-| `agent/` | agent plane governance、managed extension authoring contract |
-| `agent/extensions/` | 仓内显式 extension 入口；默认发布面为空索引和基座溯源 |
-| `scripts/setup/` | host preparation、one-click deploy、clean delivery bundle |
-| `scripts/doctor/` | runtime、governance、release、ingress、image 与 control-plane diagnostics |
-| `scripts/testing/` | repository readiness、syntax、unit test entrypoints |
-| `docs/` | architecture、getting-started、operations、security boundary、troubleshooting |
-
-## Developer Paths / 开发者入口
-
-- 了解项目目标态和边界：[`VISION.md`](VISION.md)
-- 部署主线：[`docs/getting-started/quickstart.md`](docs/getting-started/quickstart.md)
-- 支持边界：[`docs/architecture/supported-deployment-boundary.md`](docs/architecture/supported-deployment-boundary.md)
-- 控制面基线：[`docs/architecture/control-plane-baseline.md`](docs/architecture/control-plane-baseline.md)
-- 平台主路径：[`docs/architecture/platform-main-path.md`](docs/architecture/platform-main-path.md)
-- Extension authoring：[`agent/extensions/README.md`](agent/extensions/README.md)
-- 运维和值守：[`docs/operations/runtime-service-reference.md`](docs/operations/runtime-service-reference.md)
-- 维护地图：[`docs/operations/maintenance-map.md`](docs/operations/maintenance-map.md)
-- 安全边界：[`docs/operations/security-boundary.md`](docs/operations/security-boundary.md)
-- 排障：[`docs/operations/troubleshooting.md`](docs/operations/troubleshooting.md)
-- 脚本索引：[`scripts/README.md`](scripts/README.md)
-
-## Extension Model / 扩展模型
-
-ClawCTL 的默认发布面只包含 `base` 和 `agent_platform`。业务能力通过仓内显式 managed extension 接入，而不是混入基座。
-
-正式 extension 应放在 `agent/extensions/<extension-id>/`，并通过以下入口进入运行面：
-
-- 仓内正式 profile；
-- 有效自动发现 profile；
-- 指向仓内标准 extension service 的显式 `--config-path`。
-
-仓外非标准 manifest 目录不属于兼容入口。
-
-## Release and Audit / 发布与审计
-
-发布候选必须满足：
-
-- profile registry 只包含基座发布面；
-- `agent_platform` registry validation 通过；
-- strict stack verify 通过；
-- Docker release gate 通过；
-- full-source-governance clean bundle check 通过；
-- 仓库、archive entry 和全文扫描无业务扩展残留、无真实凭据、无私钥、无证书输出目录；
-- `LICENSE`、`NOTICE`、`COMMERCIAL_LICENSE.md`、`THIRD_PARTY_NOTICES.md` 与当前 image pin 同步。
-
-GitHub Actions 中的 Release Gate 会在 `main` push 和 PR 上执行 Docker release gate 与 full-source-governance bundle check。
-
-## License / 许可
-
-ClawCTL 的原创部分适用 [`LICENSE`](LICENSE) 中的非商业源码可见许可。商业使用请先阅读 [`COMMERCIAL_LICENSE.md`](COMMERCIAL_LICENSE.md)。第三方组件、镜像和依赖声明见 [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md)，版权与发布状态见 [`NOTICE`](NOTICE)。
+ClawCTL 的原创部分适用 [LICENSE](LICENSE) 中的非商业源码可见许可（source-available），该许可不是 OSI 批准的开源许可证。商业使用、客户交付、SaaS、托管服务和收费集成需要事先取得书面授权，详见 [商业许可](COMMERCIAL_LICENSE.md)。第三方组件和依赖声明见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)，版权与发布状态见 [NOTICE](NOTICE)。

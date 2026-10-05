@@ -35,9 +35,9 @@
     "notes": [
       "compose 运行面只允许 source_strategy 声明为 compose_runtime 的镜像；控制面执行介质单独由 OPENCLAW_CONTROL_PLANE_IMAGE 治理。",
       "deployment_images_*.tar 是 OpenClaw deployment image bundle，必须覆盖 source_strategy 声明的部署镜像合同角色，并包含 deployment-images.contract.json、Docker save tar 与 sha256 清单。",
-      "show_deployment_image_status.sh 负责统一输出角色表、pin ref、source tag、managed role tag、本地可用性与 verified local refs 的 image id 证明状态；check_deployment_image_contract.sh 负责统一校验模板变量集合、最终 effective compose image refs 与部署镜像合同闭合，并确认 compose 未引用 source_strategy 之外的镜像。",
-      "中国国内网络首轮部署先执行 `sudo bash ./scripts/setup/prepare_docker_host.sh --all --network-profile cn`，确保 CentOS 7 vault repo、Docker Yum repo 与 daemon registry-mirrors 同步进入国内网络 profile。",
-      "Gateway official GHCR 只作为 canonical / 默认 pin 真源；pull_images.sh 默认使用 PULL_GATEWAY_CANDIDATE_MODE=auto-switch，在 CN profile 下发现等值 candidate 时只改写当前 deploy/.env，并写出 state/image_pull/gateway_source_selection.json；canonical pin 不改写。若 envRewritten=true，one_click_deploy.sh 会重新加载镜像 env、重渲染 effective compose 并刷新 proof；手工分步执行时也必须在 pull_images 后重渲染 effective compose。",
+      "show_deployment_image_status.sh 负责统一输出角色表、Gateway 来源选择记录、pin ref、source tag、managed role tag、本地可用性、等值 RepoDigest 来源标签与 verified local refs 的 image id 证明状态；check_deployment_image_contract.sh 负责统一校验模板变量集合、最终 effective compose image refs 与部署镜像合同闭合，并确认 compose 未引用 source_strategy 之外的镜像。",
+      "中国国内网络首轮部署先执行 `sudo bash ./scripts/setup/prepare_docker_host.sh --os auto --all --network-profile cn`，按国内网络 profile 配置 daemon registry-mirrors 与 Docker MTU；CentOS 7 legacy 同时配置该 profile 声明的 vault repo 与 Docker Yum repo。",
+      "Gateway official GHCR 只作为 canonical / 默认 pin 真源；pull_images.sh 默认使用 PULL_GATEWAY_CANDIDATE_MODE=auto-switch，在 CN profile 下发现等值 candidate 时仅改写当前 deploy/.env 的 Gateway 镜像引用，并写出 state/image_pull/gateway_source_selection.json；canonical pin 不改写。拉取完成后默认移除未被当前部署选用的 Gateway canonical/candidate 来源标签；若 envRewritten=true，one_click_deploy.sh 会重新加载镜像 env、重渲染 effective compose 并刷新 proof；手工分步执行时也必须在 pull_images 后重渲染 effective compose。",
       "pull_policy: never 或离线 compose up 前使用 `check_deployment_image_contract.sh --compose-file <effective-compose> --require-local`，确保每个最终 compose image ref 都能被本地 Docker inspect 命中，并具有声明 digest 或 verified local refs 中的合同 image id 证明。",
       "离线 bundle 导入后会写出 pin、managed role tag 与 image id；compose 运行态只使用合同声明且 image id 仍匹配的 managed role tag 作为 verified local runtime ref，pin ref 仍作为供应链合同。",
       "update_openclaw_pin.sh / update_runtime_pin.sh 执行后的验证命令统一查看本页。"

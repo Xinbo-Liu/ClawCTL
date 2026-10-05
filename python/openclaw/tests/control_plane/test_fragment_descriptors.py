@@ -13,14 +13,13 @@ from openclaw.control_plane.governance_surfaces import (
     load_diagnostic_surface,
     load_dispatch_operations_surface,
     load_docs_registry,
-    load_full_test_group_registry,
 )
 from openclaw.control_plane.surfaces import load_runtime_paths_manifest, load_testing_manifest
 from openclaw.control_plane.registry_loader import load_registry_from_context
 from openclaw.control_plane.registry_loader.config import load_registry_service_context
 from openclaw.setup.deploy_env.support import load_schema
+from openclaw.lib.cli.common import CliError
 from openclaw.doctor.agent_modules.managed_probe_fixture import (
-    PROBE_CHECK_ID,
     PROBE_DIAGNOSTIC_ACTION,
     PROBE_EXTENSION_ID,
     PROBE_GROUP_REF,
@@ -29,7 +28,6 @@ from openclaw.doctor.agent_modules.managed_probe_fixture import (
     PROBE_PRIMARY_MODULE_REF,
     PROBE_RUNTIME_ENTRY_ID,
     PROBE_TARGET_REF,
-    PROBE_TEST_GROUP_ID,
 )
 from openclaw.lib.repo.layout import resolve_repo_root
 from openclaw.tests.support.managed_probe import managed_probe_repo
@@ -49,8 +47,18 @@ class FragmentDescriptorIntegrationTest(unittest.TestCase):
     def _prepare_repo_root(self, root: Path) -> None:
         (root / 'python' / 'openclaw').mkdir(parents=True, exist_ok=True)
         self._write_json(root / 'config' / 'runtime' / 'paths.json', {'entries': {}})
+        schema_path = root / 'config' / 'control_plane' / 'schemas' / 'service.schema.json'
+        if not schema_path.exists():
+            schema_path.parent.mkdir(parents=True, exist_ok=True)
+            schema_path.write_text(
+                (ROOT_DIR / 'config' / 'control_plane' / 'schemas' / 'service.schema.json').read_text(encoding='utf-8'),
+                encoding='utf-8',
+            )
         if not (root / 'config' / 'control_plane' / 'service.json').exists():
-            self._write_json(root / 'config' / 'control_plane' / 'service.json', {})
+            (root / 'config' / 'control_plane' / 'service.json').write_text(
+                (ROOT_DIR / 'config' / 'control_plane' / 'service.json').read_text(encoding='utf-8'),
+                encoding='utf-8',
+            )
         platform_manifest_path = root / 'config' / 'control_plane' / 'extensions.d' / 'agent_platform.json'
         if not platform_manifest_path.exists():
             self._write_json(
@@ -128,24 +136,24 @@ class FragmentDescriptorIntegrationTest(unittest.TestCase):
         self.assertIn('scheduler', probe_entry.get('paths') or {})
         self.assertIn('scheduler', probe_entry.get('env_names') or {})
 
-        owned_groups = {
-            str(row.get('id') or '').strip()
+        owned_groups = [
+            row
             for row in testing_manifest.get('groups') or []
             if isinstance(row, dict) and row.get('extensionId') == PROBE_EXTENSION_ID
-        }
-        self.assertIn(PROBE_TEST_GROUP_ID, owned_groups)
-        owned_checks = {
-            str(row.get('id') or '').strip()
+        ]
+        owned_checks = [
+            row
             for row in testing_manifest.get('checks') or []
             if isinstance(row, dict) and row.get('extensionId') == PROBE_EXTENSION_ID
-        }
-        self.assertIn(PROBE_CHECK_ID, owned_checks)
+        ]
+        self.assertEqual([], owned_groups)
+        self.assertEqual([], owned_checks)
         owned_release_gate_checks = {
             str(row.get('id') or '').strip()
             for row in testing_manifest.get('release_gate_checks') or []
             if isinstance(row, dict) and row.get('extensionId') == PROBE_EXTENSION_ID
         }
-        self.assertIn('agent_module_smoke_tests_agent_probe', owned_release_gate_checks)
+        self.assertIn('agent_governance_baseline_agent_probe', owned_release_gate_checks)
 
         owned_actions = {
             str(row.get('action') or '').strip()
@@ -248,20 +256,6 @@ class FragmentDescriptorIntegrationTest(unittest.TestCase):
                 },
             )
             self._write_json(
-                root / 'full_test_groups.json',
-                {
-                    'generated_artifacts': {
-                        'base_full_test_doc': 'docs/base-full-test.md',
-                    },
-                    'dispatch_recovery_actions': ['retry', 'reset'],
-                    'groups': {
-                        'base_group': {
-                            'title': 'Base group',
-                        }
-                    },
-                },
-            )
-            self._write_json(
                 root / 'docs_registry.json',
                 {
                     'checker': {
@@ -305,34 +299,6 @@ class FragmentDescriptorIntegrationTest(unittest.TestCase):
                 },
             )
             self._write_json(
-                ext_a_dir / 'full_test_groups.json',
-                {
-                    'generated_artifacts': {
-                        'ext_a_full_test_doc': 'docs/ext-a-full-test.md',
-                    },
-                    'dispatch_recovery_actions': ['reset', 'repair_a'],
-                    'groups': {
-                        'group_a': {
-                            'title': 'Group A',
-                        }
-                    },
-                },
-            )
-            self._write_json(
-                ext_b_dir / 'full_test_groups.json',
-                {
-                    'generated_artifacts': {
-                        'ext_b_full_test_doc': 'docs/ext-b-full-test.md',
-                    },
-                    'dispatch_recovery_actions': ['repair_b', 'retry'],
-                    'groups': {
-                        'group_b': {
-                            'title': 'Group B',
-                        }
-                    },
-                },
-            )
-            self._write_json(
                 ext_a_dir / 'docs_registry.json',
                 {
                     'checker': {
@@ -368,7 +334,6 @@ class FragmentDescriptorIntegrationTest(unittest.TestCase):
                 {
                     'governanceSurfaces': {
                         'dispatchOperationsSurfacePath': '@extension/dispatch_surface.json',
-                        'fullTestGroupRegistryPath': '@extension/full_test_groups.json',
                         'docsRegistryPath': '@extension/docs_registry.json',
                     }
                 },
@@ -379,7 +344,6 @@ class FragmentDescriptorIntegrationTest(unittest.TestCase):
                 {
                     'governanceSurfaces': {
                         'dispatchOperationsSurfacePath': '@extension/dispatch_surface.json',
-                        'fullTestGroupRegistryPath': '@extension/full_test_groups.json',
                         'docsRegistryPath': '@extension/docs_registry.json',
                     }
                 },
@@ -387,7 +351,6 @@ class FragmentDescriptorIntegrationTest(unittest.TestCase):
             service_path = self._write_service(root, [dir_a, dir_b], ['ext_a', 'ext_b'])
 
             dispatch_payload = load_dispatch_operations_surface(root / 'dispatch_surface.json', config_path=service_path)
-            full_test_payload = load_full_test_group_registry(root / 'full_test_groups.json', config_path=service_path)
             docs_payload = load_docs_registry(root / 'docs_registry.json', config_path=service_path)
 
         dispatch_entries = {
@@ -406,21 +369,6 @@ class FragmentDescriptorIntegrationTest(unittest.TestCase):
             },
         )
 
-        self.assertEqual(full_test_payload['groups']['group_a']['extensionId'], 'ext_a')
-        self.assertEqual(full_test_payload['groups']['group_b']['extensionId'], 'ext_b')
-        self.assertEqual(
-            full_test_payload['dispatch_recovery_actions'],
-            ['retry', 'reset', 'repair_a', 'repair_b'],
-        )
-        self.assertEqual(
-            full_test_payload['generated_artifacts'],
-            {
-                'base_full_test_doc': 'docs/base-full-test.md',
-                'ext_a_full_test_doc': 'docs/ext-a-full-test.md',
-                'ext_b_full_test_doc': 'docs/ext-b-full-test.md',
-            },
-        )
-
         shared_page = next(
             row for row in docs_payload.get('pages') or []
             if isinstance(row, dict) and row.get('path') == 'docs/shared.md'
@@ -435,7 +383,38 @@ class FragmentDescriptorIntegrationTest(unittest.TestCase):
         }
         self.assertTrue({'docs/shared.md', 'docs/ext-a.md', 'docs/ext-b.md'}.issubset(ext_page_paths))
 
-    def test_testing_manifest_conflict_still_raises_on_duplicate_group_id(self) -> None:
+    def test_non_platform_extension_cannot_declare_full_test_group_registry(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            ext_dir = self._extension_root(root, 'ext_a')
+            ext_dir.mkdir(parents=True)
+            self._write_json(
+                ext_dir / 'full_test_groups.json',
+                {
+                    'groups': {
+                        'group_a': {
+                            'title': 'Group A',
+                        }
+                    },
+                },
+            )
+            dir_a = self._write_manifest(
+                root,
+                'ext_a',
+                {
+                    'governanceSurfaces': {
+                        'fullTestGroupRegistryPath': '@extension/full_test_groups.json',
+                    }
+                },
+            )
+            service_path = self._write_service(root, [dir_a], ['ext_a'])
+
+            with self.assertRaises((ExtensionError, CliError)) as ctx:
+                load_registry_service_context(service_path)
+
+        self.assertIn('cannot declare fullTestGroupRegistryPath', str(ctx.exception))
+
+    def test_extension_testing_manifest_rejects_platform_full_test_fields(self) -> None:
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
             ext_a_dir = self._extension_root(root, 'ext_a')
@@ -484,9 +463,51 @@ class FragmentDescriptorIntegrationTest(unittest.TestCase):
             with self.assertRaises((ExtensionError, ValueError)) as ctx:
                 load_testing_manifest(root / 'testing_manifest.json', config_path=service_path)
 
-        self.assertIn('duplicate_group', str(ctx.exception))
+        self.assertIn('platform full test field', str(ctx.exception))
 
-    def test_deploy_env_shared_ollama_merge_is_limited_to_controlled_extension_pair(self) -> None:
+    def test_testing_manifest_live_acceptance_checks_merge_with_ownership(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            ext_dir = self._extension_root(root, 'ext_live')
+            ext_dir.mkdir(parents=True)
+            self._write_json(
+                root / 'testing_manifest.json',
+                {
+                    'groups': [],
+                    'checks': [],
+                    'valid_groups': [],
+                },
+            )
+            self._write_json(
+                ext_dir / 'testing_manifest.json',
+                {
+                    'live_acceptance_checks': [
+                        {
+                            'id': 'ext_live_acceptance',
+                            'title': 'live',
+                            'extensionId': 'ext_live',
+                            'requiresExplicitLive': True,
+                            'command': {'script': 'agent/extensions/ext_live/scripts/check.sh', 'args': []},
+                            'evidencePaths': ['state/ext_live/summary.json'],
+                            'redactionPolicy': 'summary_only',
+                        }
+                    ],
+                },
+            )
+            dir_a = self._write_manifest(root, 'ext_live', {'surfaceFragments': {'testingManifestPath': '@extension/testing_manifest.json'}})
+            service_path = self._write_service(root, [dir_a], ['ext_live'])
+
+            payload = load_testing_manifest(root / 'testing_manifest.json', config_path=service_path)
+
+        checks = {
+            str(row.get('id') or ''): row
+            for row in payload.get('live_acceptance_checks') or []
+            if isinstance(row, dict)
+        }
+        self.assertIn('ext_live_acceptance', checks)
+        self.assertEqual(checks['ext_live_acceptance'].get('extensionId'), 'ext_live')
+
+    def test_deploy_env_shared_ollama_merge_is_limited_to_declared_owner_set(self) -> None:
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
             shared_field = {
@@ -533,7 +554,7 @@ class FragmentDescriptorIntegrationTest(unittest.TestCase):
         self.assertEqual(ollama_fields[0].get('doc_location'), 'deploy/site.env')
         self.assertNotIn('extensionId', ollama_fields[0])
 
-    def test_deploy_env_shared_ollama_merge_rejects_uncontrolled_extension_owner(self) -> None:
+    def test_deploy_env_shared_ollama_merge_rejects_undeclared_extension_owner(self) -> None:
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
             shared_field = {

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Shared command example builders for docs and static control surfaces."""
+"""提供OpenClaw lib子系统的生产实现。"""
 from __future__ import annotations
 
 import shlex

@@ -105,7 +105,26 @@ class RunShadowUpgradeVerifyScriptTest(unittest.TestCase):
 
         self.assertEqual(result.returncode, 0)
         self.assertIn('摘要渲染固定通过控制面容器执行', result.stdout)
+        self.assertIn('按候选镜像的运行 UID/GID 初始化', result.stdout)
         self.assertNotIn('本机 Python 解释器', result.stdout)
+
+    def test_candidate_runtime_prepares_writable_state_and_keeps_failure_evidence(self) -> None:
+        source = SCRIPT_PATH.read_text(encoding='utf-8')
+
+        self.assertIn('prepare_candidate_home_permissions()', source)
+        self.assertIn('--cap-add CHOWN', source)
+        self.assertIn('candidate-state-permission-prepare-failed', source)
+        self.assertIn('CANDIDATE_STATUS_STDERR_LOG=', source)
+        self.assertIn('CANDIDATE_PROBE_STDERR_LOG=', source)
+        self.assertIn('CANDIDATE_CONTAINER_LOG=', source)
+        self.assertIn('docker logs "$CANDIDATE_CONTAINER_NAME"', source)
+
+    def test_active_deep_status_acceptance_uses_rpc_and_config_structure(self) -> None:
+        source = SCRIPT_PATH.read_text(encoding='utf-8')
+
+        self.assertIn('def gateway_status_ok(payload: dict) -> bool:', source)
+        self.assertIn("bool(rpc.get('ok'))", source)
+        self.assertIn("all(bool(row.get('valid')) for row in config_rows)", source)
 
     def test_fails_when_docker_cli_is_missing(self) -> None:
         result = self._run_script(fake_docker_mode=None)

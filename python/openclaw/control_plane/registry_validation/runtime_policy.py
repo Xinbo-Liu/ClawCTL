@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Runtime-policy normalization helpers for control-plane registry validation."""
+"""提供OpenClaw 控制平面子系统的生产实现。"""
 from __future__ import annotations
 
 from typing import Any
@@ -103,6 +103,7 @@ def _normalize_job_runtime_policy(
     agent: dict[str, Any],
     module: dict[str, Any],
     is_recovery_job: bool,
+    retry_ownership: str = 'stage_owned',
 ) -> None:
     capabilities = agent_capabilities(agent)
     job['enabled'] = bool(job.get('enabled', DEFAULT_JOB_ENABLED))
@@ -116,7 +117,20 @@ def _normalize_job_runtime_policy(
         raise CliError('control-plane validation error', 2)
     job['timeoutSeconds'] = timeout_seconds
 
-    retry_payload = normalize_retry_policy(job.get('retryPolicy')) if isinstance(job.get('retryPolicy'), dict) else infer_job_retry_policy(capabilities=capabilities, is_recovery_job=is_recovery_job)
+    explicit_retry_policy = isinstance(job.get('retryPolicy'), dict)
+    retry_payload = normalize_retry_policy(job.get('retryPolicy')) if explicit_retry_policy else infer_job_retry_policy(capabilities=capabilities, is_recovery_job=is_recovery_job)
+    normalized_retry_ownership = str(retry_ownership or 'stage_owned').strip()
+    if normalized_retry_ownership not in {'stage_owned', 'group_owned'}:
+        raise CliError('control-plane validation error', 2)
+    if normalized_retry_ownership == 'group_owned':
+        if explicit_retry_policy and bool(retry_payload.get('enabled')):
+            raise CliError('control-plane validation error', 2)
+        retry_payload = {
+            'enabled': False,
+            'maxAttempts': 0,
+            'backoffSeconds': [],
+        }
+    job['retryOwnership'] = normalized_retry_ownership
     job['retryPolicy'] = retry_payload
     _validate_retry_policy(job)
 
@@ -150,6 +164,7 @@ def _normalize_generic_job_runtime_policy(job: dict[str, Any]) -> None:
         'backoffSeconds': [],
     }
     job['retryPolicy'] = retry_payload
+    job['retryOwnership'] = 'stage_owned'
     _validate_retry_policy(job)
 
     idempotency_payload = normalize_idempotency_key_policy(job.get('idempotencyKeyPolicy')) if isinstance(job.get('idempotencyKeyPolicy'), dict) else {
@@ -246,6 +261,18 @@ def _normalize_group_recovery_policy(
     if mode != 'scheduled_job_sequence':
         raise CliError('control-plane validation error', 2)
     trigger_status_signals = _ensure_unique_text_list(recovery_policy.get('triggerStatusSignals') or [], label=f'agent group {group_id} recoveryPolicy.triggerStatusSignals')
+    declared_recovery_of_job_ref = str(recovery_policy.get('recoveryOfJobRef') or '').strip()
+    recovery_candidates = [
+        candidate
+        for candidate in ordered_job_refs
+        if candidate == declared_recovery_of_job_ref or candidate.rsplit(':', 1)[-1] == declared_recovery_of_job_ref
+    ]
+    if len(recovery_candidates) != 1:
+        raise CliError('control-plane validation error', 2)
+    recovery_of_job_ref = recovery_candidates[0]
+    origin_binding = job_bindings_by_job_id.get(recovery_of_job_ref)
+    if not isinstance(origin_binding, dict):
+        raise CliError('control-plane validation error', 2)
     steps_input = [item for item in (recovery_policy.get('steps') or []) if isinstance(item, dict)]
     if not steps_input:
         raise CliError('control-plane validation error', 2)
@@ -291,11 +318,16 @@ def _normalize_group_recovery_policy(
         effective_group_ref = declared_group_ref or binding_group_ref
         if effective_group_ref != group_id:
             raise CliError('control-plane validation error', 2)
+        if str(binding.get('agentRef') or '').strip() != str(origin_binding.get('agentRef') or '').strip():
+            raise CliError('control-plane validation error', 2)
+        if str(binding.get('targetBindingRef') or '').strip() != str(origin_binding.get('targetBindingRef') or '').strip():
+            raise CliError('control-plane validation error', 2)
         steps.append({
             'jobRef': job_ref,
             'actionKind': action_kind,
             'afterMinutes': after_minutes,
             'operationRef': operation_ref,
+            'recoveryOfJobRef': recovery_of_job_ref,
             'agentRef': str(binding.get('agentRef') or '').strip(),
             'schedule': dict(job.get('schedule') or {}) if isinstance(job.get('schedule'), dict) else {},
             'notes': [str(note).strip() for note in (item.get('notes') or []) if str(note).strip()],
@@ -303,6 +335,7 @@ def _normalize_group_recovery_policy(
     return {
         'mode': mode,
         'triggerStatusSignals': trigger_status_signals,
+        'recoveryOfJobRef': recovery_of_job_ref,
         'haltMainlineOnRecoveryPending': bool(recovery_policy.get('haltMainlineOnRecoveryPending', False)),
         'steps': steps,
         'notes': [str(note).strip() for note in (recovery_policy.get('notes') or []) if str(note).strip()],

@@ -2,6 +2,9 @@
 # 用途：导出交付包前执行本地残留洁净策略。
 set -euo pipefail
 
+# 快照只属于本次宿主导出；不能继承其他仓库或外层调用的索引。
+unset OPENCLAW_BUNDLE_GIT_INDEX_SNAPSHOT OPENCLAW_BUNDLE_GIT_INDEX_ROOT
+
 __openclaw_script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 # shellcheck source=../lib/repo_root.sh
 source "$__openclaw_script_dir/../lib/repo_root.sh"
@@ -168,10 +171,16 @@ run_bundle_python() {
     --workdir "$ROOT_DIR"
   )
   local mount_dir=''
+  local index_snapshot=''
   add_host_tool_overlay jq 1
   if [[ -e "$ROOT_DIR/.git" ]]; then
-    # Git 工作树导出按索引保留权限，不能由生成文件的临时落盘权限替代。
-    add_host_tool_overlay git 1
+    # 在宿主读取索引，再把 NUL 快照交给容器，避免宿主 Git 与容器 libc 不兼容。
+    index_snapshot="$TOOL_OVERLAY_DIR/git-index.snapshot"
+    if ! git -C "$ROOT_DIR" ls-files --stage -z > "$index_snapshot"; then
+      fail '无法读取交付源码的宿主 Git 索引；请检查 Git 与工作树后重新导出。'
+    fi
+    runner_args+=(--env "OPENCLAW_BUNDLE_GIT_INDEX_SNAPSHOT=$index_snapshot")
+    runner_args+=(--env "OPENCLAW_BUNDLE_GIT_INDEX_ROOT=$ROOT_DIR")
   fi
   runner_args+=(--mount "$TOOL_OVERLAY_DIR")
   runner_args+=(--env "PATH=$TOOL_OVERLAY_DIR/bin:/usr/local/bin:/usr/bin:/bin")

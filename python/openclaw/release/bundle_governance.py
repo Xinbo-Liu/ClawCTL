@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -29,6 +30,8 @@ from openclaw.release.bundle_runtime_checks import (
 
 FIXED_ZIP_TIMESTAMP = (2026, 1, 1, 0, 0, 0)
 ARTIFACT_SMOKE_ACTIVE_ENV = 'OPENCLAW_BUNDLE_ARTIFACT_SMOKE_ACTIVE'
+GIT_INDEX_SNAPSHOT_ENV = 'OPENCLAW_BUNDLE_GIT_INDEX_SNAPSHOT'
+GIT_INDEX_ROOT_ENV = 'OPENCLAW_BUNDLE_GIT_INDEX_ROOT'
 LIKELY_BINARY_SUFFIXES = {
     '.7z',
     '.bin',
@@ -98,18 +101,72 @@ def _bundle_file_bytes(rel_path: str) -> bytes:
     return _normalize_bundle_bytes(rel_path, (ROOT_DIR / rel_path).read_bytes())
 
 
-def _git_index_file_modes() -> dict[str, str]:
-    """读取 Git index 中的文件模式。
+def _parse_git_index_file_modes(data: bytes) -> dict[str, str]:
+    """解析 `git ls-files --stage -z` 的 NUL 记录。
+
+    参数：
+        data（bytes）：Git 输出的原始字节；路径内的制表符和换行保留为路径内容。
 
     返回：
-        dict[str, str]：仓库相对路径到 Git index mode 的映射；无 Git 目录的源码包返回空映射。
+        dict[str, str]：仓库相对路径到 Git index mode 的映射；空索引返回空映射。
 
     异常：
-        BundleGovernanceError：工作树存在但 Git 不可用、索引读取失败，或记录不合法、含未合并项。
+        BundleGovernanceError：记录缺少字段、含未合并项，或文件模式不是 ASCII 文本。
 
     副作用：
-        调用 `git ls-files --stage -z` 读取工作树 index，不修改文件或索引。
+        无；不访问文件、Git 或环境变量。
     """
+    modes: dict[str, str] = {}
+    for record in data.split(b'\0'):
+        if not record:
+            continue
+        if b'\t' not in record:
+            raise BundleGovernanceError('Git 索引记录格式不合法；请检查工作树后重新导出')
+        metadata, rel_path = record.split(b'\t', 1)
+        parts = metadata.split()
+        if len(parts) != 3 or parts[2] != b'0':
+            raise BundleGovernanceError('Git 索引含未合并或不合法记录；请解决工作树问题后重新导出')
+        try:
+            mode = parts[0].decode('ascii')
+        except UnicodeDecodeError as exc:
+            raise BundleGovernanceError('Git 索引文件模式不是合法 ASCII 文本') from exc
+        modes[rel_path.decode('utf-8', errors='surrogateescape')] = mode
+    return modes
+
+
+def _git_index_file_modes() -> dict[str, str]:
+    """读取绑定当前仓库的索引快照，或直接读取 Git index 的文件模式。
+
+    环境输入：
+        OPENCLAW_BUNDLE_GIT_INDEX_SNAPSHOT：宿主捕获的原始 NUL 快照文件路径。
+        OPENCLAW_BUNDLE_GIT_INDEX_ROOT：快照对应的仓库根目录；与快照路径同时声明。
+
+    返回：
+        dict[str, str]：仓库相对路径到 Git index mode 的映射；未传快照且无 Git 目录的源码包返回空映射。
+
+    异常：
+        BundleGovernanceError：快照参数不完整、仓库根绑定不匹配、快照不可读，或直接 Git 读取失败、记录不合法。
+
+    副作用：
+        读取显式快照文件；未传快照时可调用 `git ls-files --stage -z`。不修改文件或索引。
+    """
+    if GIT_INDEX_SNAPSHOT_ENV in os.environ or GIT_INDEX_ROOT_ENV in os.environ:
+        snapshot = os.environ.get(GIT_INDEX_SNAPSHOT_ENV, '')
+        snapshot_root = os.environ.get(GIT_INDEX_ROOT_ENV, '')
+        if not snapshot or not snapshot_root:
+            raise BundleGovernanceError('Git 索引快照必须同时声明非空文件路径与仓库根绑定')
+        try:
+            bound_root = Path(snapshot_root).resolve()
+            current_root = ROOT_DIR.resolve()
+        except (OSError, ValueError, RuntimeError) as exc:
+            raise BundleGovernanceError('无法解析 Git 索引快照的仓库根绑定') from exc
+        if bound_root != current_root:
+            raise BundleGovernanceError('Git 索引快照的仓库根绑定不匹配当前交付源码')
+        try:
+            data = Path(snapshot).read_bytes()
+        except (OSError, ValueError) as exc:
+            raise BundleGovernanceError('无法读取绑定当前仓库的 Git 索引快照') from exc
+        return _parse_git_index_file_modes(data)
     if not (ROOT_DIR / '.git').exists():
         return {}
     try:
@@ -124,18 +181,7 @@ def _git_index_file_modes() -> dict[str, str]:
         raise BundleGovernanceError('无法读取交付源码的 Git 索引；请准备 Git 后重新导出') from exc
     if proc.returncode != 0:
         raise BundleGovernanceError(f'读取交付源码 Git 索引失败（exit={proc.returncode}）；请检查工作树后重新导出')
-    modes: dict[str, str] = {}
-    for record in proc.stdout.split(b'\0'):
-        if not record:
-            continue
-        if b'\t' not in record:
-            raise BundleGovernanceError('Git 索引记录格式不合法；请检查工作树后重新导出')
-        metadata, rel_path = record.split(b'\t', 1)
-        parts = metadata.split()
-        if len(parts) != 3 or parts[2] != b'0':
-            raise BundleGovernanceError('Git 索引含未合并或不合法记录；请解决工作树问题后重新导出')
-        modes[rel_path.decode('utf-8', errors='surrogateescape')] = parts[0].decode('ascii')
-    return modes
+    return _parse_git_index_file_modes(proc.stdout)
 
 
 def _zip_external_mode(rel_path: str, git_index_modes: dict[str, str]) -> int:
@@ -143,7 +189,7 @@ def _zip_external_mode(rel_path: str, git_index_modes: dict[str, str]) -> int:
 
     参数：
         rel_path（str）：仓库内的交付文件相对路径，用于查找索引和读取文件权限。
-        git_index_modes（dict[str, str]）：已读取的 Git 索引模式；空映射表示源码包不含 Git 目录。
+        git_index_modes（dict[str, str]）：已读取的 Git 索引模式；空映射时按文件实际权限处理。
 
     返回：
         int：已跟踪普通文件采用索引的 100644 或 100755；其余文件保留 stat 模式的低 16 位。

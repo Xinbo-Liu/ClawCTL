@@ -26,25 +26,10 @@ from openclaw.setup.upgrade.main import (
 from openclaw.setup.surface import control_plane_medium, entrypoint, followup
 from openclaw.tests.support.helpers import isolated_test_root
 from openclaw.tests.support.managed_extensions import managed_extensions
+from openclaw.tests.support.managed_probe import managed_probe_repo
 from openclaw.tests.support.static_text_assertions import assert_static_text_absent
 
 ROOT_DIR = resolve_repo_root(Path(__file__))
-RELATED_PARTY_EXTENSION_ID = 'agent_' + 'related_' + 'party_compare'
-RELATED_PARTY_DOMAIN_ID = 'related_' + 'party_compare'
-MANAGED_EXTENSIONS = tuple(sorted(managed_extensions(ROOT_DIR), key=lambda row: row.id))
-
-
-def _extension_package_name(extension_id: str) -> str:
-    extension = next((row for row in MANAGED_EXTENSIONS if row.id == extension_id), None)
-    if extension is None:
-        return ''
-    for python_root in extension.python_roots:
-        if not python_root.is_dir():
-            continue
-        for package_dir in sorted(python_root.iterdir()):
-            if package_dir.is_dir() and (package_dir / '__init__.py').is_file():
-                return package_dir.name
-    return ''
 
 
 def _write_image_pin_repo_contracts(root: Path) -> None:
@@ -92,6 +77,51 @@ def _strategy_image(env_key: str, pin_file: str, role: str, selector: str) -> di
 
 
 class RepoContractConsumerRegressionTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        """建立真实受管扩展，并登记供升级合同读取的 live check 与部署字段。
+
+        参数：cls（type）：保存类级 fixture 的测试类。
+        返回：None；fixture 在整个测试类执行期间有效。
+        副作用：在临时仓库写入 testing/schema fragments；类清理时删除仓库。
+        异常：fixture 物化、JSON 解析或文件写入失败直接传播。
+        """
+        super().setUpClass()
+        cls._fixture_context = managed_probe_repo('repo-contract-consumer')
+        cls.fixture = cls._fixture_context.__enter__()
+        cls.addClassCleanup(cls._fixture_context.__exit__, None, None, None)
+        fixture = cls.fixture
+        testing = json.loads(fixture.testing_manifest_path.read_text(encoding='utf-8'))
+        testing['live_acceptance_checks'] = [{
+            'id': 'probe_live_acceptance',
+            'extensionId': fixture.extension_id,
+            'requiresExplicitLive': True,
+            'command': {'module': f'{fixture.python_package_dir.name}.modules.{fixture.primary_module_dir.name}.main'},
+        }]
+        fixture.testing_manifest_path.write_text(json.dumps(testing) + '\n', encoding='utf-8')
+        schema_path = fixture.manifest_dir / f'{fixture.extension_id}.deploy_env_schema.json'
+        descriptor = json.loads(fixture.manifest_path.read_text(encoding='utf-8'))
+        descriptor['surfaceFragments']['deployEnvSchemaPath'] = schema_path.name
+        fixture.manifest_path.write_text(json.dumps(descriptor) + '\n', encoding='utf-8')
+        schema_path.write_text(json.dumps({
+            'groups': [{'id': 'probe_live', 'title': '探针验收输入'}],
+            'fields': [{
+                'key': key,
+                'group': 'probe_live',
+                'required': False,
+                'manual_required': False,
+                'default_kind': 'literal',
+                'default': '',
+                'doc_summary': '探针扩展输入',
+                'doc_location': f'agent/extensions/{fixture.extension_id}/deploy/extension.env',
+                'validator': {'type': 'non_empty'},
+                'live_acceptance_env': live,
+            } for key, live in [
+                ('PROBE_LIVE_ACCEPTANCE_TASK_ID', True),
+                ('PROBE_ORDINARY_INPUT', False),
+            ]],
+        }, ensure_ascii=False) + '\n', encoding='utf-8')
+
     def test_full_test_registry_commands_do_not_invoke_host_python(self) -> None:
         registry_paths = [
             ROOT_DIR / 'config' / 'governance' / 'flows' / 'full_test_group_registry.json',
@@ -121,10 +151,8 @@ class RepoContractConsumerRegressionTest(unittest.TestCase):
         self.assertEqual([], violations)
 
     def test_managed_extensions_do_not_contribute_platform_full_test_checks(self) -> None:
-        if not MANAGED_EXTENSIONS:
-            self.skipTest('base release surface has no repo-managed extension')
         checked_extensions = 0
-        for extension in managed_extensions(ROOT_DIR):
+        for extension in (*managed_extensions(ROOT_DIR), *managed_extensions(self.fixture.repo_root)):
             extension_descriptor = json.loads((extension.manifest_dir / f'{extension.id}.json').read_text(encoding='utf-8'))
             governance_surfaces = extension_descriptor.get('governanceSurfaces') if isinstance(extension_descriptor.get('governanceSurfaces'), dict) else {}
             with self.subTest(extension_id=extension.id, surface='fullTestGroupRegistryPath'):
@@ -229,10 +257,8 @@ class RepoContractConsumerRegressionTest(unittest.TestCase):
         self.assertIn('full_test_process_exit_code', check_ids)
 
     def test_managed_extension_groups_do_not_bind_platform_deployment_acceptance(self) -> None:
-        if not MANAGED_EXTENSIONS:
-            self.skipTest('base release surface has no repo-managed extension')
         checked = 0
-        for extension in managed_extensions(ROOT_DIR):
+        for extension in (*managed_extensions(ROOT_DIR), *managed_extensions(self.fixture.repo_root)):
             for group_path in sorted((extension.root_dir / 'agent' / 'control_plane' / 'groups').glob('*.json')):
                 group = json.loads(group_path.read_text(encoding='utf-8'))
                 release_policy = group.get('releasePolicy') if isinstance(group.get('releasePolicy'), dict) else {}
@@ -243,40 +269,32 @@ class RepoContractConsumerRegressionTest(unittest.TestCase):
                     checked += 1
         self.assertGreater(checked, 0)
 
-    def test_related_party_live_acceptance_plan_is_manifest_declared(self) -> None:
-        extension = next((row for row in managed_extensions(ROOT_DIR) if row.id == RELATED_PARTY_EXTENSION_ID), None)
-        if extension is None:
-            self.skipTest(f'{RELATED_PARTY_EXTENSION_ID} extension is unavailable')
-
+    def test_live_acceptance_plan_is_manifest_declared(self) -> None:
         payload = build_live_acceptance_plan_payload(
-            ROOT_DIR,
-            RELATED_PARTY_EXTENSION_ID,
-            config_path=extension.default_service_config_path,
+            self.fixture.repo_root,
+            self.fixture.extension_id,
+            config_path=self.fixture.service_path,
         )
 
         self.assertEqual(payload['status'], 'ok')
         checks = {str(row.get('id') or '') for row in payload.get('checks') or [] if isinstance(row, dict)}
-        self.assertIn(f'{RELATED_PARTY_EXTENSION_ID}_feishu_live_acceptance', checks)
+        self.assertIn('probe_live_acceptance', checks)
 
     def test_live_acceptance_env_keys_are_extension_schema_owned(self) -> None:
-        extension = next((row for row in managed_extensions(ROOT_DIR) if row.id == RELATED_PARTY_EXTENSION_ID), None)
-        if extension is None:
-            self.skipTest(f'{RELATED_PARTY_EXTENSION_ID} extension is unavailable')
-
         payload = build_live_acceptance_env_keys_payload(
-            ROOT_DIR,
-            RELATED_PARTY_EXTENSION_ID,
-            config_path=extension.default_service_config_path,
+            self.fixture.repo_root,
+            self.fixture.extension_id,
+            config_path=self.fixture.service_path,
         )
 
         self.assertEqual(payload['status'], 'ok')
-        self.assertEqual(payload['envKeys'], ['RELATED_PARTY_COMPARE_LIVE_ACCEPTANCE_TASK_ID'])
+        self.assertEqual(payload['envKeys'], ['PROBE_LIVE_ACCEPTANCE_TASK_ID'])
 
     def test_live_acceptance_requirement_rejects_disabled_extension(self) -> None:
         payload = build_live_acceptance_plan_payload(
-            ROOT_DIR,
-            RELATED_PARTY_EXTENSION_ID,
-            config_path=ROOT_DIR / 'config' / 'control_plane' / 'service.json',
+            self.fixture.repo_root,
+            self.fixture.extension_id,
+            config_path=self.fixture.repo_root / 'config' / 'control_plane' / 'service.json',
         )
 
         self.assertEqual(payload['status'], 'blocked')
@@ -284,12 +302,11 @@ class RepoContractConsumerRegressionTest(unittest.TestCase):
         self.assertIn('extension_not_enabled', issue_codes)
 
     def test_live_acceptance_module_must_belong_to_extension_python_package(self) -> None:
-        package_name = _extension_package_name(RELATED_PARTY_EXTENSION_ID)
-        if not package_name:
-            self.skipTest(f'{RELATED_PARTY_EXTENSION_ID} python package is unavailable')
+        package_name = self.fixture.python_package_dir.name
+        self.assertTrue((self.fixture.python_package_dir / '__init__.py').is_file())
         base_check = {
             'id': 'module_owner_check',
-            'extensionId': RELATED_PARTY_EXTENSION_ID,
+            'extensionId': self.fixture.extension_id,
             'requiresExplicitLive': True,
         }
         valid_check = {
@@ -303,11 +320,11 @@ class RepoContractConsumerRegressionTest(unittest.TestCase):
 
         self.assertEqual(
             [],
-            _validate_live_acceptance_check(valid_check, repo_root=ROOT_DIR, extension_id=RELATED_PARTY_EXTENSION_ID),
+            _validate_live_acceptance_check(valid_check, repo_root=self.fixture.repo_root, extension_id=self.fixture.extension_id),
         )
         issue_codes = {
             str(row.get('code') or '')
-            for row in _validate_live_acceptance_check(invalid_check, repo_root=ROOT_DIR, extension_id=RELATED_PARTY_EXTENSION_ID)
+            for row in _validate_live_acceptance_check(invalid_check, repo_root=self.fixture.repo_root, extension_id=self.fixture.extension_id)
         }
         self.assertIn('live_acceptance_module_owner_mismatch', issue_codes)
 

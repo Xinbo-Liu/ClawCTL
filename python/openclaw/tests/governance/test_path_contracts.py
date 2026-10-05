@@ -10,11 +10,10 @@ from tempfile import TemporaryDirectory
 from openclaw.docs.support.markdown_links import local_link_errors, parse_markdown
 from openclaw.lib.repo.layout import resolve_repo_root
 from openclaw.lib.repo.path_contracts import extension_anchored_path, resolve_path_contract
-from openclaw.tests.support.managed_extensions import managed_extensions, representative_managed_extension
+from openclaw.tests.support.managed_probe import managed_probe_repo
 
 
 ROOT_DIR = resolve_repo_root(Path(__file__))
-MANAGED_EXTENSIONS = tuple(sorted(managed_extensions(ROOT_DIR), key=lambda row: row.id))
 # 只区分实际 Markdown 导航和文件系统路径；不按 Python/JSON 文件所在目录放行。
 DEEP_PARENT_PATTERN = re.compile(r'\.\.[/\\]+(?:\.\.[/\\]+)+')
 
@@ -150,30 +149,26 @@ class RepoPathContractsTest(unittest.TestCase):
             )
 
     def test_extension_anchored_path_resolves_from_extension_root(self) -> None:
-        if not MANAGED_EXTENSIONS:
-            self.skipTest('base release surface has no repo-managed extension')
-        extension = representative_managed_extension(ROOT_DIR)
-        module_dir = extension.root_dir / 'agent'
-        target_file = self._representative_extension_python_file(extension.python_roots)
-        resolved = resolve_path_contract(
-            extension_anchored_path(target_file.relative_to(extension.root_dir).as_posix()),
-            base_dir=module_dir,
-            start_path=module_dir,
-        )
+        with managed_probe_repo('extension-path-anchor') as fixture:
+            module_dir = fixture.package_root / 'agent'
+            target_file = self._representative_extension_python_file((fixture.python_root,))
+            resolved = resolve_path_contract(
+                extension_anchored_path(target_file.relative_to(fixture.package_root).as_posix()),
+                base_dir=module_dir,
+                start_path=module_dir,
+            )
 
         self.assertEqual(resolved, target_file.resolve())
 
     def test_extension_anchored_path_rejects_extension_escape(self) -> None:
-        if not MANAGED_EXTENSIONS:
-            self.skipTest('base release surface has no repo-managed extension')
-        extension = representative_managed_extension(ROOT_DIR)
-        module_dir = extension.root_dir / 'agent'
-        with self.assertRaisesRegex(ValueError, 'must stay inside the extension root'):
-            resolve_path_contract(
-                '@extension/../outside/README.md',
-                base_dir=module_dir,
-                start_path=module_dir,
-            )
+        with managed_probe_repo('extension-path-escape') as fixture:
+            module_dir = fixture.package_root / 'agent'
+            with self.assertRaisesRegex(ValueError, 'must stay inside the extension root'):
+                resolve_path_contract(
+                    '@extension/../outside/README.md',
+                    base_dir=module_dir,
+                    start_path=module_dir,
+                )
 
     def test_extension_anchored_path_rejects_non_contract_extension_root(self) -> None:
         with TemporaryDirectory() as tmpdir:

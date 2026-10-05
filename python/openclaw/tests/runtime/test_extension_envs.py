@@ -29,11 +29,11 @@ from openclaw.lib.repo.extension_envs import (
 from openclaw.lib.repo.layout import resolve_repo_root
 from openclaw.lib.repo.managed_extensions import ManagedExtensionRow
 from openclaw.lib.runtime.resolver_loader import require_path_resolver
-from openclaw.tests.support.managed_extensions import managed_extensions, representative_managed_extension
+from openclaw.tests.support.managed_extensions import managed_extensions
+from openclaw.tests.support.managed_probe import managed_probe_repo
 
 
 ROOT_DIR = resolve_repo_root(Path(__file__))
-MANAGED_EXTENSIONS = tuple(sorted(managed_extensions(ROOT_DIR), key=lambda row: row.id))
 
 
 def _write_pyproject(extension_root: Path, *, dependencies: tuple[str, ...] = ()) -> None:
@@ -448,19 +448,18 @@ class ExtensionEnvsTest(unittest.TestCase):
                 extension_envs_dir(repo_root=ROOT_DIR, env=env)
 
     def test_enabled_selector_uses_control_plane_config_context(self) -> None:
-        if not MANAGED_EXTENSIONS:
-            self.skipTest('base release surface has no repo-managed extension')
-        extension = representative_managed_extension(ROOT_DIR)
-        rows = select_extension_rows(
-            repo_root=ROOT_DIR,
-            include_enabled=True,
-            config_path=extension.default_service_config_path,
-        )
-        _, payload = load_control_plane_service_payload(extension.default_service_config_path)
-        managed_ids = {row.id for row in MANAGED_EXTENSIONS}
-        enabled = (payload.get('extensions') or {}).get('enabledExtensionIds') or []
-        expected = [str(extension_id) for extension_id in enabled if str(extension_id) in managed_ids]
+        with managed_probe_repo('enabled-extension-env-selector') as fixture:
+            rows = select_extension_rows(
+                repo_root=fixture.repo_root,
+                include_enabled=True,
+                config_path=fixture.service_path,
+            )
+            _, payload = load_control_plane_service_payload(fixture.service_path)
+            managed_ids = {row.id for row in managed_extensions(fixture.repo_root)}
+            enabled = (payload.get('extensions') or {}).get('enabledExtensionIds') or []
+            expected = [str(extension_id) for extension_id in enabled if str(extension_id) in managed_ids]
 
+        self.assertTrue(expected)
         self.assertEqual([row.id for row in rows], expected)
 
     def test_env_contract_scanner_includes_env_prefixed_runtime_inputs(self) -> None:

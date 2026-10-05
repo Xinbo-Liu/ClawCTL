@@ -11,12 +11,11 @@ from openclaw.docs.renderers import getting_started
 from openclaw.docs.renderers.getting_started import render_step_sections
 from openclaw.docs.renderers.getting_started_support.fragments import quickstart_step2_note_lines
 from openclaw.lib.repo.layout import resolve_repo_root
-from openclaw.tests.support.managed_extensions import managed_extensions
+from openclaw.tests.support.managed_probe import managed_probe_repo
 from openclaw.tests.support.static_text_assertions import assert_static_text_absent
 
 
 ROOT_DIR = resolve_repo_root(Path(__file__))
-MANAGED_EXTENSIONS = tuple(sorted(managed_extensions(ROOT_DIR), key=lambda row: row.id))
 
 
 class GettingStartedRendererTest(unittest.TestCase):
@@ -29,14 +28,17 @@ class GettingStartedRendererTest(unittest.TestCase):
         self.assertEqual(stderr.getvalue(), '')
 
     def test_generated_docs_ignore_active_profile_env(self) -> None:
-        if not MANAGED_EXTENSIONS:
-            self.skipTest('base release surface has no repo-managed extension profile')
-        extension = MANAGED_EXTENSIONS[0]
         stdout = io.StringIO()
         stderr = io.StringIO()
-        with patch.dict(os.environ, {'OPENCLAW_CONTROL_PLANE_PROFILE': extension.id}, clear=False):
-            with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
-                self.assertEqual(getting_started.render_entry(['--check']), 0)
+        with managed_probe_repo('getting-started-active-profile') as fixture:
+            self.assertTrue(fixture.service_path.is_file())
+            env = {
+                'OPENCLAW_CONTROL_PLANE_PROFILE': fixture.extension_id,
+                'OPENCLAW_CONTROL_PLANE_SERVICE_CONFIG_PATH': str(fixture.service_path),
+            }
+            with patch.dict(os.environ, env, clear=False):
+                with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+                    self.assertEqual(getting_started.render_entry(['--check']), 0)
         self.assertIn('已同步', stdout.getvalue())
         self.assertEqual(stderr.getvalue(), '')
 

@@ -21,9 +21,10 @@ from openclaw.internal_api.routes.control_plane import (
 from openclaw.internal_api.routes.health import render_ready, reset_ready_cache
 from openclaw.scheduler.engine import runtime_job_key
 from openclaw.scheduler import runtime as scheduler_runtime
+from openclaw.control_plane.registry_loader import load_registry_from_path
+from openclaw.tests.support.managed_probe import managed_probe_repo
 from openclaw.tests.support.managed_extensions import (
     cron_jobs,
-    representative_managed_extension_registry,
 )
 
 ROOT_DIR = resolve_repo_root(Path(__file__))
@@ -265,50 +266,50 @@ class ControlPlaneReadonlySmokeTest(unittest.TestCase):
             self.assertEqual(list(Path(tmpdir).rglob('*')), [])
 
     def test_scheduler_syncs_gateway_cron_projection_for_ui(self) -> None:
-        try:
-            registry = representative_managed_extension_registry(ROOT_DIR)
-        except AssertionError:
-            self.skipTest('base release surface has no repo-managed extension cron jobs')
-        first_job = cron_jobs(registry)[0]
-        first_job_id = str(first_job.get('id') or '').strip()
-        first_runtime_job_key = runtime_job_key(first_job)
-        with TemporaryDirectory() as tmpdir:
-            state_root = Path(tmpdir) / 'control_plane'
-            gateway_state_root = Path(tmpdir) / 'gateway'
-            state = {
-                'schemaVersion': 1,
-                'jobs': {
-                    first_runtime_job_key: {
-                        'currentStatus': 'succeeded',
-                        'lastFinishedAt': '2026-04-27T01:05:00Z',
-                        'nextScheduledRunAt': '2026-04-28T08:35:00+08:00',
+        with managed_probe_repo('gateway-cron-projection') as fixture:
+            registry = load_registry_from_path(fixture.service_path)
+            scheduled_jobs = cron_jobs(registry)
+            self.assertTrue(scheduled_jobs)
+            first_job = scheduled_jobs[0]
+            first_job_id = str(first_job.get('id') or '').strip()
+            first_runtime_job_key = runtime_job_key(first_job)
+            with TemporaryDirectory() as tmpdir:
+                state_root = Path(tmpdir) / 'control_plane'
+                gateway_state_root = Path(tmpdir) / 'gateway'
+                state = {
+                    'schemaVersion': 1,
+                    'jobs': {
+                        first_runtime_job_key: {
+                            'currentStatus': 'succeeded',
+                            'lastFinishedAt': '2026-04-27T01:05:00Z',
+                            'nextScheduledRunAt': '2026-04-28T08:35:00+08:00',
+                        },
                     },
-                },
-            }
-            with mock.patch.dict(os.environ, {'OPENCLAW_GATEWAY_STATE_DIR': str(gateway_state_root)}, clear=False):
-                previous_fingerprint = scheduler_runtime._sync_gateway_cron_jobs_projection(
-                    state_root=state_root,
-                    config=registry,
-                    state=state,
-                    previous_fingerprint=None,
-                )
-                (gateway_state_root / 'cron' / 'jobs.json').write_text(
-                    json.dumps({'version': 1, 'jobs': []}) + '\n',
-                    encoding='utf-8',
-                )
-                scheduler_runtime._sync_gateway_cron_jobs_projection(
-                    state_root=state_root,
-                    config=registry,
-                    state=state,
-                    previous_fingerprint=previous_fingerprint,
-                )
+                }
+                with mock.patch.dict(os.environ, {'OPENCLAW_GATEWAY_STATE_DIR': str(gateway_state_root)}, clear=False):
+                    previous_fingerprint = scheduler_runtime._sync_gateway_cron_jobs_projection(
+                        state_root=state_root,
+                        config=registry,
+                        state=state,
+                        previous_fingerprint=None,
+                    )
+                    (gateway_state_root / 'cron' / 'jobs.json').write_text(
+                        json.dumps({'version': 1, 'jobs': []}) + '\n',
+                        encoding='utf-8',
+                    )
+                    scheduler_runtime._sync_gateway_cron_jobs_projection(
+                        state_root=state_root,
+                        config=registry,
+                        state=state,
+                        previous_fingerprint=previous_fingerprint,
+                    )
 
-            payload = json.loads((gateway_state_root / 'cron' / 'jobs.json').read_text(encoding='utf-8'))
-        job = next(item for item in payload['jobs'] if item['id'] == first_job_id)
-        self.assertTrue(job['enabled'])
-        self.assertEqual(job['payload'], {'kind': 'systemEvent', 'text': 'NO_REPLY'})
-        self.assertEqual(job['state']['lastStatus'], 'ok')
-        self.assertIsInstance(job['state']['nextRunAtMs'], int)
+                payload = json.loads((gateway_state_root / 'cron' / 'jobs.json').read_text(encoding='utf-8'))
+            job = next(item for item in payload['jobs'] if item['id'] == first_job_id)
+            self.assertTrue(job['enabled'])
+            self.assertEqual(job['payload'], {'kind': 'systemEvent', 'text': 'NO_REPLY'})
+            self.assertEqual(job['state']['lastStatus'], 'ok')
+            self.assertIsInstance(job['state']['nextRunAtMs'], int)
 
 
 

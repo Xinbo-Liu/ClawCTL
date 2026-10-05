@@ -6,25 +6,28 @@ import io
 import json
 import os
 from pathlib import Path
+import shutil
 from tempfile import TemporaryDirectory
 from typing import Any
 import unittest
 from unittest import mock
 
 from openclaw.control_plane.registry_loader import load_registry_from_path
-from openclaw.doctor.agent_modules.managed_probe_fixture import materialize_managed_probe_extension
+from openclaw.doctor.agent_modules.managed_probe_fixture import PROBE_MODEL_REF, materialize_managed_probe_extension
+from openclaw.doctor.agent_modules.managed_probe_fixture_repo_markers import write_json
+from openclaw.lib.repo.contracts import repo_contract_path
 from openclaw.lib.repo.layout import resolve_repo_root
 from openclaw.lib.runtime.time import DEFAULT_APP_TZ
 from openclaw.lib.runtime.resolver_loader import require_path_resolver
 from openclaw.runtime import path_view
 from openclaw.runtime import path_surface
-import openclaw.runtime.generated_paths.env as generated_env
 import openclaw.runtime.generated_paths.gateway.workspace as gateway_workspace
 import openclaw.runtime.generated_paths.io as generated_io
 from openclaw.runtime.generated_paths.env import (
     build_env_outputs,
     build_internal_api_env_output,
     env_lines,
+    internal_api_contract_path,
 )
 from openclaw.runtime.generated_paths.gateway.config import (
     build_public_openclaw_config_output,
@@ -56,34 +59,19 @@ from openclaw.tests.support.managed_extensions import (
     cron_jobs,
     first_model_by_provider,
     jobs_for_agent,
-    managed_extensions,
     managed_extension_agent_ids,
     registry_rows,
-    representative_managed_extension,
-    representative_managed_extension_registry,
 )
+from openclaw.tests.support.managed_probe import managed_probe_repo
 
 ROOT_DIR = resolve_repo_root(Path(__file__))
-MANAGED_EXTENSIONS = tuple(sorted(managed_extensions(ROOT_DIR), key=lambda row: row.id))
-MANAGED_EXTENSION = representative_managed_extension(ROOT_DIR) if MANAGED_EXTENSIONS else None
-MANAGED_EXTENSION_CONFIG_PATH = MANAGED_EXTENSION.default_service_config_path if MANAGED_EXTENSION is not None else None
 TEST_OLLAMA_BASE_URL = 'http://ollama.local:11434'
 TEST_OLLAMA_MODEL_REF = 'qwen-local:32b'
 
 
 @lru_cache(maxsize=1)
-def _managed_registry() -> dict[str, Any]:
-    return representative_managed_extension_registry(ROOT_DIR)
-
-
-@lru_cache(maxsize=1)
 def _default_resolver() -> Any:
     return require_path_resolver(repo_root=ROOT_DIR)
-
-
-@lru_cache(maxsize=1)
-def _managed_resolver() -> Any:
-    return require_path_resolver(repo_root=ROOT_DIR, config_path=MANAGED_EXTENSION_CONFIG_PATH)
 
 
 def _text(value: Any) -> str:
@@ -118,22 +106,49 @@ def _agent_workspace_host_path(agent_id: str, resolver: Any) -> Path:
 
 
 class RuntimePathViewTest(unittest.TestCase):
-    _MANAGED_EXTENSION_REQUIRED_TESTS = {
-        'test_gateway_runtime_env_exports_ollama_availability_marker',
-        'test_gateway_public_config_projects_active_control_plane_agents',
-        'test_gateway_public_config_projects_active_ollama_model_for_ui_chat',
-        'test_runtime_paths_cli_passes_active_config_to_generated_outputs',
-        'test_gateway_cron_jobs_are_display_only_projection',
-        'test_gateway_cron_jobs_project_scheduler_state_for_ui',
-        'test_gateway_cron_jobs_use_runtime_job_key_only',
-        'test_gateway_agent_workspace_core_files_are_projected',
-        'test_render_gateway_agent_state_dirs_loads_registry_from_config_path',
-        'test_gateway_default_session_render_refreshes_empty_placeholder_time',
-    }
-
-    def setUp(self) -> None:
-        if self._testMethodName in self._MANAGED_EXTENSION_REQUIRED_TESTS and MANAGED_EXTENSION is None:
-            self.skipTest('base release surface has no repo-managed extension')
+    @classmethod
+    def setUpClass(cls) -> None:
+        """以真实登记资产检验 Gateway 投影、模型选择和路径配置传播。"""
+        super().setUpClass()
+        context = managed_probe_repo('gateway-path-projection', base_repo_root=ROOT_DIR)
+        cls._probe = context.__enter__()
+        cls.addClassCleanup(context.__exit__, None, None, None)
+        for relative in ('config/gateway', f'config/workspace_templates/{GATEWAY_ROUTER_WORKSPACE_ID}'):
+            shutil.copytree(ROOT_DIR / relative, cls._probe.repo_root / relative, dirs_exist_ok=True)
+        for contract_source in (
+            repo_contract_path('image_pins.openclaw', root_dir=ROOT_DIR),
+            internal_api_contract_path(ROOT_DIR),
+        ):
+            contract_target = cls._probe.repo_root / contract_source.relative_to(ROOT_DIR)
+            contract_target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(contract_source, contract_target)
+        model_path = cls._probe.models_dir / f'{PROBE_MODEL_REF}.json'
+        model = json.loads(model_path.read_text(encoding='utf-8'))
+        model['provider'] = 'ollama'
+        model['channel'].update({
+            'api': 'ollama-chat',
+            'baseUrlEnv': 'PROBE_OLLAMA_BASE_URL',
+            'apiKeyEnv': 'PROBE_OLLAMA_API_KEY',
+            'auth': {'kind': 'api_key', 'required': False},
+        })
+        model['modelRef'] = 'ollama/probe-model'
+        model['modelRefEnv'] = 'PROBE_OLLAMA_MODEL_REF'
+        write_json(model_path, model)
+        cls._registry = load_registry_from_path(cls._probe.service_path)
+        runtime_paths = json.loads(cls._probe.runtime_paths_path.read_text(encoding='utf-8'))
+        for agent_id in managed_extension_agent_ids(cls._registry):
+            runtime_paths['entries'][f'workspace_{agent_id}'] = {
+                'kind': 'runtime_dir',
+                'category': 'runtime',
+                'owner': ['host', 'gateway'],
+                'create_on_bootstrap': True,
+                'paths': {
+                    'host': f'{{host_gateway_root}}/workspace-{agent_id}',
+                    'gateway': f'{{gateway_state_root}}/workspace-{agent_id}',
+                },
+            }
+        write_json(cls._probe.runtime_paths_path, runtime_paths)
+        cls._resolver = require_path_resolver(repo_root=cls._probe.repo_root, config_path=cls._probe.service_path)
 
     def test_generated_paths_write_text_preserves_lf_newlines(self) -> None:
         with TemporaryDirectory() as tmpdir:
@@ -166,23 +181,20 @@ class RuntimePathViewTest(unittest.TestCase):
         self.assertIn('OPENCLAW_RUNTIME_PATH_VIEW=scheduler', build_internal_api_env_output(ROOT_DIR, resolver))
 
     def test_gateway_runtime_env_exports_ollama_availability_marker(self) -> None:
-        registry = _managed_registry()
+        registry = self._registry
         ollama_model = first_model_by_provider(registry, 'ollama', apis={'ollama', 'ollama-chat'})
-        resolver = _managed_resolver()
-        with (
-            mock.patch.dict(os.environ, _ollama_env(ollama_model), clear=False),
-            mock.patch.object(generated_env, '_load_registry', return_value=registry),
-        ):
-            gateway_env = build_env_outputs(ROOT_DIR, resolver)['runtime.gateway.env']
+        resolver = self._resolver
+        with mock.patch.dict(os.environ, _ollama_env(ollama_model), clear=False):
+            gateway_env = build_env_outputs(self._probe.repo_root, resolver)['runtime.gateway.env']
 
         self.assertIn('OLLAMA_API_KEY=ollama-local', gateway_env)
         self.assertIn(f'OLLAMA_BASE_URL={TEST_OLLAMA_BASE_URL}', gateway_env)
 
     def test_gateway_public_config_projects_active_control_plane_agents(self) -> None:
-        registry = _managed_registry()
+        registry = self._registry
         business_agent_ids = managed_extension_agent_ids(registry)
-        resolver = _managed_resolver()
-        payload = json.loads(build_public_openclaw_config_output(ROOT_DIR, resolver, MANAGED_EXTENSION_CONFIG_PATH))
+        resolver = self._resolver
+        payload = json.loads(build_public_openclaw_config_output(self._probe.repo_root, resolver, self._probe.service_path))
         agents = payload['agents']['list']
         agent_ids = {agent['id'] for agent in agents}
         explicit_workspace_agent_ids = [
@@ -220,18 +232,18 @@ class RuntimePathViewTest(unittest.TestCase):
         self.assertEqual(payload['agents']['defaults']['timeoutSeconds'], 1800)
         self.assertNotIn('contextTokens', payload['agents']['defaults'])
         self.assertNotIn('allowBundled', payload['skills'])
-        skill_governance = load_gateway_skill_governance(ROOT_DIR)
+        skill_governance = load_gateway_skill_governance(self._probe.repo_root)
         self.assertEqual(skill_governance['targetOpenClawVersion'], payload['meta']['lastTouchedVersion'])
         self.assertEqual(skill_governance['disabledSkills'], sorted(skill_governance['disabledSkills']))
         for skill_name in skill_governance['disabledSkills']:
             self.assertEqual(payload['skills']['entries'][skill_name], {'enabled': False})
 
     def test_gateway_public_config_projects_active_ollama_model_for_ui_chat(self) -> None:
-        registry = _managed_registry()
+        registry = self._registry
         ollama_model = first_model_by_provider(registry, 'ollama', apis={'ollama', 'ollama-chat'})
-        resolver = _managed_resolver()
+        resolver = self._resolver
         with mock.patch.dict(os.environ, _ollama_env(ollama_model), clear=False):
-            payload = json.loads(build_public_openclaw_config_output(ROOT_DIR, resolver, MANAGED_EXTENSION_CONFIG_PATH))
+            payload = json.loads(build_public_openclaw_config_output(self._probe.repo_root, resolver, self._probe.service_path))
 
         model_key = f'ollama/{TEST_OLLAMA_MODEL_REF}'
         capabilities = ollama_model.get('capabilities') if isinstance(ollama_model.get('capabilities'), dict) else {}
@@ -253,35 +265,32 @@ class RuntimePathViewTest(unittest.TestCase):
         self.assertEqual(provider['models'][0]['cost'], {'input': 0.0, 'output': 0.0, 'cacheRead': 0.0, 'cacheWrite': 0.0})
 
     def test_runtime_paths_cli_passes_active_config_to_generated_outputs(self) -> None:
-        fake_resolver = mock.Mock()
-        fake_resolver.absolute_host_path.side_effect = lambda entry_id: Path('/runtime') / entry_id
         with (
-            mock.patch.object(path_surface, 'require_path_resolver', return_value=fake_resolver),
             mock.patch.object(path_surface, 'check_generated_outputs', return_value=0) as check_mock,
             mock.patch.object(path_surface, 'render_generated_outputs') as render_mock,
             mock.patch.object(path_surface.sys, 'stdout', io.StringIO()),
         ):
             self.assertEqual(
                 path_surface.cmd_check_generated(
-                    ['--repo-root', str(ROOT_DIR), '--config-path', str(MANAGED_EXTENSION_CONFIG_PATH)]
+                    ['--repo-root', str(self._probe.repo_root), '--config-path', str(self._probe.service_path)]
                 ),
                 0,
             )
             self.assertEqual(
                 path_surface.cmd_render_generated(
-                    ['--repo-root', str(ROOT_DIR), '--config-path', str(MANAGED_EXTENSION_CONFIG_PATH)]
+                    ['--repo-root', str(self._probe.repo_root), '--config-path', str(self._probe.service_path)]
                 ),
                 0,
             )
 
-        check_mock.assert_called_once_with(ROOT_DIR, fake_resolver, MANAGED_EXTENSION_CONFIG_PATH)
-        render_mock.assert_called_once_with(ROOT_DIR, fake_resolver, MANAGED_EXTENSION_CONFIG_PATH)
+        check_mock.assert_called_once_with(self._probe.repo_root, self._resolver, self._probe.service_path)
+        render_mock.assert_called_once_with(self._probe.repo_root, self._resolver, self._probe.service_path)
 
     def test_gateway_cron_jobs_are_display_only_projection(self) -> None:
-        registry = _managed_registry()
+        registry = self._registry
         expected_jobs = cron_jobs(registry, require_agent=True)
         now = datetime(2026, 4, 27, 0, 30, tzinfo=timezone.utc)
-        payload = json.loads(build_gateway_cron_jobs_output(MANAGED_EXTENSION_CONFIG_PATH, now=now))
+        payload = json.loads(build_gateway_cron_jobs_output(self._probe.service_path, now=now))
         jobs = payload['jobs']
         job_ids = {job['id'] for job in jobs}
         first_job = expected_jobs[0]
@@ -305,7 +314,7 @@ class RuntimePathViewTest(unittest.TestCase):
         self.assertIsInstance(first_payload['state']['nextRunAtMs'], int)
 
     def test_gateway_cron_jobs_project_scheduler_state_for_ui(self) -> None:
-        first_job = cron_jobs(_managed_registry(), require_agent=True)[0]
+        first_job = cron_jobs(self._registry, require_agent=True)[0]
         first_job_id = _text(first_job.get('id'))
         runtime_job_key = _text(first_job.get('resolvedRuntimeJobKey') or first_job.get('qualifiedId') or first_job_id)
         scheduler_state = {
@@ -317,7 +326,7 @@ class RuntimePathViewTest(unittest.TestCase):
                 },
             },
         }
-        payload = json.loads(build_gateway_cron_jobs_output(MANAGED_EXTENSION_CONFIG_PATH, scheduler_state=scheduler_state))
+        payload = json.loads(build_gateway_cron_jobs_output(self._probe.service_path, scheduler_state=scheduler_state))
         job = next(item for item in payload['jobs'] if item['id'] == first_job_id)
 
         self.assertEqual(job['state']['lastStatus'], 'ok')
@@ -331,7 +340,7 @@ class RuntimePathViewTest(unittest.TestCase):
         )
 
     def test_gateway_cron_jobs_use_runtime_job_key_only(self) -> None:
-        first_job = cron_jobs(_managed_registry(), require_agent=True)[0]
+        first_job = cron_jobs(self._registry, require_agent=True)[0]
         first_job_id = _text(first_job.get('id'))
         scheduler_state = {
             'jobs': {
@@ -342,20 +351,20 @@ class RuntimePathViewTest(unittest.TestCase):
                 },
             },
         }
-        payload = json.loads(build_gateway_cron_jobs_output(MANAGED_EXTENSION_CONFIG_PATH, scheduler_state=scheduler_state))
+        payload = json.loads(build_gateway_cron_jobs_output(self._probe.service_path, scheduler_state=scheduler_state))
         job = next(item for item in payload['jobs'] if item['id'] == first_job_id)
 
         self.assertEqual(job['state']['lastStatus'], 'skipped')
         self.assertNotIn('lastRunAtMs', job['state'])
 
     def test_gateway_agent_workspace_core_files_are_projected(self) -> None:
-        resolver = _managed_resolver()
-        registry = _managed_registry()
+        resolver = self._resolver
+        registry = self._registry
         business_agent_ids = managed_extension_agent_ids(registry)
         targets = gateway_agent_core_file_targets(registry, resolver)
-        router_targets = gateway_router_workspace_file_targets(ROOT_DIR, resolver)
-        router_agent_targets = gateway_router_agent_file_targets(ROOT_DIR, resolver)
-        healthcheck_targets = gateway_healthcheck_script_targets(ROOT_DIR, resolver)
+        router_targets = gateway_router_workspace_file_targets(self._probe.repo_root, resolver)
+        router_agent_targets = gateway_router_agent_file_targets(self._probe.repo_root, resolver)
+        healthcheck_targets = gateway_healthcheck_script_targets(self._probe.repo_root, resolver)
         session_seed_time = 1777344000000
         session_targets = gateway_default_session_targets(registry, resolver, seed_time_ms=session_seed_time)
         transcript_targets = set(gateway_default_session_transcript_targets(registry, resolver))
@@ -441,10 +450,9 @@ class RuntimePathViewTest(unittest.TestCase):
     def test_render_gateway_agent_state_dirs_loads_registry_from_config_path(self) -> None:
         with TemporaryDirectory() as tmpdir:
             target_dir = Path(tmpdir) / 'gateway' / 'agents' / 'probe'
-            resolver = mock.Mock()
-            resolver.config_path = MANAGED_EXTENSION_CONFIG_PATH
+            resolver = self._resolver
             with (
-                mock.patch.object(gateway_workspace, '_load_registry', return_value={'agents': []}) as load_mock,
+                mock.patch.object(gateway_workspace, '_load_registry', wraps=gateway_workspace._load_registry) as load_mock,
                 mock.patch.object(gateway_workspace, 'gateway_agent_state_dir_targets', return_value=[target_dir]),
                 mock.patch.object(gateway_workspace, 'gateway_healthcheck_script_targets', return_value={}),
                 mock.patch.object(gateway_workspace, 'gateway_router_workspace_file_targets', return_value={}),
@@ -453,11 +461,11 @@ class RuntimePathViewTest(unittest.TestCase):
                 mock.patch.object(gateway_workspace, 'prune_stale_gateway_agent_state_dirs', return_value=[]) as prune_mock,
                 mock.patch.object(gateway_workspace, 'render_gateway_default_sessions') as sessions_mock,
             ):
-                gateway_workspace.render_gateway_agent_state_dirs(ROOT_DIR, resolver, MANAGED_EXTENSION_CONFIG_PATH)
+                gateway_workspace.render_gateway_agent_state_dirs(self._probe.repo_root, resolver, self._probe.service_path)
 
                 self.assertTrue(target_dir.is_dir())
-                load_mock.assert_called_once_with(MANAGED_EXTENSION_CONFIG_PATH)
-                prune_mock.assert_called_once_with({'agents': []}, resolver)
+                load_mock.assert_called_once_with(self._probe.service_path)
+                prune_mock.assert_called_once_with(self._registry, resolver)
                 sessions_mock.assert_called_once()
 
     def test_gateway_agent_state_prunes_dirs_outside_current_registry(self) -> None:
@@ -495,31 +503,24 @@ class RuntimePathViewTest(unittest.TestCase):
             self.assertTrue(all(directory.is_dir() for directory in retained_dirs))
 
     def test_gateway_cron_state_prunes_migration_backups(self) -> None:
-        resolver = _managed_resolver()
-        with TemporaryDirectory() as tmpdir:
-            gateway_root = Path(tmpdir) / 'gateway'
-            cron_dir = gateway_root / 'cron'
-            cron_dir.mkdir(parents=True)
-            stale_path = cron_dir / 'jobs.json.migrated'
-            current_path = cron_dir / 'jobs.json'
-            stale_path.write_text('{}\n', encoding='utf-8')
-            current_path.write_text('{}\n', encoding='utf-8')
-            original_absolute_host_path = resolver.absolute_host_path
+        resolver = self._resolver
+        gateway_root = resolver.absolute_host_path('gateway_host_state_dir')
+        gateway_root.relative_to(self._probe.repo_root)
+        cron_dir = gateway_root / 'cron'
+        cron_dir.mkdir(parents=True, exist_ok=True)
+        stale_path = cron_dir / 'jobs.json.migrated'
+        current_path = cron_dir / 'jobs.json'
+        stale_path.write_text('{}\n', encoding='utf-8')
+        current_path.write_text('{}\n', encoding='utf-8')
 
-            with mock.patch.object(resolver, 'absolute_host_path') as absolute_host_path:
-                absolute_host_path.side_effect = (
-                    lambda entry_id: gateway_root
-                    if entry_id == 'gateway_host_state_dir'
-                    else original_absolute_host_path(entry_id)
-                )
-                self.assertEqual(stale_gateway_cron_migration_paths(resolver), [stale_path])
-                self.assertEqual(prune_stale_gateway_cron_migration_paths(resolver), [stale_path])
+        self.assertEqual(stale_gateway_cron_migration_paths(resolver), [stale_path])
+        self.assertEqual(prune_stale_gateway_cron_migration_paths(resolver), [stale_path])
 
-            self.assertFalse(stale_path.exists())
-            self.assertTrue(current_path.exists())
+        self.assertFalse(stale_path.exists())
+        self.assertTrue(current_path.exists())
 
     def test_gateway_default_session_render_refreshes_empty_placeholder_time(self) -> None:
-        sample_agent_id = managed_extension_agent_ids(_managed_registry())[0]
+        sample_agent_id = managed_extension_agent_ids(self._registry)[0]
         with TemporaryDirectory() as tmpdir:
             sessions_dir = Path(tmpdir) / 'agents' / sample_agent_id / 'sessions'
             sessions_dir.mkdir(parents=True)

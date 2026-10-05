@@ -17,7 +17,9 @@ from openclaw.control_plane.registry import CliError
 from openclaw.control_plane.runtime.adapters import resolve_runtime_tokens, run_python_module
 from openclaw.lib.repo.extension_envs import PreparedExtensionEnv
 from openclaw.lib.repo.layout import resolve_repo_root
-from openclaw.lib.repo.managed_extensions import ManagedExtensionRow
+from openclaw.doctor.agent_modules.managed_probe_fixture import PROBE_PACKAGE_NAME, PROBE_PRIMARY_MODULE_REF
+from openclaw.tests.support.managed_extensions import representative_managed_extension
+from openclaw.tests.support.managed_probe import managed_probe_repo
 from openclaw.lib.runtime.execution import build_subprocess_env, import_callable, run_module_main
 from openclaw.scheduler.subprocess_runner import run_subprocess_job_impl
 ROOT_DIR = resolve_repo_root(Path(__file__))
@@ -89,22 +91,12 @@ class RuntimeAdaptersTest(unittest.TestCase):
         self.assertIn('无法解析为退出码的字符串', str(ctx.exception))
 
     def test_managed_extension_python_module_runs_with_prepared_venv_subprocess(self) -> None:
-        self.skipTest('base release surface has no repo-managed extension env allowlist')
-        with TemporaryDirectory() as tmp:
-            base = Path(tmp)
-            extension_root = base / 'agent' / 'extensions' / 'agent_probe'
-            extension_python_root = extension_root / 'python'
-            extension_python_root.mkdir(parents=True)
+        with managed_probe_repo('prepared-extension-adapter') as fixture:
+            base = fixture.repo_root
+            row = representative_managed_extension(fixture.repo_root)
+            runtime_module = f'{PROBE_PACKAGE_NAME}.modules.{PROBE_PRIMARY_MODULE_REF}.main'
             prepared = PreparedExtensionEnv(
-                row=ManagedExtensionRow(
-                    id='agent_probe',
-                    title='Probe',
-                    root_dir=extension_root,
-                    default_service_config_path=extension_root / 'config' / 'control_plane' / 'profiles' / 'agent_probe.service.json',
-                    manifest_dir=extension_root / 'config' / 'control_plane' / 'extensions.d',
-                    python_roots=(extension_python_root,),
-                    status='managed_explicit_extension',
-                ),
+                row=row,
                 env_path=base / 'env',
                 python_executable=base / 'env' / 'bin' / 'python',
                 manifest={'schemaVersion': 1},
@@ -115,11 +107,11 @@ class RuntimeAdaptersTest(unittest.TestCase):
                     'LEAK_ME': 'should-not-cross',
                     'HOST_SECRET_TOKEN': 'should-not-cross',
                     'HOST_STATE_DIR': str(base / 'host-state'),
-                    'CHANNEL_GATEWAY_FEISHU_PREMARKET_PRIMARY_SECRET': 'dispatch-secret',
-                    'PREMARKET_DISPATCH_PRIMARY_ENABLE': 'true',
-                    'CHANNEL_GATEWAY_FEISHU_PREMARKET_PRIMARY_WEBHOOK_URL': 'https://example.invalid/webhook',
-                    'MINIMAX_API_KEY': 'declared-secret',
-                    'OPENCLAW_CONTROL_PLANE_SERVICE_CONFIG_PATH': str(AGENT_PLATFORM_CONFIG),
+                    'PROBE_DISPATCH_BOT_SECRET': 'dispatch-secret',
+                    'PROBE_DISPATCH_ENABLE': 'true',
+                    'PROBE_DISPATCH_WEBHOOK_URL': 'https://example.invalid/webhook',
+                    'OPENAI_API_KEY': 'declared-secret',
+                    'OPENCLAW_CONTROL_PLANE_SERVICE_CONFIG_PATH': str(fixture.service_path),
                     'OPENCLAW_GATEWAY_TOKEN': 'should-not-cross',
                     'OPENCLAW_INTERNAL_API_TOKEN': 'internal-api-token',
                     'OPENCLAW_RUNTIME_PATH_VIEW': 'scheduler',
@@ -139,43 +131,43 @@ class RuntimeAdaptersTest(unittest.TestCase):
                 return_value=SimpleNamespace(returncode=0),
             ) as run_mock:
                 rc = run_python_module(
-                    runtime_config={'module': 'agent_probe.entry'},
+                    runtime_config={'module': runtime_module},
                     runtime_args=['--state', '{state_root}'],
                     state_root=base / 'state',
-                    repo_root=ROOT_DIR,
-                    agent_ref='agent_probe:demo',
-                    implementation_ref='agent_probe:impl',
+                    repo_root=fixture.repo_root,
+                    agent_ref=f'{fixture.extension_id}:{PROBE_PRIMARY_MODULE_REF}',
+                    implementation_ref=f'{fixture.extension_id}:{PROBE_PRIMARY_MODULE_REF}_impl',
                 )
 
-        self.assertEqual(rc, 0)
-        run_mock.assert_called_once()
-        command = run_mock.call_args.args[0]
-        kwargs = run_mock.call_args.kwargs
-        self.assertEqual(command[0], str(prepared.python_executable))
-        self.assertEqual(command[-3:-1], ['agent_probe.entry', '--state'])
-        self.assertEqual(Path(command[-1]).name, 'state')
-        self.assertEqual(kwargs['env']['OPENCLAW_EXTENSION_ID'], 'agent_probe')
-        self.assertEqual(kwargs['env']['VIRTUAL_ENV'], str(prepared.env_path))
-        self.assertEqual(Path(kwargs['env']['PATH'].split(os.pathsep)[0]), prepared.python_executable.parent)
-        self.assertEqual(kwargs['env']['CHANNEL_GATEWAY_FEISHU_PREMARKET_PRIMARY_SECRET'], 'dispatch-secret')
-        self.assertEqual(kwargs['env']['PREMARKET_DISPATCH_PRIMARY_ENABLE'], 'true')
-        self.assertEqual(kwargs['env']['CHANNEL_GATEWAY_FEISHU_PREMARKET_PRIMARY_WEBHOOK_URL'], 'https://example.invalid/webhook')
-        self.assertEqual(kwargs['env']['MINIMAX_API_KEY'], 'declared-secret')
-        self.assertEqual(kwargs['env']['OPENCLAW_CONTROL_PLANE_SERVICE_CONFIG_PATH'], str(AGENT_PLATFORM_CONFIG))
-        self.assertEqual(kwargs['env']['OPENCLAW_INTERNAL_API_TOKEN'], 'internal-api-token')
-        self.assertEqual(kwargs['env']['OPENCLAW_RUNTIME_PATH_VIEW'], 'scheduler')
-        self.assertEqual(kwargs['env']['OPENCLAW_STATE_DIR'], str(base / 'scheduler-state'))
-        self.assertEqual(kwargs['env']['HOST_STATE_DIR'], str(base / 'host-state'))
-        self.assertNotIn('HOST_SECRET_TOKEN', kwargs['env'])
-        self.assertNotIn('LEAK_ME', kwargs['env'])
-        self.assertNotIn('OPENCLAW_GATEWAY_TOKEN', kwargs['env'])
-        self.assertNotIn('OPENCLAW_UNDECLARED_TOKEN', kwargs['env'])
-        self.assertNotIn('PYTHONHOME', kwargs['env'])
-        self.assertNotIn('PYTHONUSERBASE', kwargs['env'])
-        self.assertNotIn('PIP_REQUIRE_VIRTUALENV', kwargs['env'])
-        pythonpath_prefix = [Path(item) for item in kwargs['env']['PYTHONPATH'].split(os.pathsep)[:2]]
-        self.assertTrue(pythonpath_prefix[0].as_posix().endswith('/agent/extensions/agent_probe/python'))
-        self.assertTrue(pythonpath_prefix[1].samefile((ROOT_DIR / 'python').resolve()))
+            self.assertEqual(rc, 0)
+            run_mock.assert_called_once()
+            command = run_mock.call_args.args[0]
+            kwargs = run_mock.call_args.kwargs
+            self.assertEqual(command[0], str(prepared.python_executable))
+            self.assertEqual(command[-3:-1], [runtime_module, '--state'])
+            self.assertEqual(Path(command[-1]).name, 'state')
+            self.assertEqual(kwargs['env']['OPENCLAW_EXTENSION_ID'], 'agent_probe')
+            self.assertEqual(kwargs['env']['VIRTUAL_ENV'], str(prepared.env_path))
+            self.assertEqual(Path(kwargs['env']['PATH'].split(os.pathsep)[0]), prepared.python_executable.parent)
+            self.assertEqual(kwargs['env']['PROBE_DISPATCH_BOT_SECRET'], 'dispatch-secret')
+            self.assertEqual(kwargs['env']['PROBE_DISPATCH_ENABLE'], 'true')
+            self.assertEqual(kwargs['env']['PROBE_DISPATCH_WEBHOOK_URL'], 'https://example.invalid/webhook')
+            self.assertEqual(kwargs['env']['OPENAI_API_KEY'], 'declared-secret')
+            self.assertEqual(kwargs['env']['OPENCLAW_CONTROL_PLANE_SERVICE_CONFIG_PATH'], str(fixture.service_path))
+            self.assertEqual(kwargs['env']['OPENCLAW_INTERNAL_API_TOKEN'], 'internal-api-token')
+            self.assertEqual(kwargs['env']['OPENCLAW_RUNTIME_PATH_VIEW'], 'scheduler')
+            self.assertEqual(kwargs['env']['OPENCLAW_STATE_DIR'], str(base / 'scheduler-state'))
+            self.assertEqual(kwargs['env']['HOST_STATE_DIR'], str(base / 'host-state'))
+            self.assertNotIn('HOST_SECRET_TOKEN', kwargs['env'])
+            self.assertNotIn('LEAK_ME', kwargs['env'])
+            self.assertNotIn('OPENCLAW_GATEWAY_TOKEN', kwargs['env'])
+            self.assertNotIn('OPENCLAW_UNDECLARED_TOKEN', kwargs['env'])
+            self.assertNotIn('PYTHONHOME', kwargs['env'])
+            self.assertNotIn('PYTHONUSERBASE', kwargs['env'])
+            self.assertNotIn('PIP_REQUIRE_VIRTUALENV', kwargs['env'])
+            pythonpath_prefix = [Path(item) for item in kwargs['env']['PYTHONPATH'].split(os.pathsep)[:2]]
+            self.assertTrue(pythonpath_prefix[0].as_posix().endswith('/agent/extensions/agent_probe/python'))
+            self.assertTrue(pythonpath_prefix[1].samefile((fixture.repo_root / 'python').resolve()))
 
     def test_base_python_module_stays_in_process_without_venv_subprocess(self) -> None:
         with TemporaryDirectory() as tmp:

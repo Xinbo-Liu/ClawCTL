@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import contextlib
+from dataclasses import replace
 import io
 import json
 import os
+import shutil
 import tempfile
 import unittest
 from pathlib import Path
@@ -12,11 +14,16 @@ from unittest.mock import patch
 from openclaw.control_plane import facts
 from openclaw.lib.control_plane import object_families
 from openclaw.lib.runtime.path_resolver import PathResolver
+from openclaw.doctor.agent_modules.managed_probe_fixture import PROBE_PACKAGE_NAME, materialize_managed_probe_extension
 from openclaw.doctor.platform.architecture_import_guards import business_name_leak_tokens
 from openclaw.lib.repo.layout import resolve_repo_root
+from openclaw.lib.repo.contracts import repo_contract_path
+from openclaw.tests.support.helpers import isolated_test_root
 
 
 ROOT_DIR = resolve_repo_root(Path(__file__))
+REDACTION_EXTENSION_ID = 'agent_overview_secret_identity'
+REDACTION_PACKAGE_NAME = 'openclaw_ext_overview_secret_identity'
 
 
 class FactsOverviewTest(unittest.TestCase):
@@ -29,6 +36,43 @@ class FactsOverviewTest(unittest.TestCase):
         cls._payload = facts.build_overview_payload(root_dir=ROOT_DIR, probe_local=False)
         cls._all_profiles_payload = facts.build_overview_payload(
             root_dir=ROOT_DIR,
+            probe_local=False,
+            include_all_profiles=True,
+        )
+        context = isolated_test_root('facts-redaction-contract')
+        repo_root = context.__enter__()
+        cls.addClassCleanup(context.__exit__, None, None, None)
+        cls._probe = materialize_managed_probe_extension(
+            repo_root, base_repo_root=ROOT_DIR, extension_id=REDACTION_EXTENSION_ID,
+        )
+        # 身份脱敏测试使用独特包名，避免把平台 probe 命令误当成业务名字。
+        old_package = cls._probe.python_package_dir
+        new_package = old_package.with_name(REDACTION_PACKAGE_NAME)
+        old_package.rename(new_package)
+        for path in cls._probe.package_root.rglob('*'):
+            if path.is_file() and path.suffix in {'.json', '.py', '.md'}:
+                source = path.read_text(encoding='utf-8')
+                updated = source.replace(PROBE_PACKAGE_NAME, REDACTION_PACKAGE_NAME)
+                if updated != source:
+                    path.write_text(updated, encoding='utf-8')
+        cls._probe = replace(
+            cls._probe,
+            python_package_dir=new_package,
+            primary_main_path=new_package / cls._probe.primary_main_path.relative_to(old_package),
+            support_main_path=new_package / cls._probe.support_main_path.relative_to(old_package),
+            shared_runtime_layout_path=new_package / cls._probe.shared_runtime_layout_path.relative_to(old_package),
+        )
+        for contract_id in ('governance.script_catalog_surface', 'control_plane.object_families'):
+            source = repo_contract_path(contract_id, root_dir=ROOT_DIR)
+            target = repo_contract_path(contract_id, root_dir=cls._probe.repo_root)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(source, target)
+        cls._probe_payload = facts.build_overview_payload(
+            root_dir=cls._probe.repo_root, probe_local=False, include_all_profiles=True,
+        )
+        cls._probe_selected_payload = facts.build_overview_payload(
+            root_dir=cls._probe.repo_root,
+            control_plane_profile=cls._probe.extension_id,
             probe_local=False,
             include_all_profiles=True,
         )
@@ -164,36 +208,27 @@ class FactsOverviewTest(unittest.TestCase):
             self.assertNotIn(token, rendered)
 
     def test_all_profiles_maintenance_markdown_redacts_managed_business_names(self) -> None:
-        if not self.all_profiles_payload()['extensions']['managed_explicit']:
-            self.skipTest('base release surface has no repo-managed extension')
-        payload = self.all_profiles_payload()
+        payload = self._probe_payload
+        self.assertEqual([row['id'] for row in payload['extensions']['managed_explicit']], [self._probe.extension_id])
         rendered = facts.render_overview_markdown(payload, redact_managed_extensions=True)
 
         self.assertIn('managed-extension-', rendered)
-        for token in business_name_leak_tokens(ROOT_DIR):
+        tokens = business_name_leak_tokens(self._probe.repo_root)
+        self.assertEqual(tokens, (REDACTION_EXTENSION_ID, REDACTION_PACKAGE_NAME, 'overview_secret_identity'))
+        for token in tokens:
             self.assertNotIn(token, rendered)
 
     def test_redacted_managed_profile_markdown_does_not_emit_fake_repo_paths(self) -> None:
-        managed_ids = [
-            row['id']
-            for row in self.payload()['extensions']['managed_explicit']
-            if isinstance(row, dict) and row.get('id')
-        ]
-        if not managed_ids:
-            self.skipTest('base release surface has no repo-managed extension')
-
-        payload = facts.build_overview_payload(
-            root_dir=ROOT_DIR,
-            control_plane_profile=managed_ids[0],
-            probe_local=False,
-            include_all_profiles=True,
-        )
+        payload = self._probe_selected_payload
+        self.assertEqual(payload['selected_config']['profile_id'], self._probe.extension_id)
         rendered = facts.render_overview_markdown(payload, redact_managed_extensions=True)
 
         self.assertIn('managed-extension-1 selected profile config', rendered)
         self.assertIn('managed-extension-1 registry input', rendered)
         self.assertNotIn('agent/extensions/managed-extension-', rendered)
-        for token in business_name_leak_tokens(ROOT_DIR):
+        tokens = business_name_leak_tokens(self._probe.repo_root)
+        self.assertEqual(tokens, (REDACTION_EXTENSION_ID, REDACTION_PACKAGE_NAME, 'overview_secret_identity'))
+        for token in tokens:
             self.assertNotIn(token, rendered)
 
     def test_cli_json_output_is_machine_readable(self) -> None:

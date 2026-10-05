@@ -9,16 +9,15 @@ from openclaw.doctor.agent_modules.support import repo_copy_ignore
 from openclaw.doctor.platform.temp_workspace import project_tmp_root
 from openclaw.lib.repo.layout import resolve_repo_root
 from openclaw.tests.support.helpers import isolated_test_root
+from openclaw.tests.support.managed_probe import managed_probe_repo
 from openclaw.tests.support.managed_extensions import (
     current_managed_extension,
     current_managed_extension_domain_id,
-    managed_extensions,
     representative_managed_extension,
 )
 
 
 ROOT_DIR = resolve_repo_root(Path(__file__))
-MANAGED_EXTENSIONS = tuple(sorted(managed_extensions(ROOT_DIR), key=lambda row: row.id))
 
 
 class TestSupportHelpers(unittest.TestCase):
@@ -61,12 +60,11 @@ class TestSupportHelpers(unittest.TestCase):
         self.assertEqual(ignore(str(fake_root / 'preserved'), ['state', 'keep']), {'state'})
 
     def test_managed_extension_helpers_assert_single_extension_layout(self) -> None:
-        if not MANAGED_EXTENSIONS:
-            self.skipTest('base release surface has no repo-managed extension')
-        extension = representative_managed_extension(ROOT_DIR)
+        with managed_probe_repo('managed-extension-helper-single') as fixture:
+            extension = representative_managed_extension(fixture.repo_root)
 
-        self.assertTrue(extension.id)
-        self.assertEqual(current_managed_extension_domain_id(ROOT_DIR, extension_id=extension.id), extension.id.removeprefix('agent_'))
+            self.assertEqual(extension.id, fixture.extension_id)
+            self.assertEqual(current_managed_extension_domain_id(fixture.repo_root, extension_id=extension.id), extension.id.removeprefix('agent_'))
 
     def test_representative_managed_extension_supports_multi_extension_index(self) -> None:
         with isolated_test_root('managed-extension-helper-multi') as repo_root:

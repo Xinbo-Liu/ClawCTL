@@ -9,12 +9,11 @@ import shlex
 import tempfile
 import unittest
 from collections import OrderedDict
+from functools import wraps
 from pathlib import Path
-from typing import Iterator
+from typing import Callable, Iterator
 from unittest.mock import patch
-from openclaw.control_plane.registry_loader.config import load_registry_service_context
-from openclaw.doctor.agent_modules.managed_probe_fixture import ManagedProbeExtensionFixture, materialize_managed_probe_extension
-from openclaw.doctor.agent_modules.managed_probe_fixture_repo_markers import write_json
+from openclaw.doctor.agent_modules.managed_probe_fixture import ManagedProbeExtensionFixture
 from openclaw.lib.models.env import ModelEnvSpec
 from openclaw.lib.repo.layout import resolve_repo_root
 from openclaw.lib.repo.profiles import CONTROL_PLANE_PROFILE_REGISTRY_ENV
@@ -24,7 +23,9 @@ from openclaw.setup.deploy_env import bootstrap_runtime
 from openclaw.setup.deploy_env import control_plane
 from openclaw.setup.deploy_env import input_values as deploy_input_values
 from openclaw.setup.deploy_env import render_validate as deploy_render_validate
+from openclaw.setup.deploy_env import support as deploy_env_support
 from openclaw.setup.deploy_env.dispatch_registry import render as dispatch_registry_render
+from openclaw.setup.deploy_env.dispatch_registry import query as dispatch_registry_query
 from openclaw.setup.deploy_env.dispatch_registry.render import render_dispatch_runtime
 from openclaw.setup.deploy_env.query import parse_env_file, render_shell_assignment
 from openclaw.setup.deploy_env.render_validate import (
@@ -42,59 +43,20 @@ from openclaw.setup.deploy_env.render_validate import (
 )
 from openclaw.setup.deploy_env.support import detect_first_private_ipv4_from_hostname_i, format_schema_lines, load_schema, validate_value
 from openclaw.tests.support.managed_extensions import managed_extensions
+from openclaw.tests.setup.deploy_env_probe_fixture import materialize_deploy_env_probe_profiles
 
 ROOT_DIR = resolve_repo_root(Path(__file__))
-MANAGED_EXTENSIONS = tuple(sorted(managed_extensions(ROOT_DIR), key=lambda row: row.id))
 
 
-def _managed_extension_with_dispatch_targets():
-    for extension in MANAGED_EXTENSIONS:
-        path = extension.root_dir / 'agent' / 'control_plane' / 'registries' / 'dispatch_targets.json'
-        if path.is_file():
-            return extension
-    return None
+def _combo_extension_owned_site_env_rejected_key(config_path: Path) -> str:
+    """从组合配置的真实 schema 选择仍归扩展所有的变量。
 
-
-MANAGED_EXTENSION = _managed_extension_with_dispatch_targets()
-MANAGED_EXTENSION_PROFILE_ID = MANAGED_EXTENSION.id if MANAGED_EXTENSION is not None else 'agent_probe'
-MANAGED_EXTENSION_RUNTIME_CONFIG_PATH = (
-    f'/opt/openclaw-tools/{MANAGED_EXTENSION.default_service_config_path.relative_to(ROOT_DIR).as_posix()}'
-    if MANAGED_EXTENSION is not None
-    else '/opt/openclaw-tools/agent/extensions/agent_probe/config/control_plane/profiles/agent_probe.service.json'
-)
-
-
-def _managed_extension_with_deploy_env_key(key: str):
-    for extension in MANAGED_EXTENSIONS:
-        schema_paths = sorted(extension.manifest_dir.glob('*.deploy_env_schema.json'))
-        for schema_path in schema_paths:
-            if key in schema_path.read_text(encoding='utf-8'):
-                return extension
-    return None
-
-
-DEPLOY_ENV_EXTENSION = _managed_extension_with_deploy_env_key('PROBE_NOTIFY_APP_ID')
-RELATED_PARTY_EXTENSION = next((extension for extension in MANAGED_EXTENSIONS if extension.id == 'agent_related_party_compare'), None)
-
-
-def _repo_combination_profile() -> tuple[str | None, Path | None]:
-    managed_ids = {extension.id for extension in MANAGED_EXTENSIONS}
-    for path in sorted((ROOT_DIR / 'config' / 'control_plane' / 'profiles').glob('*.service.json')):
-        context = load_registry_service_context(path)
-        extension_ids = [item for item in context['enabledExtensionIds'] if item in managed_ids]
-        if len(extension_ids) >= 2:
-            return path.name.removesuffix('.service.json'), path
-    return None, None
-
-
-COMBO_PROFILE_ID, COMBO_CONFIG_PATH = _repo_combination_profile()
-COMBO_RUNTIME_CONFIG_PATH = f'/opt/openclaw-tools/config/control_plane/profiles/{COMBO_PROFILE_ID}.service.json'
-
-
-def _combo_extension_owned_site_env_rejected_key() -> str:
-    if COMBO_CONFIG_PATH is None:
-        return 'EXTENSION_OWNED_KEY'
-    schema = load_schema(config_path=COMBO_CONFIG_PATH)
+    参数：config_path（Path）为组合 profile 的服务配置。
+    返回：str，仍须填写于 extension.env 的变量名。
+    副作用：读取组合 profile、manifest 与部署 schema，不写入文件。
+    异常：配置加载失败直接传播；无归属变量时抛出 AssertionError。
+    """
+    schema = load_schema(config_path=config_path)
     for field in schema.get('fields', []):
         key = str(field.get('key') or '').strip()
         extension_id = str(field.get('extensionId') or '').strip()
@@ -104,105 +66,92 @@ def _combo_extension_owned_site_env_rejected_key() -> str:
     raise AssertionError('combo profile has no extension-owned deploy env key outside deploy/site.env')
 
 
-def dispatch_registry_path() -> Path:
-    if MANAGED_EXTENSION is None:
-        raise AssertionError('base release surface has no managed extension dispatch registry')
-    path = MANAGED_EXTENSION.root_dir / 'agent' / 'control_plane' / 'registries' / 'dispatch_targets.json'
+def dispatch_registry_path(fixture: ManagedProbeExtensionFixture) -> Path:
+    """定位受管探针声明的真实 dispatch registry。
+
+    参数：fixture（ManagedProbeExtensionFixture）为测试拥有的扩展布局。
+    返回：Path，已存在的 registry 文件绝对路径。
+    副作用：检查文件是否存在，不写入文件。
+    异常：registry 缺失时抛出 AssertionError，避免测试前置条件静默失效。
+    """
+    path = fixture.package_root / 'agent' / 'control_plane' / 'registries' / 'dispatch_targets.json'
     if not path.is_file():
         raise AssertionError(f'expected managed dispatch target registry path to exist: {path}')
     return path.resolve()
 
 
+def _with_probe_profile(test: Callable[[DeployEnvSupportTest], None]) -> Callable[[DeployEnvSupportTest], None]:
+    """为依赖扩展声明的回归提供真实探针仓库上下文。
+
+    参数：test（Callable[[DeployEnvSupportTest], None]）为需要真实扩展或组合 profile 的测试。
+    返回：Callable[[DeployEnvSupportTest], None]，保留原测试名与断言的包装方法。
+    副作用：执行期间临时定位部署解析根目录及环境，退出时恢复。
+    异常：测试断言与真实 loader 的异常原样传播。
+    """
+    @wraps(test)
+    def run(self: DeployEnvSupportTest) -> None:
+        """在类内探针上下文运行测试。
+
+        参数：self（DeployEnvSupportTest）提供类内共享的 fixture。
+        返回：None；由原测试断言结果。
+        副作用：进入并恢复探针仓库与环境上下文。
+        异常：保留原测试方法产生的异常。
+        """
+        with self._probe_profile_context():
+            test(self)
+    return run
+
+
 class DeployEnvSupportTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
-        """构造类内复用的探针 profile，隔离通用部署输入契约与业务包装配。
+        """构造类内复用的单扩展与组合部署输入仓库。
 
-        返回值：无；保存真实受管扩展 fixture 及其 dispatch registry。
-        副作用：在临时仓库写入探针及最小 provider env schema，类结束时清理。
-        异常：fixture 构造或声明文件读取错误直接传播，避免掩盖测试前置条件。
+        返回值：None；保存真实受管扩展、组合 profile 与 dispatch registry 的入口。
+        副作用：在临时仓库写入探针、部署 schema 与组合合同，类结束时清理。
+        异常：fixture 构造或声明文件读取错误直接传播。
         """
         super().setUpClass()
         temporary_repo = tempfile.TemporaryDirectory(prefix='deploy-env-contract-')
         cls.addClassCleanup(temporary_repo.cleanup)
-        cls._probe_fixture = materialize_managed_probe_extension(Path(temporary_repo.name), base_repo_root=ROOT_DIR)
-        fixture = cls._probe_fixture
-        schema_name = 'probe.deploy_env_schema.json'
-        manifest = json.loads(fixture.manifest_path.read_text(encoding='utf-8'))
-        manifest.setdefault('surfaceFragments', {})['deployEnvSchemaPath'] = schema_name
-        write_json(fixture.manifest_path, manifest)
-        write_json(fixture.manifest_dir / schema_name, {
-            'schema_version': 1,
-            'groups': [{'id': 'probe_provider', 'title': '探针 provider 输入'}],
-            'fields': [{
-                'key': 'PROBE_PROVIDER_WEBHOOK_URL',
-                'group': 'probe_provider',
-                'required': False,
-                'manual_required': False,
-                'default_kind': 'literal',
-                'default': '',
-                'doc_summary': '探针扩展 provider endpoint',
-                'doc_location': f'agent/extensions/{fixture.extension_id}/deploy/extension.env',
-                'validator': {'type': 'non_empty'},
-            }],
-        })
-        registry_path = fixture.package_root / 'agent' / 'control_plane' / 'registries' / 'dispatch_targets.json'
-        cls._probe_dispatch_registry = json.loads(registry_path.read_text(encoding='utf-8'))
+        cls._profiles = materialize_deploy_env_probe_profiles(Path(temporary_repo.name), base_repo_root=ROOT_DIR)
+        cls._probe_fixture = cls._profiles.primary
+        cls._probe_runtime_config_path = f'/opt/openclaw-tools/{cls._probe_fixture.service_path.relative_to(cls._probe_fixture.repo_root).as_posix()}'
+        cls._combination_runtime_config_path = f'/opt/openclaw-tools/{cls._profiles.combination_path.relative_to(cls._probe_fixture.repo_root).as_posix()}'
+        cls._probe_dispatch_registry = json.loads(dispatch_registry_path(cls._probe_fixture).read_text(encoding='utf-8'))
 
     @contextlib.contextmanager
     def _probe_profile_context(self) -> Iterator[ManagedProbeExtensionFixture]:
-        """将部署输入解析定位到真实探针仓库，并在退出时恢复模块和环境。
+        """将真实部署解析和默认辅助文件写入定位到探针仓库。
 
-        返回值：上下文提供 ManagedProbeExtensionFixture，供测试选择 profile 与 env 根目录。
-        副作用：临时替换部署模块的仓库根及 profile registry 环境覆盖；省略无关的默认模板写入。
+        返回值：Iterator[ManagedProbeExtensionFixture]，上下文提供单扩展布局。
+        副作用：临时替换部署模块仓库根、默认扩展 env 根与 profile 环境，退出时恢复；
+            默认 site.env.example 也由真实 renderer 写入临时仓库。
         异常：保留 profile、schema、dispatch 加载及输入校验产生的原始异常。
         """
+        fixture = self._probe_fixture
         with (
-            patch.object(deploy_render_validate, 'ROOT_DIR', self._probe_fixture.repo_root),
-            patch.object(deploy_render_validate, 'ensure_site_env_example', return_value=None),
-            patch.dict(os.environ, {CONTROL_PLANE_PROFILE_REGISTRY_ENV: ''}),
+            patch.object(deploy_render_validate, 'ROOT_DIR', fixture.repo_root),
+            patch.object(deploy_env_support, 'ROOT_DIR', fixture.repo_root),
+            patch.object(deploy_input_values, 'ROOT_DIR', fixture.repo_root),
+            patch.object(dispatch_registry_query, 'ROOT_DIR', fixture.repo_root),
+            patch.object(dispatch_registry_render, 'ROOT_DIR', fixture.repo_root),
+            patch.object(deploy_render_validate, 'DEFAULT_EXTENSION_ENV_ROOT', fixture.repo_root / 'agent' / 'extensions'),
+            patch.object(deploy_render_validate, 'ensure_site_env_example', side_effect=lambda: ensure_site_env_example(fixture.repo_root / 'deploy' / 'site.env.example')),
+            patch.dict(os.environ, {
+                CONTROL_PLANE_PROFILE_REGISTRY_ENV: '',
+                'OPENCLAW_REPO_ROOT': str(fixture.repo_root),
+                'OPENCLAW_TOOLS_ROOT': str(fixture.repo_root),
+            }),
         ):
-            yield self._probe_fixture
+            yield fixture
 
-    _EXTENSION_REQUIRED_TESTS = {
-        'test_render_env_redacts_target_secrets_from_terminal_output',
-        'test_render_env_rejects_extension_keys_in_site_env',
-        'test_render_env_loads_active_extension_env_from_extension_root',
-        'test_render_env_rejects_undeclared_extension_env_key',
-        'test_render_env_does_not_preserve_extension_values_from_existing_output',
-        'test_render_env_maps_profile_id_to_runtime_path_and_dispatch_registry',
-        'test_render_env_infers_profile_from_runtime_config_path',
-        'test_target_env_examples_are_reconciled_to_active_profile_registry',
-        'test_dispatch_registry_commands_resolve_active_profile_from_env_file',
-        'test_dispatch_runtime_render_writes_registry_loader_snapshot',
-        'test_dispatch_runtime_v7_requires_explicit_boundary',
-        'test_dispatch_runtime_v7_requires_boolean_publish_latest_boundary',
-        'test_dispatch_runtime_local_id_payload_requires_explicit_boundary',
-    }
-    _COMBO_REQUIRED_TESTS = {
-        'test_combo_profile_allows_shared_ollama_values_in_site_env',
-        'test_combo_profile_still_rejects_extension_owned_keys_in_site_env',
-        'test_combo_profile_input_routes_shared_ollama_to_site_env',
-    }
-    _DEPLOY_ENV_EXTENSION_REQUIRED_TESTS = {
-        'test_deploy_env_requires_truthy_probe_cards_when_live_is_required',
-        'test_render_env_rejects_synthetic_notify_keys_in_site_env',
-        'test_render_env_rejects_undeclared_synthetic_notify_extension_keys',
-        'test_runtime_service_env_render_includes_active_extension_runtime_env',
-        'test_runtime_service_env_render_enforces_live_card_truthy_required',
-    }
-
-    def setUp(self) -> None:
-        if self._testMethodName in self._EXTENSION_REQUIRED_TESTS and MANAGED_EXTENSION is None:
-            self.skipTest('base release surface has no repo-managed extension; synthetic probe fixture tests cover extension contracts')
-        if self._testMethodName in self._COMBO_REQUIRED_TESTS and COMBO_PROFILE_ID is None:
-            self.skipTest('base release surface has no repo combination profile')
-        if self._testMethodName in self._DEPLOY_ENV_EXTENSION_REQUIRED_TESTS and DEPLOY_ENV_EXTENSION is None:
-            self.skipTest('base release surface has no repo extension deploy-env schema')
-
+    @_with_probe_profile
     def test_extension_env_examples_only_declare_keys_owned_by_same_extension(self) -> None:
         offenders: list[str] = []
-        for extension in MANAGED_EXTENSIONS:
+        probe_extensions = managed_extensions(self._probe_fixture.repo_root)
+        self.assertEqual({self._profiles.primary.extension_id, self._profiles.peer.extension_id}, {item.id for item in probe_extensions})
+        for extension in (*managed_extensions(ROOT_DIR), *probe_extensions):
             schema = load_schema(config_path=extension.default_service_config_path)
             key_owners = {
                 str(field.get('key') or '').strip(): str(field.get('extensionId') or '').strip()
@@ -218,9 +167,20 @@ class DeployEnvSupportTest(unittest.TestCase):
             for key in parse_env_file(example_path):
                 owner = key_owners.get(key)
                 if owner != extension.id:
-                    offenders.append(f'{example_path.relative_to(ROOT_DIR).as_posix()} declares {key} owned by {owner or "<undeclared>"}')
+                    offenders.append(f'{example_path.as_posix()} declares {key} owned by {owner or "<undeclared>"}')
 
         self.assertEqual([], offenders)
+
+    @_with_probe_profile
+    def test_single_profile_excludes_disabled_extension_deploy_env(self) -> None:
+        single_schema = load_schema(config_path=self._probe_fixture.service_path)
+        combination_schema = load_schema(config_path=self._profiles.combination_path)
+        base_schema = load_schema(config_path=self._probe_fixture.repo_root / 'config' / 'control_plane' / 'service.json')
+
+        self.assertNotIn('PROBE_PEER_SETTING', {field['key'] for field in single_schema['fields']})
+        peer_field = next(field for field in combination_schema['fields'] if field['key'] == 'PROBE_PEER_SETTING')
+        self.assertEqual(peer_field['extensionId'], self._profiles.peer.extension_id)
+        self.assertFalse([field for field in base_schema['fields'] if field.get('extensionId')])
 
     def test_format_schema_lines_accepts_single_string(self) -> None:
         self.assertEqual(
@@ -320,11 +280,12 @@ class DeployEnvSupportTest(unittest.TestCase):
 
         self.assertIn('OPENCLAW_INGRESS_BOUNDARY_EVIDENCE_PATH: 不能为空', errors)
 
+    @_with_probe_profile
     def test_deploy_env_requires_truthy_probe_cards_when_live_is_required(self) -> None:
-        schema = load_schema(config_path=DEPLOY_ENV_EXTENSION.default_service_config_path)
+        schema = load_schema(config_path=self._probe_fixture.service_path)
         values = build_default_values(
             schema=schema,
-            control_plane_profile=DEPLOY_ENV_EXTENSION.id,
+            control_plane_profile=self._probe_fixture.extension_id,
             dispatch_registry={'targets': []},
         )
         self.assertEqual(values['PROBE_NOTIFY_CARD_ACTION_TRIGGER_ENABLED'], '1')
@@ -351,98 +312,7 @@ class DeployEnvSupportTest(unittest.TestCase):
         errors = validate_deploy_env_values(values, schema, allow_placeholders=True, model_specs={})
         self.assertFalse([item for item in errors if 'PROBE_NOTIFY_CARD' in item])
 
-    @unittest.skipIf(RELATED_PARTY_EXTENSION is None, 'agent_related_party_compare extension not installed')
-    def test_related_party_live_requires_feishu_identity_and_acceptance_task(self) -> None:
-        schema = load_schema(config_path=RELATED_PARTY_EXTENSION.default_service_config_path)
-        values = build_default_values(
-            schema=schema,
-            control_plane_profile=RELATED_PARTY_EXTENSION.id,
-        )
-        values.update({
-            'OPENCLAW_INGRESS_LISTEN_IP': '192.168.91.128',
-            'OPENCLAW_INGRESS_ALLOWED_SOURCE_CIDRS': '192.168.91.128/32',
-            'RELATED_PARTY_COMPARE_LIVE_REQUIRED': '1',
-            'RELATED_PARTY_COMPARE_FEISHU_CARD_ENABLED': '1',
-            'RELATED_PARTY_COMPARE_FEISHU_CARD_UPDATE_ENABLED': '1',
-            'RELATED_PARTY_COMPARE_FEISHU_CARD_ACTION_TRIGGER_ENABLED': '1',
-            'CHANNEL_GATEWAY_FEISHU_RELATED_PARTY_COMPARE_APP_ID': '',
-            'CHANNEL_GATEWAY_FEISHU_RELATED_PARTY_COMPARE_APP_SECRET': '',
-            'CHANNEL_GATEWAY_FEISHU_RELATED_PARTY_COMPARE_CHAT_ID': '',
-            'CHANNEL_GATEWAY_FEISHU_RELATED_PARTY_COMPARE_ROBOT_ID': '',
-            'RELATED_PARTY_COMPARE_LIVE_ACCEPTANCE_TASK_ID': '',
-        })
 
-        summary = build_summary(values, Path('deploy/.env'), schema, model_specs={})
-        pending_by_key = {
-            str(row['key']): row
-            for row in summary['required_manual_keys']
-            if row['status'] != 'filled'
-        }
-
-        self.assertEqual(pending_by_key['CHANNEL_GATEWAY_FEISHU_RELATED_PARTY_COMPARE_APP_ID']['error'], '不能为空')
-        self.assertEqual(pending_by_key['CHANNEL_GATEWAY_FEISHU_RELATED_PARTY_COMPARE_APP_SECRET']['error'], '长度不能小于 8')
-        self.assertEqual(pending_by_key['CHANNEL_GATEWAY_FEISHU_RELATED_PARTY_COMPARE_CHAT_ID']['error'], '不能为空')
-        self.assertEqual(pending_by_key['CHANNEL_GATEWAY_FEISHU_RELATED_PARTY_COMPARE_ROBOT_ID']['error'], '不能为空')
-        self.assertEqual(pending_by_key['RELATED_PARTY_COMPARE_LIVE_ACCEPTANCE_TASK_ID']['error'], '不能为空')
-        self.assertEqual(
-            render_blocking_required_keys(summary, schema),
-            [
-                'CHANNEL_GATEWAY_FEISHU_RELATED_PARTY_COMPARE_APP_ID',
-                'CHANNEL_GATEWAY_FEISHU_RELATED_PARTY_COMPARE_APP_SECRET',
-                'CHANNEL_GATEWAY_FEISHU_RELATED_PARTY_COMPARE_CHAT_ID',
-                'CHANNEL_GATEWAY_FEISHU_RELATED_PARTY_COMPARE_ROBOT_ID',
-                'RELATED_PARTY_COMPARE_LIVE_ACCEPTANCE_TASK_ID',
-            ],
-        )
-
-    @unittest.skipIf(RELATED_PARTY_EXTENSION is None, 'agent_related_party_compare extension not installed')
-    def test_render_env_rejects_related_party_live_without_feishu_identity(self) -> None:
-        def fail(_: str, message: str, code: int) -> None:
-            raise AssertionError(f'{code}: {message}')
-
-        with tempfile.TemporaryDirectory() as tmpdir:
-            tmp = Path(tmpdir)
-            site_env = tmp / 'site.env'
-            extension_root = tmp / 'extensions'
-            extension_deploy = extension_root / RELATED_PARTY_EXTENSION.id / 'deploy'
-            output = tmp / '.env'
-            extension_deploy.mkdir(parents=True)
-            site_env.write_text(
-                '\n'.join([
-                    f'OPENCLAW_CONTROL_PLANE_PROFILE={RELATED_PARTY_EXTENSION.id}',
-                    'OPENCLAW_INGRESS_LISTEN_IP=192.168.91.128',
-                    'OPENCLAW_INGRESS_ALLOWED_SOURCE_CIDRS=192.168.91.1/32,192.168.91.128/32',
-                ]) + '\n',
-                encoding='utf-8',
-            )
-            (extension_deploy / 'extension.env').write_text(
-                '\n'.join([
-                    'RELATED_PARTY_COMPARE_MODEL_PROFILE_REF=ollama_default',
-                    'OLLAMA_BASE_URL=http://ollama.internal:11434',
-                    'OLLAMA_MODEL_REF=qwen-test',
-                    'RELATED_PARTY_COMPARE_LIVE_REQUIRED=1',
-                    'RELATED_PARTY_COMPARE_FEISHU_CARD_ENABLED=1',
-                    'RELATED_PARTY_COMPARE_FEISHU_CARD_UPDATE_ENABLED=1',
-                    'RELATED_PARTY_COMPARE_FEISHU_CARD_ACTION_TRIGGER_ENABLED=1',
-                    'RELATED_PARTY_COMPARE_LIVE_ACCEPTANCE_TASK_ID=feishu-task',
-                ]) + '\n',
-                encoding='utf-8',
-            )
-
-            with self.assertRaisesRegex(AssertionError, '部署输入仍有运行必填项未补齐|deploy env 配置校验未通过'):
-                render_env(
-                    [
-                        '--site-env', str(site_env),
-                        '--targets-env-dir', str(tmp / 'targets.d'),
-                        '--extension-env-root', str(extension_root),
-                        '--output', str(output),
-                        '--summary-json', str(tmp / 'summary.json'),
-                    ],
-                    fail=fail,
-                    note=lambda *_: None,
-                )
-
-            self.assertFalse(output.exists())
 
     def test_hostname_i_detection_returns_first_private_ipv4(self) -> None:
         with patch('openclaw.setup.deploy_env.support.subprocess.check_output', return_value='203.0.113.9 10.2.3.4 192.168.1.8\n'):
@@ -462,6 +332,7 @@ class DeployEnvSupportTest(unittest.TestCase):
         self.assertEqual(parsed['OPENCLAW_TLS_CERT_SOURCE_PATH'], value)
         self.assertEqual(parsed['EMPTY'], '')
 
+    @_with_probe_profile
     def test_render_env_redacts_target_secrets_from_terminal_output(self) -> None:
         def fail(_: str, message: str, code: int) -> None:
             raise AssertionError(f'{code}: {message}')
@@ -469,6 +340,7 @@ class DeployEnvSupportTest(unittest.TestCase):
         def note(prefix: str, message: str) -> None:
             print(f'[{prefix}] {message}')
 
+        target = self._probe_dispatch_registry['targets'][0]
         with tempfile.TemporaryDirectory() as tmpdir:
             tmp = Path(tmpdir)
             site_env = tmp / 'site.env'
@@ -478,16 +350,16 @@ class DeployEnvSupportTest(unittest.TestCase):
             targets_dir.mkdir()
             site_env.write_text(
                 '\n'.join([
-                    f'OPENCLAW_CONTROL_PLANE_PROFILE={MANAGED_EXTENSION_PROFILE_ID}',
+                    f'OPENCLAW_CONTROL_PLANE_PROFILE={self._probe_fixture.extension_id}',
                     'OPENCLAW_INGRESS_LISTEN_IP=192.168.91.128',
                     'OPENCLAW_INGRESS_ALLOWED_SOURCE_CIDRS=192.168.91.1/32,192.168.91.128/32',
                 ]) + '\n',
                 encoding='utf-8',
             )
-            (targets_dir / 'dispatch_primary.env').write_text(
+            (targets_dir / f"{target['id']}.env").write_text(
                 '\n'.join([
-                    'CHANNEL_GATEWAY_FEISHU_PREMARKET_PRIMARY_WEBHOOK_URL=https://example.invalid/hook-secret',
-                    'CHANNEL_GATEWAY_FEISHU_PREMARKET_PRIMARY_SECRET=bot-secret-value',
+                    f"{target['endpointEnv']}=https://example.invalid/hook-secret",
+                    f"{target['secretEnv']}=bot-secret-value",
                 ]) + '\n',
                 encoding='utf-8',
             )
@@ -507,13 +379,13 @@ class DeployEnvSupportTest(unittest.TestCase):
 
             self.assertEqual(exit_code, 0)
             rendered = stdout.getvalue()
-            self.assertIn('CHANNEL_GATEWAY_FEISHU_PREMARKET_PRIMARY_WEBHOOK_URL=<redacted>', rendered)
-            self.assertIn('CHANNEL_GATEWAY_FEISHU_PREMARKET_PRIMARY_SECRET=<redacted>', rendered)
+            self.assertIn(f"{target['endpointEnv']}=<redacted>", rendered)
+            self.assertIn(f"{target['secretEnv']}=<redacted>", rendered)
             self.assertNotIn('hook-secret', rendered)
             self.assertNotIn('bot-secret-value', rendered)
             written = output.read_text(encoding='utf-8')
-            self.assertIn('CHANNEL_GATEWAY_FEISHU_PREMARKET_PRIMARY_WEBHOOK_URL=https://example.invalid/hook-secret', written)
-            self.assertIn('CHANNEL_GATEWAY_FEISHU_PREMARKET_PRIMARY_SECRET=bot-secret-value', written)
+            self.assertIn(f"{target['endpointEnv']}=https://example.invalid/hook-secret", written)
+            self.assertIn(f"{target['secretEnv']}=bot-secret-value", written)
 
     def test_render_env_rejects_target_env_outside_active_profile(self) -> None:
         def fail(_: str, message: str, code: int) -> None:
@@ -602,6 +474,7 @@ class DeployEnvSupportTest(unittest.TestCase):
                     note=lambda *_: None,
                 )
 
+    @_with_probe_profile
     def test_render_env_rejects_extension_keys_in_site_env(self) -> None:
         def fail(_: str, message: str, code: int) -> None:
             raise AssertionError(f'{code}: {message}')
@@ -611,7 +484,7 @@ class DeployEnvSupportTest(unittest.TestCase):
             site_env = tmp / 'site.env'
             site_env.write_text(
                 '\n'.join([
-                    f'OPENCLAW_CONTROL_PLANE_PROFILE={MANAGED_EXTENSION_PROFILE_ID}',
+                    f'OPENCLAW_CONTROL_PLANE_PROFILE={self._probe_fixture.extension_id}',
                     'OLLAMA_BASE_URL=http://ollama.invalid:11434',
                 ]) + '\n',
                 encoding='utf-8',
@@ -629,11 +502,12 @@ class DeployEnvSupportTest(unittest.TestCase):
                     note=lambda *_: None,
                 )
 
+    @_with_probe_profile
     def test_combo_profile_allows_shared_ollama_values_in_site_env(self) -> None:
         def fail(_: str, message: str, code: int) -> None:
             raise AssertionError(f'{code}: {message}')
 
-        schema = load_schema(config_path=COMBO_CONFIG_PATH)
+        schema = load_schema(config_path=self._profiles.combination_path)
         ollama_fields = [field for field in schema.get('fields') or [] if field.get('key') in {'OLLAMA_BASE_URL', 'OLLAMA_MODEL_REF'}]
         self.assertEqual({field.get('key') for field in ollama_fields}, {'OLLAMA_BASE_URL', 'OLLAMA_MODEL_REF'})
         for field in ollama_fields:
@@ -649,7 +523,7 @@ class DeployEnvSupportTest(unittest.TestCase):
             summary = tmp / 'config_summary.json'
             site_env.write_text(
                 '\n'.join([
-                    f'OPENCLAW_CONTROL_PLANE_PROFILE={COMBO_PROFILE_ID}',
+                    f'OPENCLAW_CONTROL_PLANE_PROFILE={self._profiles.combination_id}',
                     'OPENCLAW_INGRESS_LISTEN_IP=192.168.91.128',
                     'OPENCLAW_INGRESS_ALLOWED_SOURCE_CIDRS=192.168.91.1/32,192.168.91.128/32',
                     'OLLAMA_BASE_URL=http://ollama.internal:11434',
@@ -673,14 +547,15 @@ class DeployEnvSupportTest(unittest.TestCase):
 
             self.assertEqual(exit_code, 0)
             parsed = parse_env_file(output)
-            self.assertEqual(parsed['OPENCLAW_CONTROL_PLANE_PROFILE'], COMBO_PROFILE_ID)
-            self.assertEqual(parsed['OPENCLAW_CONTROL_PLANE_SERVICE_CONFIG_PATH'], COMBO_RUNTIME_CONFIG_PATH)
+            self.assertEqual(parsed['OPENCLAW_CONTROL_PLANE_PROFILE'], self._profiles.combination_id)
+            self.assertEqual(parsed['OPENCLAW_CONTROL_PLANE_SERVICE_CONFIG_PATH'], self._combination_runtime_config_path)
             self.assertEqual(parsed['OLLAMA_BASE_URL'], 'http://ollama.internal:11434')
             self.assertEqual(parsed['OLLAMA_MODEL_REF'], 'qwen-test')
             required_keys = [row['key'] for row in json.loads(summary.read_text(encoding='utf-8'))['required_manual_keys']]
             self.assertEqual(required_keys.count('OLLAMA_BASE_URL'), 1)
             self.assertEqual(required_keys.count('OLLAMA_MODEL_REF'), 1)
 
+    @_with_probe_profile
     def test_combo_profile_still_rejects_extension_owned_keys_in_site_env(self) -> None:
         def fail(_: str, message: str, code: int) -> None:
             raise AssertionError(f'{code}: {message}')
@@ -688,10 +563,10 @@ class DeployEnvSupportTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             tmp = Path(tmpdir)
             site_env = tmp / 'site.env'
-            rejected_key = _combo_extension_owned_site_env_rejected_key()
+            rejected_key = _combo_extension_owned_site_env_rejected_key(self._profiles.combination_path)
             site_env.write_text(
                 '\n'.join([
-                    f'OPENCLAW_CONTROL_PLANE_PROFILE={COMBO_PROFILE_ID}',
+                    f'OPENCLAW_CONTROL_PLANE_PROFILE={self._profiles.combination_id}',
                     'OPENCLAW_INGRESS_LISTEN_IP=192.168.91.128',
                     'OPENCLAW_INGRESS_ALLOWED_SOURCE_CIDRS=192.168.91.1/32,192.168.91.128/32',
                     f'{rejected_key}=app_test',
@@ -711,8 +586,9 @@ class DeployEnvSupportTest(unittest.TestCase):
                     note=lambda *_: None,
                 )
 
+    @_with_probe_profile
     def test_combo_profile_input_routes_shared_ollama_to_site_env(self) -> None:
-        routes = deploy_input_values.build_input_routes(COMBO_PROFILE_ID)
+        routes = deploy_input_values.build_input_routes(self._profiles.combination_id)
 
         for key in ('OLLAMA_BASE_URL', 'OLLAMA_MODEL_REF'):
             with self.subTest(key=key):
@@ -743,8 +619,8 @@ class DeployEnvSupportTest(unittest.TestCase):
             'SECRET_TOKEN': deploy_input_values.DeployInputRoute(
                 key='SECRET_TOKEN',
                 scope='extension',
-                owner='agent_premarket',
-                rel_path='agent/extensions/agent_premarket/deploy/extension.env',
+                owner='ext_a',
+                rel_path='agent/extensions/ext_a/deploy/extension.env',
                 secret=True,
             ),
             'MISSING_REQUIRED': deploy_input_values.DeployInputRoute(
@@ -848,7 +724,7 @@ class DeployEnvSupportTest(unittest.TestCase):
             with (
                 patch.object(deploy_input_values, 'DEFAULT_SITE_ENV_PATH', site_env),
                 patch.object(deploy_input_values, 'build_input_routes', return_value=routes),
-                patch.object(deploy_input_values, '_enabled_managed_extension_ids', return_value=['agent_premarket']),
+                patch.object(deploy_input_values, '_enabled_managed_extension_ids', return_value=['ext_a']),
                 patch.object(deploy_input_values, '_extension_env_path', return_value=extension_env),
                 patch.object(deploy_input_values, '_extension_schema_path', return_value=schema_path),
                 contextlib.redirect_stdout(io.StringIO()) as stdout,
@@ -893,7 +769,7 @@ class DeployEnvSupportTest(unittest.TestCase):
             with (
                 patch.object(deploy_input_values, 'DEFAULT_SITE_ENV_PATH', site_env),
                 patch.object(deploy_input_values, 'build_input_routes', return_value=routes),
-                patch.object(deploy_input_values, '_enabled_managed_extension_ids', return_value=['agent_premarket']),
+                patch.object(deploy_input_values, '_enabled_managed_extension_ids', return_value=['ext_a']),
                 patch.object(deploy_input_values, '_extension_env_path', return_value=extension_env),
                 patch.object(deploy_input_values, '_extension_schema_path', return_value=schema_path),
                 contextlib.redirect_stdout(stdout),
@@ -928,13 +804,13 @@ class DeployEnvSupportTest(unittest.TestCase):
                 patch.object(deploy_input_values, '_extension_schema_path', return_value=schema_path),
                 contextlib.redirect_stdout(stdout),
             ):
-                exit_code = deploy_input_values.check_single_extension_env_values('agent_premarket', format_name='json')
+                exit_code = deploy_input_values.check_single_extension_env_values('ext_a', format_name='json')
 
         payload = json.loads(stdout.getvalue())
         self.assertEqual(exit_code, 2)
         self.assertEqual(payload['missing'][0]['scope'], 'extension')
-        self.assertEqual(payload['missing'][0]['owner'], 'agent_premarket')
-        self.assertEqual(payload['missing'][0]['envPath'], 'agent/extensions/agent_premarket/deploy/extension.env')
+        self.assertEqual(payload['missing'][0]['owner'], 'ext_a')
+        self.assertEqual(payload['missing'][0]['envPath'], 'agent/extensions/ext_a/deploy/extension.env')
         self.assertIn('apply_extension_env_values.sh', payload['missing'][0]['fixCommand'])
         self.assertNotIn('apply_site_env_values.sh', payload['missing'][0]['fixCommand'])
 
@@ -1294,6 +1170,7 @@ class DeployEnvSupportTest(unittest.TestCase):
             self.assertIn('TARGET_SECRET=<redacted>', stdout.getvalue())
             self.assertNotIn('target-secret-value', stdout.getvalue())
 
+    @_with_probe_profile
     def test_render_env_loads_active_extension_env_from_extension_root(self) -> None:
         def fail(_: str, message: str, code: int) -> None:
             raise AssertionError(f'{code}: {message}')
@@ -1305,12 +1182,12 @@ class DeployEnvSupportTest(unittest.TestCase):
             summary = tmp / 'config_summary.json'
             targets_dir = tmp / 'targets.d'
             extension_root = tmp / 'extensions'
-            extension_deploy = extension_root / MANAGED_EXTENSION_PROFILE_ID / 'deploy'
+            extension_deploy = extension_root / self._probe_fixture.extension_id / 'deploy'
             targets_dir.mkdir()
             extension_deploy.mkdir(parents=True)
             site_env.write_text(
                 '\n'.join([
-                    f'OPENCLAW_CONTROL_PLANE_PROFILE={MANAGED_EXTENSION_PROFILE_ID}',
+                    f'OPENCLAW_CONTROL_PLANE_PROFILE={self._probe_fixture.extension_id}',
                     'OPENCLAW_INGRESS_LISTEN_IP=192.168.91.128',
                     'OPENCLAW_INGRESS_ALLOWED_SOURCE_CIDRS=192.168.91.1/32,192.168.91.128/32',
                 ]) + '\n',
@@ -1342,6 +1219,7 @@ class DeployEnvSupportTest(unittest.TestCase):
             self.assertEqual(parsed['OLLAMA_BASE_URL'], 'http://ollama.internal:11434')
             self.assertEqual(parsed['OLLAMA_MODEL_REF'], 'qwen-test')
 
+    @_with_probe_profile
     def test_render_env_rejects_undeclared_extension_env_key(self) -> None:
         def fail(_: str, message: str, code: int) -> None:
             raise AssertionError(f'{code}: {message}')
@@ -1350,11 +1228,11 @@ class DeployEnvSupportTest(unittest.TestCase):
             tmp = Path(tmpdir)
             site_env = tmp / 'site.env'
             extension_root = tmp / 'extensions'
-            extension_deploy = extension_root / MANAGED_EXTENSION_PROFILE_ID / 'deploy'
+            extension_deploy = extension_root / self._probe_fixture.extension_id / 'deploy'
             extension_deploy.mkdir(parents=True)
             site_env.write_text(
                 '\n'.join([
-                    f'OPENCLAW_CONTROL_PLANE_PROFILE={MANAGED_EXTENSION_PROFILE_ID}',
+                    f'OPENCLAW_CONTROL_PLANE_PROFILE={self._probe_fixture.extension_id}',
                     'OPENCLAW_INGRESS_LISTEN_IP=192.168.91.128',
                     'OPENCLAW_INGRESS_ALLOWED_SOURCE_CIDRS=192.168.91.1/32,192.168.91.128/32',
                 ]) + '\n',
@@ -1375,10 +1253,8 @@ class DeployEnvSupportTest(unittest.TestCase):
                     note=lambda *_: None,
                 )
 
+    @_with_probe_profile
     def test_render_env_rejects_unknown_extension_env_key(self) -> None:
-        if RELATED_PARTY_EXTENSION is None:
-            self.skipTest('agent_related_party_compare extension is unavailable')
-
         def fail(_: str, message: str, code: int) -> None:
             raise AssertionError(f'{code}: {message}')
 
@@ -1386,17 +1262,17 @@ class DeployEnvSupportTest(unittest.TestCase):
             tmp = Path(tmpdir)
             site_env = tmp / 'site.env'
             extension_root = tmp / 'extensions'
-            extension_deploy = extension_root / RELATED_PARTY_EXTENSION.id / 'deploy'
+            extension_deploy = extension_root / self._probe_fixture.extension_id / 'deploy'
             extension_deploy.mkdir(parents=True)
             site_env.write_text(
                 '\n'.join([
-                    f'OPENCLAW_CONTROL_PLANE_PROFILE={RELATED_PARTY_EXTENSION.id}',
+                    f'OPENCLAW_CONTROL_PLANE_PROFILE={self._probe_fixture.extension_id}',
                     'OPENCLAW_INGRESS_LISTEN_IP=192.168.91.128',
                     'OPENCLAW_INGRESS_ALLOWED_SOURCE_CIDRS=192.168.91.1/32,192.168.91.128/32',
                 ]) + '\n',
                 encoding='utf-8',
             )
-            unknown_key = 'RELATED_PARTY_COMPARE_NOT_DECLARED_KEY'
+            unknown_key = 'PROBE_NOT_DECLARED_KEY'
             (extension_deploy / 'extension.env').write_text(f'{unknown_key}=value\n', encoding='utf-8')
 
             with self.assertRaisesRegex(AssertionError, f'当前扩展未声明的 env 键：{unknown_key}'):
@@ -1442,6 +1318,7 @@ class DeployEnvSupportTest(unittest.TestCase):
                     note=lambda *_: None,
                 )
 
+    @_with_probe_profile
     def test_render_env_rejects_synthetic_notify_keys_in_site_env(self) -> None:
         def fail(_: str, message: str, code: int) -> None:
             raise AssertionError(f'{code}: {message}')
@@ -1451,7 +1328,7 @@ class DeployEnvSupportTest(unittest.TestCase):
             site_env = tmp / 'site.env'
             site_env.write_text(
                 '\n'.join([
-                    f'OPENCLAW_CONTROL_PLANE_PROFILE={DEPLOY_ENV_EXTENSION.id}',
+                    f'OPENCLAW_CONTROL_PLANE_PROFILE={self._probe_fixture.extension_id}',
                     'OPENCLAW_INGRESS_LISTEN_IP=192.168.91.128',
                     'OPENCLAW_INGRESS_ALLOWED_SOURCE_CIDRS=192.168.91.1/32,192.168.91.128/32',
                     'PROBE_NOTIFY_APP_ID=app_site_scope_is_invalid',
@@ -1472,6 +1349,7 @@ class DeployEnvSupportTest(unittest.TestCase):
                     note=lambda *_: None,
                 )
 
+    @_with_probe_profile
     def test_render_env_rejects_undeclared_synthetic_notify_extension_keys(self) -> None:
         def fail(_: str, message: str, code: int) -> None:
             raise AssertionError(f'{code}: {message}')
@@ -1480,11 +1358,11 @@ class DeployEnvSupportTest(unittest.TestCase):
             tmp = Path(tmpdir)
             site_env = tmp / 'site.env'
             extension_root = tmp / 'extensions'
-            extension_deploy = extension_root / DEPLOY_ENV_EXTENSION.id / 'deploy'
+            extension_deploy = extension_root / self._probe_fixture.extension_id / 'deploy'
             extension_deploy.mkdir(parents=True)
             site_env.write_text(
                 '\n'.join([
-                    f'OPENCLAW_CONTROL_PLANE_PROFILE={DEPLOY_ENV_EXTENSION.id}',
+                    f'OPENCLAW_CONTROL_PLANE_PROFILE={self._probe_fixture.extension_id}',
                     'OPENCLAW_INGRESS_LISTEN_IP=192.168.91.128',
                     'OPENCLAW_INGRESS_ALLOWED_SOURCE_CIDRS=192.168.91.1/32,192.168.91.128/32',
                 ]) + '\n',
@@ -1509,6 +1387,7 @@ class DeployEnvSupportTest(unittest.TestCase):
                     note=lambda *_: None,
                 )
 
+    @_with_probe_profile
     def test_render_env_does_not_preserve_extension_values_from_existing_output(self) -> None:
         def fail(_: str, message: str, code: int) -> None:
             raise AssertionError(f'{code}: {message}')
@@ -1519,7 +1398,7 @@ class DeployEnvSupportTest(unittest.TestCase):
             output = tmp / '.env'
             site_env.write_text(
                 '\n'.join([
-                    f'OPENCLAW_CONTROL_PLANE_PROFILE={MANAGED_EXTENSION_PROFILE_ID}',
+                    f'OPENCLAW_CONTROL_PLANE_PROFILE={self._probe_fixture.extension_id}',
                     'OPENCLAW_INGRESS_LISTEN_IP=192.168.91.128',
                     'OPENCLAW_INGRESS_ALLOWED_SOURCE_CIDRS=192.168.91.1/32,192.168.91.128/32',
                 ]) + '\n',
@@ -1527,7 +1406,7 @@ class DeployEnvSupportTest(unittest.TestCase):
             )
             output.write_text(
                 '\n'.join([
-                    f'OPENCLAW_CONTROL_PLANE_PROFILE={MANAGED_EXTENSION_PROFILE_ID}',
+                    f'OPENCLAW_CONTROL_PLANE_PROFILE={self._probe_fixture.extension_id}',
                     'OLLAMA_BASE_URL=http://stale.invalid:11434',
                 ]) + '\n',
                 encoding='utf-8',
@@ -1550,11 +1429,12 @@ class DeployEnvSupportTest(unittest.TestCase):
             parsed = parse_env_file(output)
             self.assertNotEqual(parsed.get('OLLAMA_BASE_URL'), 'http://stale.invalid:11434')
 
+    @_with_probe_profile
     def test_render_env_maps_profile_id_to_runtime_path_and_dispatch_registry(self) -> None:
         def fail(_: str, message: str, code: int) -> None:
             raise AssertionError(f'{code}: {message}')
 
-        registry_source = json.loads(dispatch_registry_path().read_text(encoding='utf-8'))
+        registry_source = json.loads(dispatch_registry_path(self._probe_fixture).read_text(encoding='utf-8'))
         target = next(item for item in registry_source['targets'] if item['enabledDefault'])
         with tempfile.TemporaryDirectory() as tmpdir:
             tmp = Path(tmpdir)
@@ -1565,7 +1445,7 @@ class DeployEnvSupportTest(unittest.TestCase):
             targets_dir.mkdir()
             site_env.write_text(
                 '\n'.join([
-                    f'OPENCLAW_CONTROL_PLANE_PROFILE={MANAGED_EXTENSION_PROFILE_ID}',
+                    f'OPENCLAW_CONTROL_PLANE_PROFILE={self._probe_fixture.extension_id}',
                     'OPENCLAW_INGRESS_LISTEN_IP=192.168.91.128',
                     'OPENCLAW_INGRESS_ALLOWED_SOURCE_CIDRS=192.168.91.1/32,192.168.91.128/32',
                 ]) + '\n',
@@ -1589,10 +1469,11 @@ class DeployEnvSupportTest(unittest.TestCase):
 
             self.assertEqual(exit_code, 0)
             parsed = parse_env_file(output)
-            self.assertEqual(parsed['OPENCLAW_CONTROL_PLANE_PROFILE'], MANAGED_EXTENSION_PROFILE_ID)
-            self.assertEqual(parsed['OPENCLAW_CONTROL_PLANE_SERVICE_CONFIG_PATH'], MANAGED_EXTENSION_RUNTIME_CONFIG_PATH)
+            self.assertEqual(parsed['OPENCLAW_CONTROL_PLANE_PROFILE'], self._probe_fixture.extension_id)
+            self.assertEqual(parsed['OPENCLAW_CONTROL_PLANE_SERVICE_CONFIG_PATH'], self._probe_runtime_config_path)
             self.assertEqual(parsed[str(target['endpointEnv'])], 'https://example.invalid/hook')
 
+    @_with_probe_profile
     def test_render_env_infers_profile_from_runtime_config_path(self) -> None:
         def fail(_: str, message: str, code: int) -> None:
             raise AssertionError(f'{code}: {message}')
@@ -1606,7 +1487,7 @@ class DeployEnvSupportTest(unittest.TestCase):
             targets_dir.mkdir()
             site_env.write_text(
                 '\n'.join([
-                    f'OPENCLAW_CONTROL_PLANE_SERVICE_CONFIG_PATH={MANAGED_EXTENSION_RUNTIME_CONFIG_PATH}',
+                    f'OPENCLAW_CONTROL_PLANE_SERVICE_CONFIG_PATH={self._probe_runtime_config_path}',
                     'OPENCLAW_INGRESS_LISTEN_IP=192.168.91.128',
                     'OPENCLAW_INGRESS_ALLOWED_SOURCE_CIDRS=192.168.91.1/32,192.168.91.128/32',
                 ]) + '\n',
@@ -1622,8 +1503,8 @@ class DeployEnvSupportTest(unittest.TestCase):
 
             self.assertEqual(exit_code, 0)
             parsed = parse_env_file(output)
-            self.assertEqual(parsed['OPENCLAW_CONTROL_PLANE_PROFILE'], MANAGED_EXTENSION_PROFILE_ID)
-            self.assertEqual(parsed['OPENCLAW_CONTROL_PLANE_SERVICE_CONFIG_PATH'], MANAGED_EXTENSION_RUNTIME_CONFIG_PATH)
+            self.assertEqual(parsed['OPENCLAW_CONTROL_PLANE_PROFILE'], self._probe_fixture.extension_id)
+            self.assertEqual(parsed['OPENCLAW_CONTROL_PLANE_SERVICE_CONFIG_PATH'], self._probe_runtime_config_path)
 
     def test_site_env_example_renderer_writes_lf_newlines(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -1637,8 +1518,8 @@ class DeployEnvSupportTest(unittest.TestCase):
             rendered_text = content.decode('utf-8')
             self.assertIn('OPENCLAW_CONTROL_PLANE_PROFILE=agent_platform', rendered_text)
             self.assertNotIn('OPENCLAW_CONTROL_PLANE_SERVICE_CONFIG_PATH=', rendered_text)
-            self.assertNotIn(f'OPENCLAW_CONTROL_PLANE_PROFILE={MANAGED_EXTENSION_PROFILE_ID}', rendered_text)
-            self.assertNotIn(f'OPENCLAW_CONTROL_PLANE_PROFILE={COMBO_PROFILE_ID}', rendered_text)
+            self.assertNotIn(f'OPENCLAW_CONTROL_PLANE_PROFILE={self._probe_fixture.extension_id}', rendered_text)
+            self.assertNotIn(f'OPENCLAW_CONTROL_PLANE_PROFILE={self._profiles.combination_id}', rendered_text)
             self.assertNotIn('OLLAMA_BASE_URL=', rendered_text)
             self.assertNotIn('OLLAMA_MODEL_REF=', rendered_text)
 
@@ -1666,8 +1547,9 @@ class DeployEnvSupportTest(unittest.TestCase):
                 rendered_path.read_text(encoding='utf-8'),
             )
 
+    @_with_probe_profile
     def test_target_env_examples_are_reconciled_to_active_profile_registry(self) -> None:
-        registry_source = json.loads(dispatch_registry_path().read_text(encoding='utf-8'))
+        registry_source = json.loads(dispatch_registry_path(self._probe_fixture).read_text(encoding='utf-8'))
         target_id = str(registry_source['targets'][0]['id'])
         with tempfile.TemporaryDirectory() as tmpdir:
             targets_dir = Path(tmpdir) / 'targets.d'
@@ -1869,13 +1751,14 @@ class DeployEnvSupportTest(unittest.TestCase):
                     repo_root=repo_root,
                 )
 
+    @_with_probe_profile
     def test_dispatch_registry_commands_resolve_active_profile_from_env_file(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             env_file = Path(tmpdir) / 'deploy.env'
             env_file.write_text(
                 '\n'.join([
-                    f'OPENCLAW_CONTROL_PLANE_PROFILE={MANAGED_EXTENSION_PROFILE_ID}',
-                    f'OPENCLAW_CONTROL_PLANE_SERVICE_CONFIG_PATH={MANAGED_EXTENSION_RUNTIME_CONFIG_PATH}',
+                    f'OPENCLAW_CONTROL_PLANE_PROFILE={self._probe_fixture.extension_id}',
+                    f'OPENCLAW_CONTROL_PLANE_SERVICE_CONFIG_PATH={self._probe_runtime_config_path}',
                 ]) + '\n',
                 encoding='utf-8',
             )
@@ -1886,7 +1769,7 @@ class DeployEnvSupportTest(unittest.TestCase):
             self.assertEqual(validate_exit, 0)
             validate_payload = json.loads(stdout.getvalue())
             self.assertTrue(validate_payload['registry_enabled'])
-            self.assertIn('dispatch_primary', validate_payload['target_ids'])
+            self.assertIn(self._probe_dispatch_registry['targets'][0]['id'], validate_payload['target_ids'])
 
             stdout = io.StringIO()
             with contextlib.redirect_stdout(stdout):
@@ -1894,7 +1777,7 @@ class DeployEnvSupportTest(unittest.TestCase):
             self.assertEqual(query_exit, 0)
             query_payload = json.loads(stdout.getvalue())
             self.assertTrue(query_payload['registry_enabled'])
-            self.assertIn('dispatch_primary', query_payload['target_ids'])
+            self.assertIn(self._probe_dispatch_registry['targets'][0]['id'], query_payload['target_ids'])
 
     def test_runtime_internal_api_bind_default_is_container_reachable(self) -> None:
         self.assertEqual(control_plane.DEFAULT_RUNTIME_INTERNAL_API_BIND, '0.0.0.0')
@@ -1940,6 +1823,7 @@ class DeployEnvSupportTest(unittest.TestCase):
         self.assertEqual(observed['registry_paths'], [target_registry])
         self.assertEqual(observed['provider_registry_path'], [provider_registry])
 
+    @_with_probe_profile
     def test_runtime_service_env_render_includes_active_extension_runtime_env(self) -> None:
         class FakeResolver:
             def resolve_path(self, entry_id: str, view: str = 'host') -> str:
@@ -1979,7 +1863,7 @@ class DeployEnvSupportTest(unittest.TestCase):
                     default_env_file=env_path,
                     default_scheduler_output=scheduler_output,
                     default_internal_api_output=internal_api_output,
-                    default_config_path=DEPLOY_ENV_EXTENSION.default_service_config_path,
+                    default_config_path=self._probe_fixture.service_path,
                     default_internal_api_bind='0.0.0.0',
                 )
 
@@ -1994,6 +1878,7 @@ class DeployEnvSupportTest(unittest.TestCase):
             self.assertIn('PROBE_ADMIN_USERS_JSON', scheduler_env)
             self.assertNotIn('PROBE_NOTIFY_APP_ID', internal_api_env)
 
+    @_with_probe_profile
     def test_runtime_service_env_render_enforces_live_card_truthy_required(self) -> None:
         class FakeResolver:
             def resolve_path(self, entry_id: str, view: str = 'host') -> str:
@@ -2033,7 +1918,7 @@ class DeployEnvSupportTest(unittest.TestCase):
                     default_env_file=env_path,
                     default_scheduler_output=scheduler_output,
                     default_internal_api_output=internal_api_output,
-                    default_config_path=DEPLOY_ENV_EXTENSION.default_service_config_path,
+                    default_config_path=self._probe_fixture.service_path,
                     default_internal_api_bind='0.0.0.0',
                 )
 
@@ -2041,8 +1926,9 @@ class DeployEnvSupportTest(unittest.TestCase):
             self.assertIn('PROBE_NOTIFY_CARD_ENABLED', stderr.getvalue())
             self.assertNotIn('PROBE_NOTIFY_CARD_ACTION_TRIGGER_ENABLED', stderr.getvalue())
 
+    @_with_probe_profile
     def test_dispatch_runtime_render_writes_registry_loader_snapshot(self) -> None:
-        registry_source = json.loads(dispatch_registry_path().read_text(encoding='utf-8'))
+        registry_source = json.loads(dispatch_registry_path(self._probe_fixture).read_text(encoding='utf-8'))
         enabled_target = next(item for item in registry_source['targets'] if item['enabledDefault'])
         with tempfile.TemporaryDirectory() as tmpdir:
             tmp = Path(tmpdir)
@@ -2065,7 +1951,7 @@ class DeployEnvSupportTest(unittest.TestCase):
                         '--summary-json',
                         str(summary),
                         '--config-path',
-                        str(MANAGED_EXTENSION.default_service_config_path),
+                        str(self._probe_fixture.service_path),
                     ],
                     default_env_file=env_path,
                     default_output=output,
@@ -2089,8 +1975,9 @@ class DeployEnvSupportTest(unittest.TestCase):
             self.assertEqual(target_by_id[enabled_target['id']].dispatch_lane, enabled_target['boundary']['dispatchLane'])
             self.assertEqual(target_by_id[enabled_target['id']].publish_latest, enabled_target['boundary']['publishLatestDefault'])
 
+    @_with_probe_profile
     def test_dispatch_runtime_v7_requires_explicit_boundary(self) -> None:
-        payload = json.loads(dispatch_registry_path().read_text(encoding='utf-8'))
+        payload = json.loads(dispatch_registry_path(self._probe_fixture).read_text(encoding='utf-8'))
         payload['registry_version'] = 7
         payload['targets'][0] = dict(payload['targets'][0])
         payload['targets'][0].pop('boundary', None)
@@ -2098,8 +1985,9 @@ class DeployEnvSupportTest(unittest.TestCase):
         with self.assertRaisesRegex(TargetConfigError, 'missing boundary'):
             load_targets_payload(payload, env={}, source_label='test_registry_v7')
 
+    @_with_probe_profile
     def test_dispatch_runtime_v7_requires_boolean_publish_latest_boundary(self) -> None:
-        payload = json.loads(dispatch_registry_path().read_text(encoding='utf-8'))
+        payload = json.loads(dispatch_registry_path(self._probe_fixture).read_text(encoding='utf-8'))
         payload['registry_version'] = 7
         payload['targets'][0] = dict(payload['targets'][0])
         payload['targets'][0]['boundary'] = dict(payload['targets'][0]['boundary'])
@@ -2108,11 +1996,12 @@ class DeployEnvSupportTest(unittest.TestCase):
         with self.assertRaisesRegex(TargetConfigError, 'publishLatestDefault must be boolean'):
             load_targets_payload(payload, env={}, source_label='test_registry_v7')
 
+    @_with_probe_profile
     def test_dispatch_runtime_local_id_payload_requires_explicit_boundary(self) -> None:
-        payload = json.loads(dispatch_registry_path().read_text(encoding='utf-8'))
+        payload = json.loads(dispatch_registry_path(self._probe_fixture).read_text(encoding='utf-8'))
         payload.pop('version', None)
         payload['registry_version'] = 6
-        target_index = next(index for index, row in enumerate(payload['targets']) if row['targetGroup'] == 'ops')
+        target_index = next(index for index, row in enumerate(payload['targets']) if row['id'] == self._probe_dispatch_registry['targets'][0]['id'])
         payload['targets'][target_index] = dict(payload['targets'][target_index])
         payload['targets'][target_index].pop('boundary', None)
 

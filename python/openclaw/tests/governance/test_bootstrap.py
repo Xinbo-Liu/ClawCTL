@@ -12,14 +12,11 @@ from unittest import mock
 from openclaw.lib.repo.bootstrap import bootstrap_env_defaults, bootstrap_env_pythonpath, bootstrap_path_entries
 from openclaw.lib.repo.layout import REPO_ROOT_ENV_VARS, RepoRootResolutionError, resolve_repo_root
 from openclaw.tests.support.static_text_assertions import assert_static_text_absent
+from openclaw.tests.support.managed_probe import managed_probe_repo
 from openclaw.tests.support.managed_extensions import managed_extensions
 
 ROOT_DIR = resolve_repo_root(Path(__file__))
 CANONICAL_INIT = (ROOT_DIR / 'python' / 'openclaw' / '__init__.py').resolve()
-MANAGED_EXTENSIONS = tuple(sorted(managed_extensions(ROOT_DIR), key=lambda row: row.id))
-MANAGED_EXTENSION = MANAGED_EXTENSIONS[0] if MANAGED_EXTENSIONS else None
-MANAGED_EXTENSION_PROFILE = MANAGED_EXTENSION.default_service_config_path if MANAGED_EXTENSION is not None else None
-MANAGED_EXTENSION_PYTHON_ROOT = MANAGED_EXTENSION.python_roots[0] if MANAGED_EXTENSION is not None else None
 REPO_TEST_READINESS_WRAPPER = ROOT_DIR / 'scripts' / 'testing' / 'check_repo_test_readiness.sh'
 REPO_UNITTEST_WRAPPER = ROOT_DIR / 'scripts' / 'testing' / 'run_repo_unittest.sh'
 RETIRED_REPO_PYTEST_WRAPPER = ROOT_DIR / 'scripts' / 'testing' / 'run_repo_pytest.sh'
@@ -48,6 +45,9 @@ class RepoBootstrapTest(unittest.TestCase):
         super().setUpClass()
         cls._repo_root_probe = cls._run_python_probe()
         cls._repo_pythonpath_probe = cls._run_python_probe(pythonpath='python')
+        cls._managed_fixture_context = managed_probe_repo('bootstrap-managed-extension')
+        cls.fixture = cls._managed_fixture_context.__enter__()
+        cls.addClassCleanup(cls._managed_fixture_context.__exit__, None, None, None)
 
     @classmethod
     def _run_python_probe(cls, *, pythonpath: str | None = None) -> dict[str, str]:
@@ -100,11 +100,9 @@ class RepoBootstrapTest(unittest.TestCase):
         return env
 
     def test_bootstrap_path_entries_keep_managed_extension_then_repo_python_order(self) -> None:
-        if MANAGED_EXTENSION is None:
-            self.skipTest('base release surface has no repo-managed extension')
-        entries = bootstrap_path_entries(ROOT_DIR, MANAGED_EXTENSION_PROFILE)
+        entries = bootstrap_path_entries(self.fixture.repo_root, self.fixture.service_path)
 
-        self.assertEqual(entries[:2], (MANAGED_EXTENSION_PYTHON_ROOT, (ROOT_DIR / 'python').resolve()))
+        self.assertEqual(entries[:2], (self.fixture.python_root, (self.fixture.repo_root / 'python').resolve()))
         self.assertEqual(len(entries), len({str(item) for item in entries}))
 
     def test_bootstrap_path_entries_dedupe_duplicate_extension_roots(self) -> None:
@@ -117,16 +115,14 @@ class RepoBootstrapTest(unittest.TestCase):
         self.assertEqual(entries, ((ROOT_DIR / 'python').resolve(),))
 
     def test_bootstrap_env_pythonpath_prefixes_managed_extension_python_and_repo_python_only(self) -> None:
-        if MANAGED_EXTENSION is None:
-            self.skipTest('base release surface has no repo-managed extension')
-        env = {'PYTHONPATH': str(ROOT_DIR / 'docs')}
+        env = {'PYTHONPATH': str(self.fixture.repo_root / 'docs')}
 
-        bootstrap_env_pythonpath(env, ROOT_DIR, MANAGED_EXTENSION_PROFILE)
+        bootstrap_env_pythonpath(env, self.fixture.repo_root, self.fixture.service_path)
 
         parts = env['PYTHONPATH'].split(os.pathsep)
-        self.assertEqual(parts[:2], [str(MANAGED_EXTENSION_PYTHON_ROOT), str((ROOT_DIR / 'python').resolve())])
-        self.assertNotIn(str(ROOT_DIR.resolve()), parts)
-        self.assertIn(str((ROOT_DIR / 'docs').resolve()), parts)
+        self.assertEqual(parts[:2], [str(self.fixture.python_root), str((self.fixture.repo_root / 'python').resolve())])
+        self.assertNotIn(str(self.fixture.repo_root), parts)
+        self.assertIn(str((self.fixture.repo_root / 'docs').resolve()), parts)
 
     def test_repo_root_python_without_pythonpath_imports_canonical_openclaw(self) -> None:
         self.assertEqual(Path(self._repo_root_probe['openclaw_file']), CANONICAL_INIT)
@@ -326,17 +322,21 @@ class RepoBootstrapTest(unittest.TestCase):
         self.assertIn('resolve_host_agent_config_path', entrypoint_source)
 
     def test_managed_extension_module_launchers_do_not_embed_package_default_config_env(self) -> None:
-        if MANAGED_EXTENSION is None:
-            self.skipTest('base release surface has no repo-managed extension')
-        launcher_paths = sorted(
-            (MANAGED_EXTENSION.root_dir / 'agent' / 'modules').glob('*/bin/*')
+        launcher_paths = [
+            (ROOT_DIR, path)
+            for extension in managed_extensions(ROOT_DIR)
+            for path in sorted((extension.root_dir / 'agent' / 'modules').glob('*/bin/*'))
+        ]
+        launcher_paths.extend(
+            (self.fixture.repo_root, path)
+            for path in sorted(self.fixture.modules_dir.glob('*/bin/*'))
         )
         self.assertGreater(len(launcher_paths), 0)
-        for path in launcher_paths:
+        for repo_root, path in launcher_paths:
             source = path.read_text(encoding='utf-8')
-            self.assertIn('run_agent_entrypoint.sh', source, msg=str(path.relative_to(ROOT_DIR)))
-            assert_static_text_absent(self, 'OPENCLAW_CONTROL_PLANE_SERVICE_CONFIG_PATH', source, msg=str(path.relative_to(ROOT_DIR)))
-            assert_static_text_absent(self, 'CONTROL_PLANE_CONFIG_PATH=', source, msg=str(path.relative_to(ROOT_DIR)))
+            self.assertIn('run_agent_entrypoint.sh', source, msg=str(path.relative_to(repo_root)))
+            assert_static_text_absent(self, 'OPENCLAW_CONTROL_PLANE_SERVICE_CONFIG_PATH', source, msg=str(path.relative_to(repo_root)))
+            assert_static_text_absent(self, 'CONTROL_PLANE_CONFIG_PATH=', source, msg=str(path.relative_to(repo_root)))
 
     def test_openclaw_python_tool_wrapper_uses_explicit_env_allowlist(self) -> None:
         source = OPENCLAW_PYTHON_TOOL_WRAPPER.read_text(encoding='utf-8')

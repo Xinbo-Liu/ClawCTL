@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "base": {
     "repo": "https://github.com/Xinbo-Liu/ClawCTL.git",
-    "commit": "bdd66ba194ee7bfaadb4eb9e811cb00b30615692",
-    "releaseBundleHash": "eb54228d50e0c178c1151f9ff1493d4e695553e92f7a5ac802c97b239a77c942"
+    "commit": "6f62cb231c983268a5a9c169114e435e2705346f",
+    "releaseBundleHash": "0f0e75d83713e02cc82a9a20bfa949134bff49cbef2b205ca32a7c5b7dd2c36d"
   }
 }

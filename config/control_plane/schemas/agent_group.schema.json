@@ -20,7 +20,7 @@
   "properties": {
     "schemaVersion": {
       "type": "integer",
-      "const": 1
+      "const": 2
     },
     "id": {
       "type": "string",
@@ -216,7 +216,6 @@
         "singleSourceDocs",
         "requiredEvidence",
         "releaseGate",
-        "acceptanceBinding",
         "rollbackContract"
       ],
       "properties": {
@@ -328,51 +327,6 @@
               "minimum": 1
             }
           }
-        },
-        "acceptanceBinding": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "deploymentAcceptanceCheckIds",
-            "runtimeEvidenceEntryIds",
-            "requiredRunLedgerJobRefs"
-          ],
-          "properties": {
-            "deploymentAcceptanceCheckIds": {
-              "type": "array",
-              "minItems": 1,
-              "uniqueItems": true,
-              "items": {
-                "type": "string",
-                "minLength": 1
-              }
-            },
-            "runtimeEvidenceEntryIds": {
-              "type": "array",
-              "minItems": 1,
-              "uniqueItems": true,
-              "items": {
-                "type": "string",
-                "minLength": 1
-              }
-            },
-            "requiredRunLedgerJobRefs": {
-              "type": "array",
-              "minItems": 1,
-              "uniqueItems": true,
-              "items": {
-                "type": "string",
-                "minLength": 1
-              }
-            },
-            "notes": {
-              "type": "array",
-              "items": {
-                "type": "string",
-                "minLength": 1
-              }
-            }
-          }
         }
       }
     },
@@ -381,7 +335,8 @@
       "additionalProperties": false,
       "required": [
         "mode",
-        "triggerStatusSignals"
+        "triggerStatusSignals",
+        "recoveryOfJobRef"
       ],
       "properties": {
         "mode": {
@@ -398,6 +353,10 @@
             "type": "string",
             "minLength": 1
           }
+        },
+        "recoveryOfJobRef": {
+          "type": "string",
+          "minLength": 1
         },
         "haltMainlineOnRecoveryPending": {
           "type": "boolean"

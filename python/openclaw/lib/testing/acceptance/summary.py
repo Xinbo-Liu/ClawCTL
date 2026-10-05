@@ -1,3 +1,5 @@
+"""汇总 deployment acceptance 与 runtime acceptance 证据。"""
+
 from __future__ import annotations
 
 from datetime import datetime, timezone
@@ -20,6 +22,15 @@ from openclaw.lib.testing.acceptance.state import (
 
 
 def build_official_cli_summary(official_dir: Path, target: str) -> dict[str, Any]:
+    """汇总官方 OpenClaw CLI doctor/security/model probe 证据。
+
+    参数：
+        official_dir（Path）：官方 CLI doctor/security/model probe 证据目录。
+        target（str）：证据所属 target 名称。
+
+    返回：
+        返回 dict[str, Any]，包含 doctor 是否通过、高危安全发现和模型探测摘要。
+    """
     security = read_json(official_dir / 'security_audit_deep.json')
     models_path = official_dir / 'models_status_probe.json'
     models = safe_read_json(models_path) or default_models_probe_summary(
@@ -50,10 +61,25 @@ def build_official_cli_summary(official_dir: Path, target: str) -> dict[str, Any
 
 
 def write_official_cli_summary(*, official_dir: str | Path, out: str | Path, target: str) -> None:
+    """写出官方 OpenClaw CLI 证据摘要 JSON。
+
+    参数：
+        official_dir（str | Path）：官方 CLI 原始证据目录。
+        out（str | Path）：摘要 JSON 输出路径。
+        target（str）：证据所属 target 名称。
+    """
     write_json(Path(out), build_official_cli_summary(Path(official_dir), target))
 
 
 def required_run_ledger_status(run_ledger: dict[str, Any] | None) -> dict[str, Any]:
+    """判定平台 required run ledger jobs 是否闭合。
+
+    参数：
+        run_ledger（dict[str, Any] | None）：control-plane run ledger 摘要；缺失时按无记录处理。
+
+    返回：
+        返回 dict[str, Any]，列出 required jobs、缺失/失败/artifact 异常 job 和整体 accepted 状态；无 required jobs 时 accepted 为 None。
+    """
     manifest = read_manifest()
     required_jobs = list(manifest.get('required_run_ledger_jobs') or [])
     items = list(run_ledger.get('items') or []) if isinstance(run_ledger, dict) else []
@@ -87,6 +113,14 @@ def required_run_ledger_status(run_ledger: dict[str, Any] | None) -> dict[str, A
 
 
 def runtime_agent_group_statuses(control_plane_runtime_summary: dict[str, Any] | None) -> dict[str, Any]:
+    """提取 runtime acceptance 需要关注的 agent group 健康状态。
+
+    参数：
+        control_plane_runtime_summary（dict[str, Any] | None）：control-plane runtime 摘要 payload。
+
+    返回：
+        返回 dict[str, Any]，包含全部 group 状态、要求 run ledger 的 group 和失败 group 列表。
+    """
     groups = list(control_plane_runtime_summary.get('agentGroups') or []) if isinstance(control_plane_runtime_summary, dict) else []
     statuses: dict[str, str] = {}
     required_groups: list[str] = []
@@ -113,6 +147,14 @@ def runtime_agent_group_statuses(control_plane_runtime_summary: dict[str, Any] |
 
 
 def runtime_agent_group_release_gate_statuses(control_plane_runtime_summary: dict[str, Any] | None) -> dict[str, Any]:
+    """提取 agent group release gate 的阻断与冻结状态。
+
+    参数：
+        control_plane_runtime_summary（dict[str, Any] | None）：control-plane runtime 摘要 payload。
+
+    返回：
+        返回 dict[str, Any]，包含各 group gate 状态、blocked group 与 frozen group 列表。
+    """
     summary = control_plane_runtime_summary.get('agentGroupReleaseGates') if isinstance(control_plane_runtime_summary, dict) and isinstance(control_plane_runtime_summary.get('agentGroupReleaseGates'), dict) else {}
     items = list(summary.get('items') or []) if isinstance(summary, dict) else []
     statuses: dict[str, str] = {}
@@ -134,31 +176,23 @@ def runtime_agent_group_release_gate_statuses(control_plane_runtime_summary: dic
     return {'statuses': statuses, 'blockedGroups': blocked_groups, 'frozenGroups': frozen_groups}
 
 
-def runtime_agent_group_acceptance_binding_statuses(control_plane_runtime_summary: dict[str, Any] | None) -> dict[str, Any]:
-    summary = control_plane_runtime_summary.get('agentGroupAcceptanceBindings') if isinstance(control_plane_runtime_summary, dict) and isinstance(control_plane_runtime_summary.get('agentGroupAcceptanceBindings'), dict) else {}
-    items = list(summary.get('items') or []) if isinstance(summary, dict) else []
-    statuses: dict[str, str] = {}
-    blocked_groups: list[str] = []
-    for item in items:
-        if not isinstance(item, dict):
-            continue
-        group_ref = str(item.get('groupRef') or '').strip()
-        binding = json_object(item.get('acceptanceBinding'))
-        if not group_ref:
-            continue
-        accepted = binding.get('accepted') is True
-        statuses[group_ref] = 'accepted' if accepted else 'blocked'
-        if not accepted:
-            blocked_groups.append(group_ref)
-    return {'statuses': statuses, 'blockedGroups': blocked_groups}
-
-
 def build_runtime_acceptance_summary(
     acceptance_state_path: Path,
     control_plane_summary_path: Path,
     control_plane_run_ledger_path: Path | None = None,
     control_plane_runtime_summary_path: Path | None = None,
 ) -> dict[str, Any]:
+    """归并 deployment acceptance、runtime evidence 与 run ledger 状态。
+
+    参数：
+        acceptance_state_path（Path）：deployment acceptance 状态 JSON 路径。
+        control_plane_summary_path（Path）：官方 CLI control-plane 证据摘要路径。
+        control_plane_run_ledger_path（Path | None）：control-plane run ledger 证据路径。
+        control_plane_runtime_summary_path（Path | None）：control-plane runtime 摘要路径。
+
+    返回：
+        返回 dict[str, Any]，包含 runtime accepted 判定、scheduler 健康、registry 计数、group 状态和 run ledger 异常列表。
+    """
     acceptance = read_json(acceptance_state_path)
     control_plane_summary = read_json(control_plane_summary_path)
     control_plane_run_ledger = read_json(control_plane_run_ledger_path) if control_plane_run_ledger_path is not None else None
@@ -167,7 +201,6 @@ def build_runtime_acceptance_summary(
     counts = control_plane_runtime_summary.get('counts') if isinstance(control_plane_runtime_summary, dict) and isinstance(control_plane_runtime_summary.get('counts'), dict) else {}
     ledger_status = required_run_ledger_status(control_plane_run_ledger)
     group_status = runtime_agent_group_statuses(control_plane_runtime_summary)
-    group_binding_status = runtime_agent_group_acceptance_binding_statuses(control_plane_runtime_summary)
     group_release_status = runtime_agent_group_release_gate_statuses(control_plane_runtime_summary)
     doctor_passed = control_plane_summary.get('doctor_passed') is True
     scheduler_healthy = scheduler.get('healthy') is True if scheduler else None
@@ -195,17 +228,13 @@ def build_runtime_acceptance_summary(
         'control_plane_runtime_adapter_count': int((counts.get('runtimeAdapters') or 0)) if counts else 0,
         'control_plane_recent_agent_access_count': int((counts.get('recentAgentAccesses') or 0)) if counts else 0,
         'control_plane_recent_agent_access_group_count': int((counts.get('recentAgentAccessGroups') or 0)) if counts else 0,
-        'control_plane_agent_group_acceptance_binding_count': int((counts.get('agentGroupAcceptanceBindings') or 0)) if counts else 0,
         'control_plane_agent_group_release_gate_count': int((counts.get('agentGroupReleaseGates') or 0)) if counts else 0,
         'control_plane_agent_access_log_exists': bool(isinstance(control_plane_runtime_summary, dict) and isinstance(control_plane_runtime_summary.get('agentAccessLog'), dict) and str((control_plane_runtime_summary.get('agentAccessLog') or {}).get('path') or '').strip()),
         'control_plane_agent_group_access_exists': bool(isinstance(control_plane_runtime_summary, dict) and isinstance(control_plane_runtime_summary.get('agentGroupAccess'), dict) and isinstance((control_plane_runtime_summary.get('agentGroupAccess') or {}).get('items'), list)),
-        'control_plane_agent_group_acceptance_bindings_exists': bool(isinstance(control_plane_runtime_summary, dict) and isinstance(control_plane_runtime_summary.get('agentGroupAcceptanceBindings'), dict) and isinstance((control_plane_runtime_summary.get('agentGroupAcceptanceBindings') or {}).get('items'), list)),
         'control_plane_agent_group_release_gates_exists': bool(isinstance(control_plane_runtime_summary, dict) and isinstance(control_plane_runtime_summary.get('agentGroupReleaseGates'), dict) and isinstance((control_plane_runtime_summary.get('agentGroupReleaseGates') or {}).get('items'), list)),
         'control_plane_agent_group_statuses': group_status['statuses'],
         'control_plane_required_agent_groups': group_status['requiredGroups'],
         'control_plane_failing_agent_groups': group_status['failingGroups'],
-        'control_plane_agent_group_acceptance_binding_statuses': group_binding_status['statuses'],
-        'control_plane_blocked_agent_group_acceptance_bindings': group_binding_status['blockedGroups'],
         'control_plane_agent_group_release_gate_statuses': group_release_status['statuses'],
         'control_plane_blocked_agent_group_release_gates': group_release_status['blockedGroups'],
         'control_plane_frozen_agent_group_release_gates': group_release_status['frozenGroups'],
@@ -230,12 +259,29 @@ def write_runtime_acceptance_summary(
     control_plane_run_ledger: str | Path | None = None,
     control_plane_runtime_summary: str | Path | None = None,
 ) -> None:
+    """写出 runtime acceptance 摘要 JSON。
+
+    参数：
+        acceptance_state（str | Path）：deployment acceptance 状态 JSON 路径。
+        control_plane_summary（str | Path）：官方 CLI control-plane 摘要路径。
+        out（str | Path）：runtime acceptance 输出路径。
+        control_plane_run_ledger（str | Path | None）：control-plane run ledger 证据路径。
+        control_plane_runtime_summary（str | Path | None）：control-plane runtime 摘要路径。
+    """
     ledger_path = Path(control_plane_run_ledger) if control_plane_run_ledger is not None else None
     runtime_path = Path(control_plane_runtime_summary) if control_plane_runtime_summary is not None else None
     write_json(Path(out), build_runtime_acceptance_summary(Path(acceptance_state), Path(control_plane_summary), ledger_path, runtime_path))
 
 
 def build_acceptance_summary(base_root: Path = ROOT_DIR) -> dict[str, Any]:
+    """构建面向 `acceptance-summary` CLI 的验收汇总。
+
+    参数：
+        base_root（Path）：仓库或部署根目录，用于解析 object family 中的运行态路径。
+
+    返回：
+        返回 dict[str, Any]，包含 deployment、ingress boundary、runtime acceptance、dispatch runtime 和 official CLI 证据状态。
+    """
     manifest = read_manifest()
     deployment_entry = get_entry('acceptance_state', 'deployment_acceptance', base_root)
     ingress_boundary_entry = get_entry('acceptance_state', 'ingress_boundary_evidence', base_root)
@@ -297,10 +343,12 @@ def build_acceptance_summary(base_root: Path = ROOT_DIR) -> dict[str, Any]:
             'compose_contract_ok': ingress_boundary.get('compose_contract', {}).get('compose_contract_ok') if isinstance(ingress_boundary, dict) else None,
             'runtime_contract_ok': ingress_boundary.get('runtime_contract', {}).get('runtime_contract_ok') if isinstance(ingress_boundary, dict) else None,
             'nginx_policy_required': nginx_policy.get('required') if nginx_policy else None,
+            'nginx_policy_checked': nginx_policy.get('checked') if nginx_policy else None,
             'nginx_policy_ok': nginx_policy.get('ok') if nginx_policy else None,
             'nginx_policy_default_deny': nginx_policy.get('default_deny') if nginx_policy else None,
             'nginx_policy_rewrite_phase_default_deny': nginx_policy.get('rewrite_phase_default_deny') if nginx_policy else None,
             'nginx_policy_access_phase_default_deny': nginx_policy.get('access_phase_default_deny') if nginx_policy else None,
+            'nginx_policy_source_cidr_count': len(nginx_policy.get('source_cidrs') or []) if nginx_policy else None,
         },
         'runtime_acceptance': {
             'path': runtime_rel,
@@ -362,7 +410,61 @@ def build_acceptance_summary(base_root: Path = ROOT_DIR) -> dict[str, Any]:
     }
 
 
+def acceptance_summary_blocking_reasons(summary: dict[str, Any]) -> list[str]:
+    """返回 acceptance-summary 严格模式下的阻断原因。
+
+    参数：
+        summary（dict[str, Any]）：`build_acceptance_summary` 产出的验收汇总 payload。
+
+    返回：
+        返回 list[str]，空列表表示 deployment / ingress boundary / runtime acceptance 均已闭合；非空表示阻断原因。
+    """
+    reasons: list[str] = []
+    deployment = summary.get('deployment_acceptance') if isinstance(summary.get('deployment_acceptance'), dict) else {}
+    ingress = summary.get('ingress_boundary_evidence') if isinstance(summary.get('ingress_boundary_evidence'), dict) else {}
+    runtime = summary.get('runtime_acceptance') if isinstance(summary.get('runtime_acceptance'), dict) else {}
+    if deployment.get('exists') is not True:
+        reasons.append('deployment_acceptance 缺失')
+    if deployment.get('eligible') is not True:
+        reasons.append('deployment_acceptance eligible 不是 true')
+    if deployment.get('accepted') is not True:
+        reasons.append('deployment_acceptance accepted 不是 true')
+    if ingress.get('exists') is not True:
+        reasons.append('ingress_boundary_evidence 缺失')
+    if ingress.get('accepted') is not True:
+        reasons.append('ingress_boundary_evidence accepted 不是 true')
+    if ingress.get('nginx_policy_required') is not True:
+        reasons.append('ingress_boundary_evidence nginx_policy.required 不是 true')
+    if ingress.get('nginx_policy_checked') is not True:
+        reasons.append('ingress_boundary_evidence nginx_policy.checked 不是 true')
+    if ingress.get('nginx_policy_ok') is not True:
+        reasons.append('ingress_boundary_evidence nginx_policy.ok 不是 true')
+    if ingress.get('nginx_policy_default_deny') is not True:
+        reasons.append('ingress_boundary_evidence nginx_policy.default_deny 不是 true')
+    if ingress.get('nginx_policy_rewrite_phase_default_deny') is not True:
+        reasons.append('ingress_boundary_evidence nginx_policy.rewrite_phase_default_deny 不是 true')
+    if ingress.get('nginx_policy_access_phase_default_deny') is not True:
+        reasons.append('ingress_boundary_evidence nginx_policy.access_phase_default_deny 不是 true')
+    if not isinstance(ingress.get('nginx_policy_source_cidr_count'), int) or ingress.get('nginx_policy_source_cidr_count') <= 0:
+        reasons.append('ingress_boundary_evidence nginx_policy.source_cidrs 为空')
+    if runtime.get('exists') is not True:
+        reasons.append('runtime_acceptance 缺失')
+    if runtime.get('eligible') is not True:
+        reasons.append('runtime_acceptance eligible 不是 true')
+    if runtime.get('accepted') is not True:
+        reasons.append('runtime_acceptance accepted 不是 true')
+    return reasons
+
+
 def build_runtime_evidence_status(release_root: Path) -> dict[str, Any]:
+    """汇总 release evidence 目录中的 runtime 证据落盘状态。
+
+    参数：
+        release_root（Path）：control-plane release 目录。
+
+    返回：
+        返回 dict[str, Any]，说明 runtime acceptance、official CLI、dispatch runtime 和 artifact policy 证据是否存在及关键状态。
+    """
     runtime_path = release_root / 'evidence' / 'runtime-acceptance.json'
     control_plane_path = release_root / 'evidence' / 'official-cli-summary.control-plane.json'
     dispatch_runtime_path = release_root / 'evidence' / 'dispatch-runtime-check.json'

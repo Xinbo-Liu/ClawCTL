@@ -8,24 +8,24 @@
     "`one_click_config.sh` 后先执行 setup env validate；host_firewall 模式要先用 `sudo bash ./scripts/setup/apply_ingress_boundary_rules.sh --env-file deploy/.env` 物化来源限制，再用 root 侧 ingress boundary doctor 写出基础 evidence；不要等到 full test 才暴露来源限制语义错误。"
   ],
   "cross_instance_access_scenario": [
-    "适用条件：访问端与目标机分处不同 OS 实例、不同网络实例、VPN、NAT 或上游代理链路。",
+    "适用条件：访问端与目标机分处不同 OS 实例、不同网络实例、TUN、VPN、NAT 或上游代理链路。",
     "`OPENCLAW_INGRESS_LISTEN_IP` 固定填写目标机对访问端可达的私网 IP；不要填写访问端地址、上游网关地址，也不要误写成 loopback。",
     "`OPENCLAW_TLS_CN` 在访问端 DNS / hosts 中必须解析到目标机 ingress 地址；不要解析到访问端地址。",
     "`OPENCLAW_INGRESS_ALLOWED_SOURCE_CIDRS` 优先收窄为目标机实际看到的访问端源 IP `/32`；若网络层把访问端流量翻译成网关地址，则填写该翻译后地址 `/32`；只有链路以网段呈现时，才填写对应链路网段；同时加入目标机本机 full test 来源，即 `OPENCLAW_INGRESS_LISTEN_IP/32` 或 IPv6 `/128`。",
-    "常见误填：访问端网卡地址或网段、本地 Wi-Fi 网段、Docker bridge 网段，以及遗漏目标机本机 full test 来源。"
+    "常见误填：访问端网卡地址或网段、本地 Wi-Fi 私网段、api.ipify/TUN 出口推断值、Docker bridge 网段，以及遗漏目标机本机 full test 来源；公网 EIP 场景应填写目标机实际看到的公网出口 `/32` 或 `/128`。"
   ],
   "public_upstream_acl_access": [
-    "OpenClaw 本机 ingress 只接受私网或 loopback 来源 CIDR，不把公网客户端 CIDR 写入 `OPENCLAW_INGRESS_ALLOWED_SOURCE_CIDRS`。",
-    "公网访问必须先经过上游 ACL、NAT、VPN、堡垒机或反向代理；OpenClaw 只配置目标机实际看到的私网来源。",
-    "公网客户 IP 白名单写入上游 ACL 或安全组，并在 evidence JSON 中体现该上游策略；OpenClaw allowlist 只记录目标机可见的私网来源。",
-    "访问端验收时，先确认目标机日志或上游转发记录中的实际来源地址，再执行 `check_client_access_acceptance.sh`。"
+    "OpenClaw 本机 ingress 接受私网、loopback 或精确公网主机 CIDR；公网来源只允许 `/32` IPv4 或 `/128` IPv6。",
+    "公网访问必须以目标机实际看到的来源为准；若目标机看到的是公网出口地址，只填写该精确主机段；若由上游 ACL、TUN、NAT、VPN、堡垒机或反向代理转为私网来源，则填写转换后的私网来源。",
+    "需要放行公网网段时，不写入 OpenClaw 本机 allowlist；应写入上游 ACL 或安全组，并在 external_acl evidence JSON 中体现该上游策略。",
+    "访问端验收时，先确认目标机日志或上游转发记录中的实际来源地址，再执行 `check_client_access_acceptance.sh --observed-source-cidr <cidr[,cidr]>`。"
   ],
   "input_constraints": [
     "`OPENCLAW_TLS_CN` 是唯一访问主机名、证书主机名与 Gateway Control UI origin。",
     "`OPENCLAW_INGRESS_LISTEN_IP` 只用于私有 HTTPS ingress 绑定；Gateway 容器内 bind 固定遵循容器侧网络合同。",
     "`OPENCLAW_INGRESS_LISTEN_IP` {private_ingress_bind_ip_doc}",
-    "只有浏览器与目标服务位于同一操作系统实例时，`OPENCLAW_INGRESS_LISTEN_IP` 才允许使用 loopback；跨机器、跨 OS / 跨网络实例、VPN 或上游代理场景都不属于该例外。",
-    "`OPENCLAW_INGRESS_ALLOWED_SOURCE_CIDRS` 用于定义 ingress 允许来源段；host_firewall 模式下 root 侧基础 evidence 必须把它与宿主机防火墙规则逐项对齐，部署用户侧会把当前 Nginx allowlist 校验结果合并回 evidence；external_acl 模式必须把它与结构化证据逐项对齐，并按最小必要来源面填写。",
+    "只有浏览器与目标服务位于同一操作系统实例时，`OPENCLAW_INGRESS_LISTEN_IP` 才允许使用 loopback；跨机器、跨 OS / 跨网络实例、TUN、VPN 或上游代理场景都不属于该例外。",
+    "`OPENCLAW_INGRESS_ALLOWED_SOURCE_CIDRS` 用于定义 ingress 允许的实际观测来源 CIDR；host_firewall 模式下 root 侧基础 evidence 必须把它与宿主机防火墙规则逐项对齐，部署用户侧会把当前 Nginx allowlist 校验结果合并回 evidence；external_acl 模式必须把它与结构化证据逐项对齐，并按最小必要来源面填写。",
     "`OPENCLAW_INGRESS_ALLOWED_SOURCE_CIDRS` 必须包含目标机本机 full test 来源；默认 one_click_deploy 会在目标机本机通过 ingress 验证 `/healthz` 与 `/readyz`。",
     "当前部署输入不接受未登记的 `OPENCLAW_*` 键。",
     "当前部署输入只接受单一官方 Gateway token auth 所需字段。",
@@ -35,7 +35,7 @@
     "`OPENCLAW_TLS_MODE` 只允许 `self_signed` 或 `provided_files`；切换到 `provided_files` 时，必须同时提供 `OPENCLAW_TLS_CERT_SOURCE_PATH` / `OPENCLAW_TLS_KEY_SOURCE_PATH`。",
     "`provided_files` 模式要求外部 PEM 证书包含精确 `dNSName:OPENCLAW_TLS_CN` SAN、未过期，并与未加密 PEM 私钥匹配；目标机与访问端必须已信任签发链。",
     "`OPENCLAW_INGRESS_BOUNDARY_MODE` 只允许 `host_firewall` 或 `external_acl`；切换到 `external_acl` 时，必须同时提供 `OPENCLAW_INGRESS_BOUNDARY_EVIDENCE_PATH`。",
-    "`OPENCLAW_INGRESS_ALLOWED_SOURCE_CIDRS` 只允许逗号分隔的私网或 loopback IPv4/IPv6 CIDR，并作为 ingress 来源限制的固定输入项；没有业务必要时不得放开泛化私网大网段，公网客户端 CIDR 只能写在上游 ACL 或安全组策略中。",
+    "`OPENCLAW_INGRESS_ALLOWED_SOURCE_CIDRS` 只允许逗号分隔的私网、loopback 或精确公网主机 IPv4/IPv6 CIDR，并作为 ingress 来源限制的固定输入项；没有业务必要时不得放开泛化私网大网段，公网网段只能写在上游 ACL 或安全组策略中。",
     "root 侧 `apply_ingress_boundary_rules.sh` 会写出与当前 env 对齐的基础 evidence；部署阶段渲染 Nginx 后，部署用户会本地校验 allowlist 并把 `nginx_policy` 合并到 `<current-host-state-root>/control_plane/setup/ingress_boundary_evidence.json`。只有基础 evidence 缺失、env 漂移或本地 Nginx 校验失败时，才补跑 root 侧 `check_ingress_boundary_evidence.sh --require-nginx-policy`。",
     "`external_acl` 模式下，证据文件必须是结构化 JSON，并且其中 `source_cidrs`、`allowed_ports`、`default_deny`、`ip_families`、`enforcement_plane` 与目标信息必须能证明和当前部署输入一致。",
     "{provider_source_note}",

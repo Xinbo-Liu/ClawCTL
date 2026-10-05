@@ -1,3 +1,5 @@
+"""读取快速部署和宿主机准备声明，按部署输入 schema 整理人工必填及条件字段。"""
+
 from __future__ import annotations
 
 import json

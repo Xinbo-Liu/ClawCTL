@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Load-side helpers for deploy-env dispatch registry operations."""
+"""提供OpenClaw setup子系统的生产实现。"""
 from __future__ import annotations
 
 from pathlib import Path
@@ -44,7 +44,6 @@ def resolve_dispatch_registry_paths(
     target_required: bool = True,
     provider_required: bool = False,
 ) -> tuple[list[Path], list[Path]]:
-    """一次读取 active profile registry，同时返回 target/provider registry 路径。"""
     resolved_config, registry_paths = _registry_paths_payload(config_path)
     target_paths = _resolve_dispatch_targets_paths_from_registry_paths(resolved_config, registry_paths, required=target_required)
     provider_paths = _resolve_dispatch_provider_paths_from_registry_paths(resolved_config, registry_paths, required=provider_required)

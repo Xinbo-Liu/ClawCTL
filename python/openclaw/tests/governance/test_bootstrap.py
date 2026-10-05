@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import argparse
 import json
 import os
 from pathlib import Path
@@ -29,8 +28,6 @@ OPENCLAW_PYTHON_TOOL_WRAPPER = ROOT_DIR / 'scripts' / 'runtime' / 'run_openclaw_
 BOOTSTRAP_SCRIPT = ROOT_DIR / 'scripts' / 'setup' / 'bootstrap.sh'
 CONTROL_PLANE_SCHEDULER_EXEC_LIB = ROOT_DIR / 'scripts' / 'lib' / 'control_plane_scheduler_exec.sh'
 AGENT_ENTRYPOINT_WRAPPER = ROOT_DIR / 'scripts' / 'agent_runtime' / 'run_agent_entrypoint.sh'
-REPO_HOST_ENTRY = ROOT_DIR / 'python' / 'openclaw' / 'testing' / 'repo_host.py'
-REPO_HOST_MODULE = 'openclaw.testing.repo_host'
 LIGHTWEIGHT_UNITTEST_SELECTOR = (
     'openclaw.tests.testing.test_repo_unittest.'
     'RepoUnittestSupportTest.test_coerce_jobs_accepts_auto_and_explicit_count'
@@ -40,7 +37,6 @@ ROOT_SHIM_DIR = ROOT_DIR / 'openclaw'
 ROOT_SITECUSTOMIZE = ROOT_DIR / 'sitecustomize.py'
 PYTHON_SITECUSTOMIZE = ROOT_DIR / 'python' / 'sitecustomize.py'
 PYTHON_PACKAGE_INIT = ROOT_DIR / 'python' / '__init__.py'
-REPO_HOST_SUITE_REENTRY_GUARD = 'OPENCLAW_BOOTSTRAP_SUITE_REENTRY'
 
 
 class RepoBootstrapTest(unittest.TestCase):
@@ -159,27 +155,6 @@ class RepoBootstrapTest(unittest.TestCase):
     def test_repo_root_pythonpath_python_imports_repo_unittest_support(self) -> None:
         self.assertEqual(self._repo_pythonpath_probe['repo_unittest_module'], 'openclaw.testing.repo_unittest')
 
-    def test_repo_host_suite_repo_check_resolves_to_repo_unittest_selectors(self) -> None:
-        from openclaw.testing import repo_host
-
-        selectors = repo_host.load_suite_selectors('repo-check')
-        self.assertGreater(len(selectors), 0)
-        self.assertTrue(any(item.startswith('python/openclaw/tests') for item in selectors))
-
-        args = argparse.Namespace(
-            quiet=True,
-            jobs='1',
-            start_dir='python/openclaw/tests',
-            pattern='test_*.py',
-            import_mode='',
-            selectors=[],
-        )
-        argv = repo_host.build_repo_unittest_argv(args, selectors=selectors[:1])
-
-        self.assertEqual(argv[:5], ['--quiet', '--jobs', '1', '--start-dir', 'python/openclaw/tests'])
-        self.assertIn('--pattern', argv)
-        self.assertEqual(argv[-1], selectors[0])
-
     def test_repo_python_entry_contract_files_exist(self) -> None:
         self.assertTrue(REPO_TEST_READINESS_WRAPPER.is_file())
         self.assertTrue(REPO_UNITTEST_WRAPPER.is_file())
@@ -293,25 +268,6 @@ class RepoBootstrapTest(unittest.TestCase):
             self.assertFalse((python_root / '__pycache__').exists())
             self.assertEqual(list(repo_root.rglob('*.pyc')), [])
 
-    def test_repo_host_module_file_exists_for_repo_local_test_lane(self) -> None:
-        self.assertTrue(REPO_HOST_ENTRY.is_file())
-
-    def test_repo_host_file_path_entry_is_not_supported(self) -> None:
-        result = subprocess.run(
-            [sys.executable, str(REPO_HOST_ENTRY), '--help'],
-            cwd=ROOT_DIR,
-            text=True,
-            encoding='utf-8',
-            errors='replace',
-            capture_output=True,
-            env=self._repo_root_env(),
-            check=False,
-        )
-
-        output = '\n'.join(part for part in (result.stdout, result.stderr) if part)
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn('python -m openclaw.testing.repo_host', output)
-
     def test_resolve_repo_root_raises_when_start_path_is_outside_repo(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             outsider = (Path(tmpdir) / 'outside.txt').resolve()
@@ -321,12 +277,11 @@ class RepoBootstrapTest(unittest.TestCase):
                 with self.assertRaises(RepoRootResolutionError):
                     resolve_repo_root(outsider)
 
-    def test_docs_and_shells_do_not_reference_retired_bootstrap_entries(self) -> None:
+    def test_docs_and_shells_use_current_bootstrap_contract(self) -> None:
         scan_paths = (
             ROOT_DIR / 'README.md',
             ROOT_DIR / 'docs',
             ROOT_DIR / 'scripts',
-            ROOT_DIR / 'python' / 'openclaw' / 'testing' / 'repo_host.py',
         )
         scanned_files: list[Path] = []
         for base in scan_paths:
@@ -338,7 +293,6 @@ class RepoBootstrapTest(unittest.TestCase):
         for path in scanned_files:
             source = path.read_text(encoding='utf-8')
             assert_static_text_absent(self, '_repo_bootstrap', source, msg=str(path.relative_to(ROOT_DIR)))
-            assert_static_text_absent(self, 'python python/openclaw/testing/repo_host.py', source, msg=str(path.relative_to(ROOT_DIR)))
 
     def test_runtime_wrapper_scripts_forward_to_unified_scheduler_exec_surface(self) -> None:
         scheduler_exec_source = CONTROL_PLANE_SCHEDULER_EXEC_LIB.read_text(encoding='utf-8')

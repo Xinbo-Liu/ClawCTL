@@ -64,6 +64,7 @@ _openclaw_cidr_ipv6_private_or_loopback() {
   return 1
 }
 
+# 私网与 loopback 合同同时约束地址族和最小前缀，避免把过宽网段放入入口来源。
 openclaw_cidr_is_private_or_loopback() {
   local cidr="$1"
   local ip="${cidr%/*}"
@@ -90,6 +91,54 @@ openclaw_cidr_is_private_or_loopback() {
   return 1
 }
 
+# 公网 IPv4 来源只接受精确主机 /32；保留、链路本地、测试网、私网和组播段不属于公网入口来源。
+_openclaw_cidr_ipv4_precise_public_host() {
+  local cidr="$1"
+  local ip="${cidr%/*}"
+  local prefix="${cidr#*/}"
+  local a=0 b=0 c=0 d=0
+  [[ "$prefix" == '32' ]] || return 1
+  [[ "$ip" =~ ^([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})$ ]] || return 1
+  a="${BASH_REMATCH[1]}"; b="${BASH_REMATCH[2]}"; c="${BASH_REMATCH[3]}"; d="${BASH_REMATCH[4]}"
+  ((10#$a <= 255 && 10#$b <= 255 && 10#$c <= 255 && 10#$d <= 255)) || return 1
+  ((10#$a == 0 || 10#$a == 10 || 10#$a == 127 || 10#$a >= 224)) && return 1
+  ((10#$a == 100 && 10#$b >= 64 && 10#$b <= 127)) && return 1
+  ((10#$a == 169 && 10#$b == 254)) && return 1
+  ((10#$a == 172 && 10#$b >= 16 && 10#$b <= 31)) && return 1
+  ((10#$a == 192 && 10#$b == 168)) && return 1
+  ((10#$a == 192 && 10#$b == 0 && (10#$c == 0 || 10#$c == 2))) && return 1
+  ((10#$a == 198 && (10#$b == 18 || 10#$b == 19))) && return 1
+  ((10#$a == 198 && 10#$b == 51 && 10#$c == 100)) && return 1
+  ((10#$a == 203 && 10#$b == 0 && 10#$c == 113)) && return 1
+  return 0
+}
+
+# 公网 IPv6 来源只接受 2000::/3 内的精确主机 /128。
+_openclaw_cidr_ipv6_precise_public_host() {
+  local cidr="$1"
+  local ip="${cidr%/*}"
+  local prefix="${cidr#*/}"
+  local expanded=''
+  [[ "$prefix" == '128' ]] || return 1
+  [[ "$ip" == *:* ]] || return 1
+  ip="${ip,,}"
+  _openclaw_cidr_ipv6_address_syntax_is_valid "$ip" || return 1
+  [[ "$ip" == "::1" || "$ip" =~ ^f[c-d][0-9a-f:]*$ ]] && return 1
+  expanded="$(_openclaw_cidr_ipv6_expand_to_hex "$ip")" || return 1
+  [[ "${expanded:0:1}" == '2' || "${expanded:0:1}" == '3' ]]
+}
+
+# ingress 来源合同只允许私网、loopback 或精确公网主机，公网网段必须留在上游 ACL。
+openclaw_cidr_is_allowed_ingress_source() {
+  local cidr="$1"
+  openclaw_cidr_is_private_or_loopback "$cidr" && return 0
+  if [[ "${cidr%/*}" == *:* ]]; then
+    _openclaw_cidr_ipv6_precise_public_host "$cidr"
+  else
+    _openclaw_cidr_ipv4_precise_public_host "$cidr"
+  fi
+}
+
 _openclaw_cidr_validate_item() {
   local item="$1"
   local label="$2"
@@ -109,8 +158,10 @@ _openclaw_cidr_validate_item() {
       ((10#$prefix == 128)) || openclaw_cidr_contract_fail "$label loopback IPv6 必须使用 /128：$item" || return 1
     elif [[ "$lower_address" =~ ^f[c-d][0-9a-f:]*$ ]]; then
       ((10#$prefix >= 7)) || openclaw_cidr_contract_fail "$label IPv6 私网前缀过宽：$item" || return 1
+    elif _openclaw_cidr_ipv6_precise_public_host "$item"; then
+      :
     else
-      openclaw_cidr_contract_fail "$label 只允许私网或 loopback CIDR：$item" || return 1
+      openclaw_cidr_contract_fail "$label 只允许私网、loopback 或精确公网主机 CIDR：$item" || return 1
     fi
   else
     ((10#$prefix <= 32)) || openclaw_cidr_contract_fail "$label IPv4 前缀长度不能超过 32：$item" || return 1
@@ -125,15 +176,18 @@ _openclaw_cidr_validate_item() {
       ((10#$prefix >= 16)) || openclaw_cidr_contract_fail "$label IPv4 私网前缀过宽：$item" || return 1
     elif ((10#$a == 172 && 10#$b >= 16 && 10#$b <= 31)); then
       ((10#$prefix >= 12)) || openclaw_cidr_contract_fail "$label IPv4 私网前缀过宽：$item" || return 1
+    elif _openclaw_cidr_ipv4_precise_public_host "$item"; then
+      :
     else
-      openclaw_cidr_contract_fail "$label 只允许私网或 loopback CIDR：$item" || return 1
+      openclaw_cidr_contract_fail "$label 只允许私网、loopback 或精确公网主机 CIDR：$item" || return 1
     fi
   fi
 }
 
+# 多入口脚本复用同一套 CIDR 校验，确保错误信息、前缀边界和公网主机规则一致。
 openclaw_cidr_validate_list() {
   local value="$1"
-  local label="${2:---client-cidr}"
+  local label="${2:---observed-source-cidr}"
   local item=''
   [[ -z "$value" ]] && return 0
   [[ "$value" =~ ^[A-Fa-f0-9:./,]+$ ]] || openclaw_cidr_contract_fail "$label 只允许 CIDR 字符与逗号分隔，不允许空格或 shell 特殊字符。" || return 1
@@ -236,6 +290,7 @@ _openclaw_cidr_contains_ipv6() {
   _openclaw_cidr_hex_prefix_matches "$allowed_hex" "$client_hex" "$allowed_prefix"
 }
 
+# 只在同地址族内判断包含关系；调用方负责传入已通过合同校验的 CIDR。
 openclaw_cidr_contains() {
   local allowed="$1"
   local client="$2"
@@ -267,12 +322,12 @@ openclaw_cidr_list_first() {
   printf '%s\n' "$list" | tr ',' '\n' | sed -E 's/^[[:space:]]+|[[:space:]]+$//g' | awk 'NF { print; exit }'
 }
 
-openclaw_cidr_first_non_private_or_loopback() {
+openclaw_cidr_first_not_allowed_ingress_source() {
   local list="$1"
   local cidr=''
   while IFS= read -r cidr; do
     [[ -n "$cidr" ]] || continue
-    openclaw_cidr_is_private_or_loopback "$cidr" || { printf '%s\n' "$cidr"; return 0; }
+    openclaw_cidr_is_allowed_ingress_source "$cidr" || { printf '%s\n' "$cidr"; return 0; }
   done < <(printf '%s\n' "$list" | tr ',' '\n' | sed -E 's/^[[:space:]]+|[[:space:]]+$//g')
 }
 

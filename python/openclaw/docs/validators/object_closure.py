@@ -9,8 +9,9 @@ from typing import Any
 
 from openclaw.control_plane.governance_surfaces import load_docs_registry, load_documentation_closure_rules
 from openclaw.control_plane.surfaces import load_runtime_service_registry
-from openclaw.lib.cli import CliError, FlagSpec, parse_typed_flag_args
 from openclaw.docs.support.doc_targets import read_json_object
+from openclaw.docs.validators.registry_context import parse_stdout_config_args
+from openclaw.docs.support.shared_cache import read_text
 from openclaw.lib.cli.output import stderr_write, stdout_write
 from openclaw.lib.repo.layout import (
     DEFAULT_RUNTIME_CONTROL_PLANE_SERVICE_CONFIG_REL_PATH,
@@ -300,7 +301,7 @@ def check_entry(rule: dict[str, Any], resolver: PathResolverInstance, target_map
     checks: list[str] = []
     if not file_path.exists():
         return {'file_path': file_path, 'errors': [f'{rel_path} 不存在'], 'checks': checks}
-    content = file_path.read_text(encoding='utf-8')
+    content = read_text(file_path)
 
     for spec in rule.get('command_refs') or []:
         if not isinstance(spec, dict):
@@ -351,42 +352,17 @@ def check_entry(rule: dict[str, Any], resolver: PathResolverInstance, target_map
     return {'file_path': file_path, 'errors': errors, 'checks': checks}
 
 
-def _parse_args(argv: list[str]) -> tuple[bool, Path | None]:
-    if any(arg in {'-h', '--help'} for arg in argv):
-        stdout_write(f'{usage()}\n')
-        raise SystemExit(0)
-    try:
-        values, _ = parse_typed_flag_args(
-            argv,
-            specs={
-                'stdout': FlagSpec(kind='bool', default=False),
-                'config-path': FlagSpec(kind='str', dest='config_path', default=None),
-            },
-            allow_positionals=False,
-        )
-    except CliError as exc:
-        stderr_write(f'[check_documentation_object_closure][FAIL] {exc}\n')
-        stderr_write(f'{usage()}\n')
-        raise SystemExit(exc.exit_code) from exc
-    config_path_value = values['config_path']
-    config_path: Path | None = None
-    if config_path_value is not None:
-        candidate = Path(config_path_value)
-        if not candidate.is_absolute():
-            candidate = (ROOT_DIR / candidate).resolve()
-        config_path = candidate
-    return bool(values['stdout']), config_path
-
-
 def main(argv: list[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
-    try:
-        stdout, config_path = _parse_args(args)
-    except SystemExit as exc:
-        code = int(exc.code) if isinstance(exc.code, int) else 1
-        return code
-
-    resolved_config_path = config_path or resolve_default_runtime_control_plane_service_config_path(ROOT_DIR)
+    parsed = parse_stdout_config_args(
+        args,
+        usage_text=usage(),
+        error_prefix='[check_documentation_object_closure][FAIL]',
+        root_dir=ROOT_DIR,
+    )
+    if isinstance(parsed, int):
+        return parsed
+    stdout, resolved_config_path = parsed
 
     try:
         payload = load_rules(config_path=resolved_config_path)

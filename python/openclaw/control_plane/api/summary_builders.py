@@ -21,7 +21,6 @@ from openclaw.control_plane.api.registry_items import (
     _render_toolset_items,
 )
 from openclaw.control_plane.api.agent_group_release import (
-    build_agent_group_acceptance_binding as _build_agent_group_acceptance_binding,
     build_agent_group_release_gate as _build_agent_group_release_gate,
     group_run_ledger_status as _group_run_ledger_status,
 )
@@ -29,19 +28,40 @@ from openclaw.control_plane.registry.store import read_json, runtime_files, tail
 from openclaw.control_plane.registry.owners import qualified_registry_id, resolve_collection_ref, row_owner_id
 from openclaw.control_plane.run_ledger import apply_latest_agent_access_overlay, build_run_ledger_summary
 from openclaw.control_plane.state_paths import resolve_control_plane_state_root
+from openclaw.scheduler.engine import prune_scheduler_state_jobs
 
 
 def _now_epoch() -> int:
+    """返回当前 Unix epoch 秒数。
+
+    返回：
+        int：当前时间戳，单位为秒。
+    """
     return int(time.time())
 
 
 def _state_root() -> Path:
+    """解析 control-plane 运行态状态根目录。
+
+    返回：
+        Path：scheduler state、status、heartbeat 和 history 文件所在的根目录。
+    """
     return resolve_control_plane_state_root()
 
 
 def _state_payload(registry: dict[str, Any]) -> dict[str, Any]:
+    """读取并整理 control-plane 运行态状态文件。
+
+    参数：
+        registry（dict[str, Any]）：已加载的控制面 registry，用于解析运行态文件位置和 history 裁剪上限。
+
+    返回：
+        dict[str, Any]：包含 files、state、status、heartbeat 和 history 的标准运行态 payload。
+    """
     files = runtime_files(_state_root(), registry)
     state = read_json(files.state_dir / 'state.json', {'jobs': {}})
+    if isinstance(state, dict):
+        prune_scheduler_state_jobs(state, registry)
     status = read_json(files.status_path, {})
     heartbeat = read_json(files.heartbeat_path, {})
     history_limit = int(((registry.get('defaults') or {}).get('recentHistoryLimit') or 20))
@@ -64,6 +84,19 @@ def _build_agent_group_access_items(
     status: str = '',
     source: str = '',
 ) -> list[dict[str, Any]]:
+    """构建 agent group 访问汇总条目。
+
+    参数：
+        registry（dict[str, Any]）：已加载的控制面 registry。
+        limit（int）：每个查询最多读取的最近访问记录数。
+        timeline_limit（int）：每个 group 返回的时间线条目上限。
+        group_ref（str）：可选 agent group 过滤值。
+        status（str）：可选访问状态过滤值。
+        source（str）：可选访问来源过滤值。
+
+    返回：
+        list[dict[str, Any]]：按 agent group 聚合的访问记录、状态计数和时间线。
+    """
     return _build_agent_group_access_items_impl(
         registry,
         state_payload_builder=_state_payload,
@@ -81,6 +114,16 @@ def _agent_group_recent_access_map(
     limit: int = 200,
     timeline_limit: int = 5,
 ) -> dict[str, dict[str, Any]]:
+    """返回每个 agent group 的最近访问摘要。
+
+    参数：
+        registry（dict[str, Any]）：已加载的控制面 registry。
+        limit（int）：读取最近访问记录的数量上限。
+        timeline_limit（int）：每个 group 保留的最近访问时间线长度。
+
+    返回：
+        dict[str, dict[str, Any]]：以 agent group id 为键的访问摘要。
+    """
     return _agent_group_recent_access_map_impl(
         registry,
         state_payload_builder=_state_payload,
@@ -99,6 +142,20 @@ def _render_agent_access_log_summary_uncached(
     status: str = '',
     source: str = '',
 ) -> dict[str, Any]:
+    """读取最近 agent access log 并按查询条件裁剪。
+
+    参数：
+        registry（dict[str, Any]）：已加载的控制面 registry。
+        limit（int）：返回访问记录的数量上限。
+        agent_ref（str）：可选 agent 过滤值。
+        group_ref（str）：可选 agent group 过滤值。
+        job_id（str）：可选 job 过滤值。
+        status（str）：可选访问状态过滤值。
+        source（str）：可选访问来源过滤值。
+
+    返回：
+        dict[str, Any]：包含过滤条件、访问记录、聚合计数和来源路径的响应 payload。
+    """
     return _render_agent_access_log_summary_uncached_impl(
         registry,
         state_payload_builder=_state_payload,
@@ -112,6 +169,15 @@ def _render_agent_access_log_summary_uncached(
 
 
 def _run_ledger_with_latest_access(registry: dict[str, Any], runtime: dict[str, Any] | None = None) -> dict[str, Any]:
+    """在 run ledger 摘要上叠加最近 agent access 状态。
+
+    参数：
+        registry（dict[str, Any]）：已加载的控制面 registry。
+        runtime（dict[str, Any] | None）：可复用的 `_state_payload` 结果；未传入时会现场读取。
+
+    返回：
+        dict[str, Any]：带有最新访问状态 overlay 的 run ledger 摘要。
+    """
     runtime_payload = runtime or _state_payload(registry)
     run_ledger = build_run_ledger_summary(registry, runtime_payload['state'])
     access_limit = max(200, int(((registry.get('defaults') or {}).get('recentHistoryLimit') or 20)) * 10)
@@ -120,6 +186,14 @@ def _run_ledger_with_latest_access(registry: dict[str, Any], runtime: dict[str, 
 
 
 def _render_control_plane_summary_uncached(registry: dict[str, Any]) -> dict[str, Any]:
+    """汇总 control-plane 运行态、registry 和发布门禁状态。
+
+    参数：
+        registry（dict[str, Any]）：已加载的控制面 registry。
+
+    返回：
+        dict[str, Any]：包含 scheduler 健康、registry 计数、jobs、agent groups、运行账本和访问记录的响应 payload。
+    """
     runtime = _state_payload(registry)
     manifest_memo: dict[str, dict[str, Any] | None] = {}
     heartbeat_epoch = int(runtime['heartbeat'].get('updated_at_epoch') or 0)
@@ -133,7 +207,6 @@ def _render_control_plane_summary_uncached(registry: dict[str, Any]) -> dict[str
     agent_access_log = _render_agent_access_log_summary_uncached(registry, limit=max(20, int(((registry.get('defaults') or {}).get('recentHistoryLimit') or 20))))
     agent_group_access = _render_agent_group_access_summary_uncached(registry, limit=max(100, int(((registry.get('defaults') or {}).get('recentHistoryLimit') or 20)) * 10), timeline_limit=10)
     run_ledger_summary = apply_latest_agent_access_overlay(build_run_ledger_summary(registry, runtime['state']), agent_access_log)
-    acceptance_bindings_summary = _render_agent_group_acceptance_bindings_summary_uncached(registry)
     release_gates_summary = _render_agent_group_release_gates_summary_uncached(registry)
     runtime_adapters_summary = _render_runtime_adapters_summary_uncached(registry)
     return {
@@ -161,7 +234,6 @@ def _render_control_plane_summary_uncached(registry: dict[str, Any]) -> dict[str
             'runtimeAdapters': len(registry.get('runtimeAdapters', [])),
             'recentAgentAccesses': int((agent_access_log.get('counts') or {}).get('items') or 0),
             'recentAgentAccessGroups': int((agent_group_access.get('counts') or {}).get('activeGroups') or 0),
-            'agentGroupAcceptanceBindings': int((acceptance_bindings_summary.get('counts') or {}).get('items') or 0),
             'agentGroupReleaseGates': int((release_gates_summary.get('counts') or {}).get('items') or 0),
             'models': len(registry.get('models', [])),
             'targets': len(registry.get('targets', [])),
@@ -177,7 +249,6 @@ def _render_control_plane_summary_uncached(registry: dict[str, Any]) -> dict[str
         'runtimeAdapters': runtime_adapters_summary.get('items', []),
         'agentAccessLog': agent_access_log,
         'agentGroupAccess': agent_group_access,
-        'agentGroupAcceptanceBindings': acceptance_bindings_summary,
         'agentGroupReleaseGates': release_gates_summary,
         'runLedger': run_ledger_summary,
         'recentRuns': [_enrich_run_row(row, manifest_memo) for row in runtime['history']],
@@ -185,6 +256,14 @@ def _render_control_plane_summary_uncached(registry: dict[str, Any]) -> dict[str
 
 
 def _render_jobs_summary_uncached(registry: dict[str, Any]) -> dict[str, Any]:
+    """读取当前 job registry 并叠加最近运行状态。
+
+    参数：
+        registry（dict[str, Any]）：已加载的控制面 registry。
+
+    返回：
+        dict[str, Any]：包含服务名和 job 行集合的响应 payload。
+    """
     runtime = _state_payload(registry)
     manifest_memo: dict[str, dict[str, Any] | None] = {}
     return {
@@ -194,40 +273,27 @@ def _render_jobs_summary_uncached(registry: dict[str, Any]) -> dict[str, Any]:
 
 
 def _render_run_ledger_summary_uncached(registry: dict[str, Any]) -> dict[str, Any]:
+    """读取 run ledger 并叠加最近 agent access 状态。
+
+    参数：
+        registry（dict[str, Any]）：已加载的控制面 registry。
+
+    返回：
+        dict[str, Any]：带有最新访问状态的 run ledger 响应 payload。
+    """
     return _run_ledger_with_latest_access(registry)
 
 
-def _render_agent_group_acceptance_bindings_summary_uncached(registry: dict[str, Any], *, group_ref: str = '') -> dict[str, Any]:
-    runtime = _state_payload(registry)
-    manifest_memo: dict[str, dict[str, Any] | None] = {}
-    jobs = _job_rows(registry, runtime['state'], runtime['history'], manifest_memo)
-    group_items = _render_agent_group_items(registry, jobs)
-    run_ledger_summary = _run_ledger_with_latest_access(registry, runtime)
-    normalized_group_ref = str(group_ref or '').strip()
-    items: list[dict[str, Any]] = []
-    for item in group_items:
-        current_group_ref = str(item.get('id') or '').strip()
-        if normalized_group_ref and current_group_ref != normalized_group_ref:
-            continue
-        binding = _build_agent_group_acceptance_binding(item, run_ledger_summary)
-        items.append({
-            'groupRef': current_group_ref,
-            'title': str(item.get('title') or '').strip(),
-            'acceptanceBinding': binding,
-        })
-    items.sort(key=lambda row: (0 if bool(((row.get('acceptanceBinding') or {}).get('accepted'))) is False else 1, str(row.get('groupRef') or '')))
-    return {
-        'filters': {'groupRef': normalized_group_ref},
-        'counts': {
-            'items': len(items),
-            'accepted': sum(1 for item in items if bool((item.get('acceptanceBinding') or {}).get('accepted'))),
-            'blocked': sum(1 for item in items if not bool((item.get('acceptanceBinding') or {}).get('accepted'))),
-        },
-        'items': items,
-    }
-
-
 def _render_agent_group_release_gates_summary_uncached(registry: dict[str, Any], *, group_ref: str = '') -> dict[str, Any]:
+    """按 agent group 汇总发布门禁状态。
+
+    参数：
+        registry（dict[str, Any]）：已加载的控制面 registry。
+        group_ref（str）：可选 agent group id；为空时返回全部 group。
+
+    返回：
+        dict[str, Any]：包含过滤条件、门禁状态计数和 group 门禁条目的响应 payload。
+    """
     runtime = _state_payload(registry)
     manifest_memo: dict[str, dict[str, Any] | None] = {}
     jobs = _job_rows(registry, runtime['state'], runtime['history'], manifest_memo)
@@ -241,20 +307,17 @@ def _render_agent_group_release_gates_summary_uncached(registry: dict[str, Any],
         current_group_ref = str(item.get('id') or '').strip()
         if normalized_group_ref and current_group_ref != normalized_group_ref:
             continue
-        acceptance_binding = _build_agent_group_acceptance_binding(item, run_ledger_summary)
         gate = _build_agent_group_release_gate(
             item,
             dict(recent_access.get(current_group_ref) or {}),
             _group_run_ledger_status([str(x).strip() for x in (item.get('jobRefs') or []) if str(x).strip()], run_ledger_summary),
             agent_access_log_summary,
-            acceptance_binding,
         )
         items.append({
             'groupRef': current_group_ref,
             'title': str(item.get('title') or '').strip(),
             'health': dict(item.get('health') or {}),
             'recentAccess': dict(recent_access.get(current_group_ref) or {}),
-            'acceptanceBinding': acceptance_binding,
             'releaseGate': gate,
         })
     items.sort(key=lambda row: (0 if str(((row.get('releaseGate') or {}).get('status') or '')) in {'blocked', 'frozen'} else 1, str(row.get('groupRef') or '')))
@@ -271,6 +334,14 @@ def _render_agent_group_release_gates_summary_uncached(registry: dict[str, Any],
 
 
 def _render_agent_groups_summary_uncached(registry: dict[str, Any]) -> dict[str, Any]:
+    """返回 agent group 列表并补充访问与门禁状态。
+
+    参数：
+        registry（dict[str, Any]）：已加载的控制面 registry。
+
+    返回：
+        dict[str, Any]：每个 group 均附带最近访问摘要和发布门禁状态。
+    """
     runtime = _state_payload(registry)
     manifest_memo: dict[str, dict[str, Any] | None] = {}
     jobs = _job_rows(registry, runtime['state'], runtime['history'], manifest_memo)
@@ -290,35 +361,72 @@ def _render_agent_groups_summary_uncached(registry: dict[str, Any]) -> dict[str,
             'timeline': [],
         }))
         item['recentAccess'] = recent
-        acceptance_binding = _build_agent_group_acceptance_binding(item, run_ledger_summary)
-        item['acceptanceBinding'] = acceptance_binding
         item['releaseGate'] = _build_agent_group_release_gate(
             item,
             recent,
             _group_run_ledger_status([str(x).strip() for x in (item.get('jobRefs') or []) if str(x).strip()], run_ledger_summary),
             agent_access_log_summary,
-            acceptance_binding,
         )
     return {'items': items}
 
 
 def _render_agent_modules_summary_uncached(registry: dict[str, Any]) -> dict[str, Any]:
+    """返回 registry 中的 agent module 条目。
+
+    参数：
+        registry（dict[str, Any]）：已加载的控制面 registry。
+
+    返回：
+        dict[str, Any]：agent module 条目集合。
+    """
     return {'items': _render_agent_module_items(registry)}
 
 
 def _render_skill_sets_summary_uncached(registry: dict[str, Any]) -> dict[str, Any]:
+    """返回 registry 中的 skill set 条目。
+
+    参数：
+        registry（dict[str, Any]）：已加载的控制面 registry。
+
+    返回：
+        dict[str, Any]：skill set 条目集合。
+    """
     return {'items': _render_skill_set_items(registry)}
 
 
 def _render_permission_policies_summary_uncached(registry: dict[str, Any]) -> dict[str, Any]:
+    """返回 registry 中的 permission policy 条目。
+
+    参数：
+        registry（dict[str, Any]）：已加载的控制面 registry。
+
+    返回：
+        dict[str, Any]：permission policy 条目集合。
+    """
     return {'items': _render_permission_policy_items(registry)}
 
 
 def _render_toolsets_summary_uncached(registry: dict[str, Any]) -> dict[str, Any]:
+    """返回 registry 中的 toolset 条目。
+
+    参数：
+        registry（dict[str, Any]）：已加载的控制面 registry。
+
+    返回：
+        dict[str, Any]：toolset 条目集合。
+    """
     return {'items': _render_toolset_items(registry)}
 
 
 def _render_runtime_adapters_summary_uncached(registry: dict[str, Any]) -> dict[str, Any]:
+    """返回 registry 中的 runtime adapter 条目。
+
+    参数：
+        registry（dict[str, Any]）：已加载的控制面 registry。
+
+    返回：
+        dict[str, Any]：runtime adapter 条目集合。
+    """
     items: list[dict[str, Any]] = []
     for adapter in registry.get('runtimeAdapters', []):
         if not isinstance(adapter, dict):
@@ -335,6 +443,15 @@ def _render_runtime_adapters_summary_uncached(registry: dict[str, Any]) -> dict[
 
 
 def _render_job_detail_uncached(registry: dict[str, Any], job_id: str) -> dict[str, Any]:
+    """按 registry id 或 runtime key 构建 job 详情。
+
+    参数：
+        registry（dict[str, Any]）：已加载的控制面 registry。
+        job_id（str）：job id、qualified id 或 runtime job key。
+
+    返回：
+        dict[str, Any]：命中时返回 job 行；未命中时返回 `job_not_found` 错误 payload。
+    """
     runtime = _state_payload(registry)
     manifest_memo: dict[str, dict[str, Any] | None] = {}
     job = resolve_collection_ref(registry, 'jobs', job_id, label='job')
@@ -362,6 +479,19 @@ def _render_agent_group_access_summary_uncached(
     status: str = '',
     source: str = '',
 ) -> dict[str, Any]:
+    """构建 agent group access 聚合响应。
+
+    参数：
+        registry（dict[str, Any]）：已加载的控制面 registry。
+        limit（int）：读取最近访问记录的数量上限。
+        timeline_limit（int）：每个 group 保留的访问时间线长度。
+        group_ref（str）：可选 agent group 过滤值。
+        status（str）：可选访问状态过滤值。
+        source（str）：可选访问来源过滤值。
+
+    返回：
+        dict[str, Any]：包含过滤条件、聚合计数和 group access 条目的响应 payload。
+    """
     items = _build_agent_group_access_items(
         registry,
         limit=limit,

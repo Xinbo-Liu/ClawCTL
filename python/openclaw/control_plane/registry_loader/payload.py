@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Control-plane registry payload assembly helpers."""
+"""提供OpenClaw 控制平面子系统的生产实现。"""
 from __future__ import annotations
 
 from pathlib import Path
@@ -19,7 +19,6 @@ from openclaw.control_plane.registry_loader.config import describe_registry_path
 
 
 def _build_extension_rows(extensions: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Build extension metadata rows for the materialized registry payload."""
     extension_rows: list[dict[str, Any]] = []
     for extension in extensions:
         registry_payload = extension.get('registry') if isinstance(extension.get('registry'), dict) else {}
@@ -52,7 +51,6 @@ def _build_extension_rows(extensions: list[dict[str, Any]]) -> list[dict[str, An
 
 
 def _build_registry_metadata(context: dict[str, Any], extension_rows: list[dict[str, Any]]) -> dict[str, Any]:
-    """Build registry metadata without attaching collection rows."""
     payload = dict(context['payload'])
     registry_inputs = context['registryInputs']
     schema_paths = context['schemaPaths']
@@ -112,7 +110,6 @@ def _attach_registry_collections(
     collections: dict[str, Any],
     runtime_state: dict[str, Any],
 ) -> dict[str, Any]:
-    """Attach materialized collections, indexes, and runtime state to metadata."""
     payload['jobs'] = collections['jobs']
     payload['jobsById'] = collections['jobsById']
     payload['agents'] = collections['agents']

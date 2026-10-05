@@ -1,10 +1,5 @@
 #!/usr/bin/env python3
-"""统一解析 OpenClaw 运行路径视角。
-
-说明：
-- base kernel 默认规范视角为 `host / gateway / scheduler`；
-- extension 追加的运行视角必须来自 active profile 合并后的 runtime_paths truth。
-"""
+"""统一解析 OpenClaw 运行路径视角。"""
 from __future__ import annotations
 
 import os

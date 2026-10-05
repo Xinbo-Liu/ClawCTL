@@ -33,19 +33,8 @@ def _prepare_dual_probe_manifest(fixture, extension_id: str) -> None:
     _write_json(fixture.manifest_path, manifest)
 
     testing_manifest = json.loads(fixture.testing_manifest_path.read_text(encoding='utf-8'))
-    group_id = f'probe_pipeline_checks_{extension_id}'
-    testing_manifest['valid_groups'] = [group_id]
-    testing_manifest['execution_order'] = [group_id]
-    for group in testing_manifest.get('groups') or []:
-        group['id'] = group_id
-    for check in testing_manifest.get('checks') or []:
-        check['id'] = f"{check['id']}_{extension_id}"
-        check['group'] = group_id
     for check in testing_manifest.get('release_gate_checks') or []:
         check['id'] = f"{check['id']}_{extension_id}"
-    testing_manifest['acceptance_reference']['required_checks'] = [
-        check['id'] for check in testing_manifest.get('checks') or []
-    ]
     _write_json(fixture.testing_manifest_path, testing_manifest)
     for job_path in fixture.jobs_dir.glob('*.json'):
         job_payload = json.loads(job_path.read_text(encoding='utf-8'))

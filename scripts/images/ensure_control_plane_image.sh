@@ -24,7 +24,7 @@ USAGE
 
 print_control_plane_image_failure_next_steps() {
   echo '[ensure_control_plane_image][HINT] 先执行 bash ./scripts/doctor/check_docker_host_readiness.sh，定位 Docker daemon、registry-mirrors 与当前 selected runtime source 是否闭合。' >&2
-  echo '[ensure_control_plane_image][HINT] 中国国内网络首轮部署先执行 sudo bash ./scripts/setup/prepare_docker_host.sh --all --network-profile cn；仅补 daemon 时执行 sudo bash ./scripts/setup/prepare_docker_host.sh --configure-daemon。' >&2
+  echo '[ensure_control_plane_image][HINT] 中国国内网络首轮部署先执行 sudo bash ./scripts/setup/prepare_docker_host.sh --os auto --all --network-profile cn；仅补 daemon 时执行 sudo bash ./scripts/setup/prepare_docker_host.sh --os auto --configure-daemon。' >&2
   echo '[ensure_control_plane_image][HINT] 受限网络或离线目标机使用 export_deployment_images.sh 生成 deployment_images_*.tar，再执行 load_deployment_images.sh 或把归档放到 state/image_artifacts/ 后重试。' >&2
 }
 

@@ -24,7 +24,6 @@ COMMAND_TIMEOUT_SECONDS="${OPENCLAW_OFFICIAL_CLI_COMMAND_TIMEOUT_SECONDS:-300}"
 RESOLVED_CONFIG_PATH=""
 repo_contract_assign_path RUNTIME_CONTRACT_PATH runtime.runtime_contract
 repo_contract_assign_relpath RUNTIME_CONTRACT_REL_PATH runtime.runtime_contract
-
 usage() {
   cat <<'USAGE'
 用法：
@@ -48,7 +47,6 @@ usage() {
   -h, --help                显示帮助
 USAGE
 }
-
 python_json_eval() {
   local inline_script="$1"
   shift
@@ -56,7 +54,6 @@ python_json_eval() {
 $inline_script
 PYINLINE
 }
-
 fail() {
   local msg="$1" code="${2:-2}"
   if [[ "$JSON_STDOUT" == "1" ]]; then
@@ -66,12 +63,10 @@ fail() {
   fi
   exit "$code"
 }
-
 note() {
   [[ "$JSON_STDOUT" == "1" ]] && return 0
   echo "[check_openclaw_official_runtime_contract] $*"
 }
-
 run_official_cli_command() {
   local label="$1"
   local stdout_path="$2"
@@ -105,7 +100,6 @@ run_official_cli_command() {
   fi
   [[ "$rc" -eq 0 ]] || fail "$label 失败；请查看 $evidence_paths" "$fail_code"
 }
-
 sha256_file_or_empty() {
   local path="$1"
   [[ -f "$path" ]] || {
@@ -114,11 +108,9 @@ sha256_file_or_empty() {
   }
   sha256sum "$path" 2>/dev/null | awk '{print $1}'
 }
-
 sha256_text() {
   printf '%s' "$1" | sha256sum | awk '{print $1}'
 }
-
 json_bool_field() {
   local payload="$1"
   local field="$2"
@@ -128,7 +120,6 @@ json_bool_field() {
   fi
   python_json_eval $'import json, sys\nprint("true" if json.loads(sys.argv[1]).get(sys.argv[2]) else "false")' "$payload" "$field"
 }
-
 official_cli_write_summary() {
   local summary_path="$1"
   local container_id="$2"
@@ -192,7 +183,6 @@ official_cli_write_summary() {
       models: $models
     }' > "$summary_path"
 }
-
 official_cli_cache_valid() {
   local summary_path="$1"
   local container_id="$2"

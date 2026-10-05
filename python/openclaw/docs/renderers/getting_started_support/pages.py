@@ -1,3 +1,5 @@
+"""将部署与宿主机准备声明拼装为 Quickstart 和基础环境准备页面。"""
+
 from __future__ import annotations
 
 from typing import Any, Callable
@@ -119,26 +121,30 @@ def quickstart_doc(
     tls_cn = str(examples.get('tls_cn') or 'openclaw.internal.example').strip()
 
     online_chain = [
-        'sudo bash ./scripts/setup/prepare_docker_host.sh --all',
+        'sudo bash ./scripts/setup/prepare_docker_host.sh --os auto --all --network-profile cn',
         f'sudo bash ./scripts/setup/prepare_deploy_user.sh --user openclaw --repo-dir {DEFAULT_DEPLOY_REPO_DIR}',
         *_deploy_user_block([
             'bash ./scripts/doctor/check_docker_host_readiness.sh',
             'bash ./scripts/setup/init_private_ingress.sh',
             'vim deploy/site.env',
-            '# 启用扩展时，使用 check_extension_env_values.sh / apply_extension_env_values.sh 补齐 extension.env',
             control_plane_medium_surface.mode_command(control_plane_medium, mode='online'),
+            '# 校验部署输入文件：bash ./scripts/setup/apply_deploy_input_values.sh --validate-only --profile <profile_id> --input <owner-only-env>',
+            '# 部署输入文件：bash ./scripts/setup/apply_deploy_input_values.sh --profile <profile_id> --input <owner-only-env> --init',
+            '# 单项维护：apply_site_env_values.sh / apply_extension_env_values.sh / apply_target_env_values.sh',
         ]),
         *_deployment_flow_commands(baseline, mode='default'),
     ]
     offline_chain_existing_runtime = [
-        'sudo bash ./scripts/setup/prepare_docker_host.sh --configure-kernel --configure-daemon --open-firewall',
+        'sudo bash ./scripts/setup/prepare_docker_host.sh --os auto --configure-kernel --configure-daemon --open-firewall',
         f'sudo bash ./scripts/setup/prepare_deploy_user.sh --user openclaw --repo-dir {DEFAULT_DEPLOY_REPO_DIR}',
         *_deploy_user_block([
             'bash ./scripts/doctor/check_docker_host_readiness.sh --offline',
             'bash ./scripts/setup/init_private_ingress.sh',
             'vim deploy/site.env',
-            '# 启用扩展时，使用 check_extension_env_values.sh / apply_extension_env_values.sh 补齐 extension.env',
             control_plane_medium_surface.mode_command(control_plane_medium, mode='offline'),
+            '# 校验部署输入文件：bash ./scripts/setup/apply_deploy_input_values.sh --validate-only --profile <profile_id> --input <owner-only-env>',
+            '# 部署输入文件：bash ./scripts/setup/apply_deploy_input_values.sh --profile <profile_id> --input <owner-only-env> --init',
+            '# 单项维护：apply_site_env_values.sh / apply_extension_env_values.sh / apply_target_env_values.sh',
         ]),
         *_deployment_flow_commands(baseline, mode='offline'),
     ]
@@ -241,7 +247,7 @@ def quickstart_doc(
         '',
         *render_code_block(offline_chain_existing_runtime),
         '',
-        '- 离线新机尚未安装 Docker / Compose 时，先按 `environment-setup.md` 挂载本地 RPM / YUM 源并完成 Docker / Compose 安装；不要把 `--offline` 当作安装路径。',
+        '- 离线新机尚未安装 Docker / Compose 时，先按 `environment-setup.md` 准备本地 OS 软件源并完成 Docker / Compose 安装；不要把 `--offline` 当作安装路径。',
         '- 访问端动作只出现在第 1 步与第 6 步；其余默认命令都在目标机执行。',
         '',
         *deployment_checklist_lines,
@@ -249,10 +255,10 @@ def quickstart_doc(
         '',
         '### 第 0 步：完成宿主机准备与 readiness 准入',
         '',
-        '- 固定入口：`sudo bash ./scripts/setup/prepare_docker_host.sh --all`；中国国内网络首轮部署使用 `sudo bash ./scripts/setup/prepare_docker_host.sh --all --network-profile cn`。',
+        '- 固定入口：`sudo bash ./scripts/setup/prepare_docker_host.sh --os auto --all`；中国国内网络首轮部署使用 `sudo bash ./scripts/setup/prepare_docker_host.sh --os auto --all --network-profile cn`。',
         '- 固定部署用户交接：`sudo bash ./scripts/setup/prepare_deploy_user.sh --user openclaw --repo-dir /opt/openclaw/clawctl`，随后用 `sudo -iu openclaw` 切换到该用户继续主链。',
         '- 固定准入：`bash ./scripts/doctor/check_docker_host_readiness.sh`',
-        '- 详细命令、CentOS 7 仓库修复与离线分支统一查看 `environment-setup.md`。',
+        '- 详细命令、Ubuntu 22.04 推荐基线、CentOS 7 legacy 仓库修复与离线分支统一查看 `environment-setup.md`。',
         '',
         '### 第 1 步：确定 private ingress 地址与访问端解析',
         '',
@@ -279,8 +285,10 @@ def quickstart_doc(
         '',
         *render_code_block([
             'vim deploy/site.env',
-            '# 启用扩展时，使用 check_extension_env_values.sh / apply_extension_env_values.sh 补齐 extension.env',
             control_plane_medium_surface.mode_command(control_plane_medium, mode='online'),
+            '# 校验部署输入文件：bash ./scripts/setup/apply_deploy_input_values.sh --validate-only --profile <profile_id> --input <owner-only-env>',
+            '# 部署输入文件：bash ./scripts/setup/apply_deploy_input_values.sh --profile <profile_id> --input <owner-only-env> --init',
+            '# 单项维护：apply_site_env_values.sh / apply_extension_env_values.sh / apply_target_env_values.sh',
             'bash ./scripts/setup/one_click_config.sh',
         ]),
         '',

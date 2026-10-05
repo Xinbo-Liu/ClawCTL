@@ -55,7 +55,6 @@ PUBLIC_GROUP_COMMANDS: dict[str, dict[str, str]] = {
     'evidence': {
         'agent-access-log': 'agent-access-log',
         'agent-group-access': 'agent-group-access',
-        'agent-group-acceptance-bindings': 'agent-group-acceptance-bindings',
         'agent-group-release-gates': 'agent-group-release-gates',
         'export-agent-group-evidence': 'export-agent-group-evidence',
     },
@@ -175,6 +174,11 @@ def _consume_leading_selection_args(argv: list[str]) -> tuple[list[str], list[st
 
 
 def _print_group_help(group: str) -> None:
+    """输出grouphelp。
+
+    参数：
+        group（str）：group。
+    """
     public_commands = PUBLIC_GROUP_COMMANDS[group]
     print(f'usage: python -m openclaw.cli control-plane {group} [--config-path PATH | --control-plane-profile PROFILE] <command> ...')
     print()

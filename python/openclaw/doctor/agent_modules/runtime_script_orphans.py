@@ -80,13 +80,24 @@ def build_orphan_report(
     repo_root: Path | None = None,
     *,
     extension_id: str | None = None,
+    corpus: list[Path] | None = None,
 ) -> dict[str, object]:
+    """检查目标扩展模块脚本是否被仓库真源引用。
+
+    参数：
+        repo_root（Path | None）：仓库根目录；为 ``None`` 时使用当前仓库。
+        extension_id（str | None）：仅检查指定受管扩展；为空时检查全部扩展。
+        corpus（list[Path] | None）：可复用的仓库文本文件清单；为空时现场枚举。
+
+    返回：
+        dict[str, object]：扫描根、候选脚本、引用详情和孤儿脚本摘要。
+    """
     root_dir = ROOT_DIR if repo_root is None else Path(repo_root).resolve()
     scripts, scan_roots = candidate_scripts(root_dir, extension_id=extension_id)
-    corpus = repo_text_files(root_dir)
+    effective_corpus = repo_text_files(root_dir) if corpus is None else corpus
     items: list[dict[str, object]] = []
     for script in scripts:
-        refs = external_references(script, corpus=corpus, repo_root=root_dir)
+        refs = external_references(script, corpus=effective_corpus, repo_root=root_dir)
         items.append({
             'path': script.relative_to(root_dir).as_posix(),
             'referenceCount': len(refs),

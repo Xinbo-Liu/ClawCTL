@@ -209,6 +209,105 @@ class BundleManifestWorkspacePolicyTest(unittest.TestCase):
         self.assertIn('state/openclaw/**', excludes)
         self.assertIn('**/__pycache__/**', excludes)
 
+    def test_bundle_manifest_globs_include_dotfile_placeholders(self) -> None:
+        included_paths = {
+            'agent/extensions/agent_probe/agent/control_plane/targets/.gitkeep',
+            'agent/.hidden/fixture.txt',
+            'agent/extensions/agent_probe/README.md',
+        }
+        cache_path = 'agent/extensions/agent_probe/python/__pycache__/fixture.pyc'
+        manifest = {
+            'sharedExcludes': ['**/__pycache__/**'],
+            'bundles': {'full-source-governance': {'include': ['agent/**']}},
+        }
+        with isolated_test_root('bundle-manifest-hidden-files') as repo_root:
+            for relative_path in included_paths | {cache_path}:
+                path = repo_root / relative_path
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text('fixture\n', encoding='utf-8')
+            with patch.object(bundle_manifest_support, 'ROOT_DIR', repo_root):
+                files = bundle_manifest_support.resolve_bundle_files(
+                    'full-source-governance',
+                    manifest,
+                    error_factory=RuntimeError,
+                )
+
+        self.assertEqual(set(files), included_paths)
+        self.assertNotIn(cache_path, files)
+
+    def test_full_source_bundle_keeps_available_wheel_metadata_without_payloads(self) -> None:
+        manifest = load_bundle_manifest(error_factory=RuntimeError)
+        files = set(bundle_manifest_support.resolve_bundle_files(
+            'full-source-governance', manifest, error_factory=RuntimeError,
+        ))
+        available_metadata = {
+            path.relative_to(ROOT_DIR).as_posix()
+            for path in (ROOT_DIR / 'agent' / 'extensions').glob('*/offline_wheelhouse/manifest.json')
+        }
+        self.assertFalse(any(path.endswith('.whl') for path in files))
+        self.assertTrue(available_metadata.issubset(files))
+
+    def test_managed_extension_dependency_bundle_separates_wheels_from_full_source(self) -> None:
+        metadata_paths = {
+            'agent/extensions/index.json',
+            'agent/extensions/lock.json',
+            'agent/extensions/provenance.json',
+            'openclaw-stack.lock.json',
+            'agent/extensions/agent_probe/requirements.lock',
+            'agent/extensions/agent_probe/offline_wheelhouse/manifest.json',
+        }
+        wheel_path = 'agent/extensions/agent_probe/offline_wheelhouse/probe_dependency-1.0-py3-none-any.whl'
+        source_paths = {
+            'agent/extensions/agent_probe/python/openclaw_ext_probe/main.py',
+            'agent/extensions/agent_probe/README.md',
+            'agent/extensions/agent_probe/offline_wheelhouse/notes.txt',
+        }
+        actual_manifest = load_bundle_manifest(error_factory=RuntimeError)
+        full_source_spec = dict(actual_manifest['bundles']['full-source-governance'])
+        # 仅取夹具覆盖的命名空间，保留正式清单的包含、排除及共享裁剪规则。
+        full_source_spec['include'] = [
+            pattern for pattern in full_source_spec['include']
+            if pattern.startswith('agent/') or pattern == 'openclaw-stack.lock.json'
+        ]
+        manifest = {
+            'sharedExcludes': actual_manifest['sharedExcludes'],
+            'bundles': {
+                'full-source-governance': full_source_spec,
+                'managed-extension-dependencies': {
+                    'include': [
+                        'agent/extensions/index.json',
+                        'agent/extensions/lock.json',
+                        'agent/extensions/provenance.json',
+                        'openclaw-stack.lock.json',
+                        'agent/extensions/*/requirements.lock',
+                        'agent/extensions/*/offline_wheelhouse/manifest.json',
+                        'agent/extensions/*/offline_wheelhouse/*.whl',
+                    ],
+                },
+            },
+        }
+        with isolated_test_root('bundle-manifest-dependencies') as repo_root:
+            for relative_path in metadata_paths | source_paths | {wheel_path}:
+                path = repo_root / relative_path
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text('fixture\n', encoding='utf-8')
+            with patch.object(bundle_manifest_support, 'ROOT_DIR', repo_root):
+                full_source_files = bundle_manifest_support.resolve_bundle_files(
+                    'full-source-governance',
+                    manifest,
+                    error_factory=RuntimeError,
+                )
+                dependency_files = bundle_manifest_support.resolve_bundle_files(
+                    'managed-extension-dependencies',
+                    manifest,
+                    error_factory=RuntimeError,
+                )
+
+        self.assertEqual(set(full_source_files), metadata_paths | source_paths)
+        self.assertNotIn(wheel_path, full_source_files)
+        self.assertEqual(set(dependency_files), metadata_paths | {wheel_path})
+        self.assertTrue(source_paths.isdisjoint(dependency_files))
+
 
 if __name__ == '__main__':
     unittest.main()

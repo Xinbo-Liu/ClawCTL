@@ -93,6 +93,9 @@ def _build_dispatch_validation_contract(
         'allowed_payload_scopes': set(
             _require_unique_text_list(schema_payload.get('allowedPayloadScopes'), label='dispatch target schema.allowedPayloadScopes')
         ),
+        'allowed_completion_roles': set(
+            _require_unique_text_list(schema_payload.get('allowedCompletionRoles'), label='dispatch target schema.allowedCompletionRoles')
+        ),
         'allowed_formats': set(
             _require_unique_text_list(schema_payload.get('allowedMessageFormats'), label='dispatch target schema.allowedMessageFormats')
         ),
@@ -220,7 +223,6 @@ def _validate_target_boundary(
     message_profile: str,
     contract: dict[str, Any],
 ) -> dict[str, Any]:
-    """校验 target 的职责边界，避免业务、监控和联调目标混用同一运行语义。"""
     boundary = _require_object(row.get('boundary'), label=f'dispatch target 注册表.targets[{target_id}].boundary')
     _require_keys(
         boundary,
@@ -247,6 +249,14 @@ def _validate_target_boundary(
         boundary.get('publishLatestDefault'),
         label=f'dispatch target 注册表.targets[{target_id}].boundary.publishLatestDefault',
     )
+    completion_role = _require_non_empty_text(
+        boundary.get('completionRole'),
+        label=f'dispatch target 注册表.targets[{target_id}].boundary.completionRole',
+    )
+    if completion_role not in contract['allowed_completion_roles']:
+        raise DispatchRegistryValidationError(
+            f'dispatch target 注册表.targets[{target_id}].boundary.completionRole 取值非法：{completion_role}'
+        )
     _require_non_empty_text(
         boundary.get('description'),
         label=f'dispatch target 注册表.targets[{target_id}].boundary.description',
@@ -298,6 +308,14 @@ def _validate_target_boundary(
             f'dispatch target 注册表.targets[{target_id}].boundary.publishLatestDefault 必须为 '
             f'{str(expected_publish_latest).lower()}'
         )
+    expected_completion_role = _require_non_empty_text(
+        rule.get('completionRole'),
+        label=f'dispatch target schema.targetGroupBoundaryRules.{target_group}.completionRole',
+    )
+    if completion_role != expected_completion_role:
+        raise DispatchRegistryValidationError(
+            f'dispatch target 注册表.targets[{target_id}].boundary.completionRole 必须为 {expected_completion_role}'
+        )
     return boundary
 
 
@@ -313,6 +331,15 @@ def _validate_target_rows(
     target_index = _index_by_id(targets, label='dispatch target 注册表.targets')
     managed_env_keys: dict[str, str] = {}
     verification_orders: set[int] = set()
+
+    def register_managed_env_key(env_key: str, owner_id: str) -> None:
+        owner_target = managed_env_keys.get(env_key)
+        if owner_target and owner_target != owner_id:
+            raise DispatchRegistryValidationError(
+                f'dispatch target 注册表中的环境键冲突：{env_key} 同时归属 {owner_target} 与 {owner_id}'
+            )
+        managed_env_keys[env_key] = owner_id
+
     for target_id, row in target_index.items():
         _require_keys(
             row,
@@ -372,6 +399,15 @@ def _validate_target_rows(
             row.get('silenceEnabledDefault'),
             label=f'dispatch target 注册表.targets[{target_id}].silenceEnabledDefault',
         )
+        boundary = _require_object(row.get('boundary'), label=f'dispatch target 注册表.targets[{target_id}].boundary')
+        if (
+            str(boundary.get('dispatchLane') or '') == 'formal_broadcast'
+            and str(boundary.get('completionRole') or '') == 'required'
+            and bool(row.get('silenceEnabledDefault'))
+        ):
+            raise DispatchRegistryValidationError(
+                f'dispatch target 注册表.targets[{target_id}] 正式 required 通道不得启用 silence'
+            )
         silence_delta = row.get('silenceMinDeltaDefault')
         if not isinstance(silence_delta, (int, float)) or isinstance(silence_delta, bool):
             raise DispatchRegistryValidationError(
@@ -469,12 +505,53 @@ def _validate_target_rows(
             for field in TARGET_MANAGED_ENV_FIELDS
         ]
         for env_key in unique_env_keys:
-            owner_target = managed_env_keys.get(env_key)
-            if owner_target and owner_target != target_id:
-                raise DispatchRegistryValidationError(
-                    f'dispatch target 注册表中的环境键冲突：{env_key} 同时归属 {owner_target} 与 {target_id}'
-                )
-            managed_env_keys[env_key] = target_id
+            register_managed_env_key(env_key, target_id)
+    formal_target_ids = [
+        target_id
+        for target_id, row in target_index.items()
+        if str(_require_object(
+            row.get('boundary'),
+            label=f'dispatch target 注册表.targets[{target_id}].boundary',
+        ).get('dispatchLane') or '') == 'formal_broadcast'
+    ]
+    formal_publishers = [
+        target_id
+        for target_id, row in target_index.items()
+        if bool(_require_object(
+            row.get('boundary'),
+            label=f'dispatch target 注册表.targets[{target_id}].boundary',
+        ).get('publishLatestDefault'))
+    ]
+    if formal_target_ids and len(formal_publishers) != 1:
+        raise DispatchRegistryValidationError(
+            '声明 formal_broadcast 的 dispatch target 注册表必须且只能有一个正式 latest publisher；'
+            f'当前={sorted(formal_publishers)}'
+        )
+    if formal_publishers:
+        publisher_id = formal_publishers[0]
+        publisher_row = target_index[publisher_id]
+        publisher_boundary = _require_object(
+            publisher_row.get('boundary'),
+            label=f'dispatch target 注册表.targets[{publisher_id}].boundary',
+        )
+        if not (
+            str(publisher_boundary.get('dispatchLane') or '') == 'formal_broadcast'
+            and str(publisher_boundary.get('completionRole') or '') == 'required'
+        ):
+            raise DispatchRegistryValidationError(
+                f'dispatch target 注册表正式 latest publisher {publisher_id} 必须为 formal_broadcast/required'
+            )
+        publisher_lifecycle_state = str(publisher_row.get('lifecycleState') or '')
+        if publisher_lifecycle_state != 'active':
+            raise DispatchRegistryValidationError(
+                f'dispatch target 注册表正式 latest publisher {publisher_id} 必须保持 lifecycleState=active；'
+                '维护窗口请使用 scheduler maintenance'
+            )
+        if publisher_row.get('enabledDefault') is not True:
+            raise DispatchRegistryValidationError(
+                f'dispatch target 注册表正式 latest publisher {publisher_id} 必须保持 enabledDefault=true；'
+                '维护窗口请使用 scheduler maintenance'
+            )
     return target_index
 
 

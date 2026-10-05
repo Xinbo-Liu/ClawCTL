@@ -13,7 +13,6 @@ ingress_boundary_cache_env_value() {
     }
   ' "$env_file"
 }
-
 ingress_boundary_cache_abs_path() {
   local root_dir="$1"
   local value="$2"
@@ -23,7 +22,6 @@ ingress_boundary_cache_abs_path() {
     printf '%s/%s\n' "$root_dir" "${value#./}"
   fi
 }
-
 ingress_boundary_cached_nginx_policy_ok() {
   local evidence_path="$1"
   local allowed_cidrs="$2"
@@ -41,7 +39,6 @@ ingress_boundary_cached_nginx_policy_ok() {
       and ((.nginx_policy.source_cidrs // [] | sort) == csv_set($allowed_cidrs))
     ' "$evidence_path" >/dev/null
 }
-
 ingress_boundary_refresh_cached_nginx_policy() {
   local root_dir="$1"
   local env_file="$2"
@@ -72,7 +69,6 @@ ingress_boundary_refresh_cached_nginx_policy() {
   chmod 600 "$evidence_path" 2>/dev/null || true
   rm -f "$nginx_json" "$nginx_err"
 }
-
 ingress_boundary_cached_evidence_ok() {
   local root_dir="$1"
   local env_file="$2"

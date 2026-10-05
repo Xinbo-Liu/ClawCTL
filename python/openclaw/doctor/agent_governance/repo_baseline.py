@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Repo-baseline checks for the agent governance doctor."""
+"""提供OpenClaw doctor子系统的生产实现。"""
 from __future__ import annotations
 
 from pathlib import Path

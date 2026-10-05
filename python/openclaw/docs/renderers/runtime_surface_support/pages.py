@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Page assembly for runtime_surface renderer."""
+"""拼装运行态任务、服务核对、验收顺序和证据归档的参考页面。"""
 from __future__ import annotations
 
 from typing import Any, Callable
@@ -12,9 +12,22 @@ def render_doc(
     *,
     managed_note_text: str,
     acceptance_summary_cmd: str,
-    agent_group_acceptance_bindings_cmd: str,
     format_markdown_tables_fn: Callable[[str], str],
 ) -> str:
+    """把运行合同与入口声明拼装为运行任务、服务核对和验收归档说明。
+
+    参数：
+        manifest（dict[str, Any]）：包含页面标题、运行目标、镜像合同和验收声明的渲染输入。
+        managed_note_text（str）：生成来源提示；空文本时不增加提示段落。
+        acceptance_summary_cmd（str）：查询严格验收摘要的完整命令。
+        format_markdown_tables_fn（Callable[[str], str]）：用于格式化页面表格的共享函数。
+    返回：
+        str：含操作步骤、失败分流和有效引用的完整 Markdown 页面。
+    异常：
+        KeyError：缺少页面标题或服务目标的必要字段。
+    副作用：
+        仅在内存中拼装给定声明并调用表格 formatter，不读取运行状态或写入文档。
+    """
     lines: list[str] = [
         f"# {manifest['title']}",
         '',
@@ -26,7 +39,7 @@ def render_doc(
         '',
         '本页覆盖三类运行态任务：运行状态查看、deployment acceptance / runtime acceptance 默认顺序、以及最终交付前的证据归档。',
         '',
-        '详细对象解释、路径合同、dispatch 观察与恢复说明统一查看 `../architecture/control-plane-baseline.md`、`dispatch-targets.md` 与仓库根路径 `agent/README.md`。',
+        '详细对象解释与路径合同查看 [运行产物参考](runtime-artifacts-reference.md) 和 `../architecture/control-plane-baseline.md`；dispatch 观察与恢复查看 `dispatch-targets.md`。',
         '',
         '## 适用范围',
         '',
@@ -77,7 +90,7 @@ def render_doc(
 
     lines.append('## 运行镜像来源与 source strategy')
     lines.append('')
-    lines.append('runtime contract 与 source strategy 的正式事实统一记录在本节。')
+    lines.append('本节列出运行镜像的官方来源、所选引用、pin 文件与来源校验规则。')
     lines.append('')
     lines.append('| object | canonical source | selected env | selected pin |')
     lines.append('| --- | --- | --- | --- |')
@@ -135,7 +148,7 @@ def render_doc(
         acceptance_summary_cmd,
     ])
     lines.append('')
-    lines.append('- 若当前 profile / extension 声明 `required_run_ledger_jobs`，`one_click_deploy.sh` 会在 full test 前自动执行 `run_control_plane_run_all_once.sh` 生成当前机器真实 run ledger；发送动作按当前 target 配置执行。当前 target 配置不允许发送时，使用 `--skip-acceptance` 仅启动服务，并把 deployment acceptance / runtime acceptance evidence 未闭合作为显式交接状态。')
+    lines.append('- 若平台 deployment acceptance manifest 声明 `required_run_ledger_jobs`，`one_click_deploy.sh` 会在 full test 前自动执行 `run_control_plane_run_all_once.sh` 生成当前机器真实 run ledger；发送动作按当前 target 配置执行。当前 target 配置不允许发送时，使用 `--skip-acceptance` 仅启动服务，并把 deployment acceptance / runtime acceptance evidence 未闭合作为显式交接状态。')
     lines.append('')
     lines.append('使用 `--skip-acceptance` 或 `--prepare-only` 后，先确认 runtime 服务已启动，再按 run ledger 状态闭合 deployment acceptance 与 runtime evidence：')
     lines.append('')
@@ -187,10 +200,7 @@ def render_doc(
     for check_id in acceptance.get('required_checks') or []:
         lines.append(f'- `{check_id}`')
     lines.append('')
-    lines.append(
-        f'group 级发布门禁若需要对齐 deployment acceptance required checks，统一通过 `{agent_group_acceptance_bindings_cmd}` 与 '
-        '`/v1/control-plane/agent-group-acceptance-bindings` 查看正式映射摘要。'
-    )
+    lines.append('group 级发布门禁通过 `control-plane evidence agent-group-release-gates` 与 `/v1/control-plane/agent-group-release-gates` 查看，required evidence、run ledger、recent access 和 group health 均在该视图中闭合。')
     lines.append('')
 
     lines.append('## 失败分流')
@@ -201,7 +211,7 @@ def render_doc(
     lines.append('| ingress 边界证据不通过 | `troubleshooting.md#runtime-与-ingress-问题` |')
     lines.append('| full test 未闭合或 acceptance state 不通过 | `troubleshooting.md#full-test-与-deployment-acceptance-问题` |')
     lines.append('| runtime evidence / clean release 导出失败 | `troubleshooting.md#验收归档与交付导出问题` |')
-    lines.append('| 需要对象路径、run ledger、dispatch observability 长表 | `agent/README.md`、`dispatch-targets.md` |')
+    lines.append('| 需要对象路径、run ledger、dispatch observability 长表 | [运行产物参考](runtime-artifacts-reference.md)、`dispatch-targets.md` |')
     lines.append('')
 
     lines.append('## 下一步')

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Repository-local extension discovery helpers."""
+"""提供OpenClaw lib子系统的生产实现。"""
 from __future__ import annotations
 
 import json
@@ -65,7 +65,7 @@ def _discovery_repo_root(start_path: Path | None = None) -> Path:
 
 @dataclass(frozen=True)
 class DiscoveredExtensionProfile:
-    """A directory-scanned extension profile candidate."""
+    """自动发现扩展 profile 候选。"""
 
     id: str
     title: str
@@ -99,6 +99,48 @@ def _read_json_object(path: Path, *, label: str, issues: list[str]) -> dict[str,
         issues.append(f'{label} root must be an object: {path}')
         return {}
     return payload
+
+
+def _manifest_path_for_extension_id(repo_root: Path, extension_id: str) -> Path:
+    """返回扩展 manifest 的仓库约定路径。"""
+    if extension_id == _PLATFORM_EXTENSION_ID:
+        return (repo_root / _PLATFORM_MANIFEST_REL_DIR / f'{_PLATFORM_EXTENSION_ID}.json').resolve()
+    return (
+        repo_root
+        / EXTENSIONS_REL_DIR
+        / extension_id
+        / _CONTROL_PLANE_MANIFEST_REL_DIR
+        / f'{extension_id}.json'
+    ).resolve()
+
+
+def _required_dependency_ids_for_manifest(
+    manifest_path: Path,
+    *,
+    issues: list[str],
+    seen: set[str] | None = None,
+) -> tuple[str, ...]:
+    """读取 manifest required dependency 闭包，顺序为依赖优先。"""
+    repo_root = resolve_repo_root(manifest_path)
+    payload = _read_json_object(manifest_path, label='extension manifest', issues=issues)
+    if seen is None:
+        seen = set()
+    result: list[str] = []
+    for dep in payload.get('dependencies') or []:
+        if not isinstance(dep, dict) or bool(dep.get('optional', False)):
+            continue
+        dep_id = str(dep.get('id') or '').strip()
+        if not dep_id or dep_id == _PLATFORM_EXTENSION_ID or dep_id in seen:
+            continue
+        seen.add(dep_id)
+        dep_manifest_path = _manifest_path_for_extension_id(repo_root, dep_id)
+        if dep_manifest_path.is_file():
+            for nested_id in _required_dependency_ids_for_manifest(dep_manifest_path, issues=issues, seen=seen):
+                if nested_id not in result:
+                    result.append(nested_id)
+        if dep_id not in result:
+            result.append(dep_id)
+    return tuple(result)
 
 
 def _path_is_relative_to(path: Path, base: Path) -> bool:
@@ -231,7 +273,12 @@ def _validate_service_profile(
             for item in (extensions_payload.get('enabledExtensionIds') or [])
             if str(item).strip()
         ]
-        _validate_discovered_service_activation(enabled_ids, extension_id=extension_id, issues=issues)
+        _validate_discovered_service_activation(
+            enabled_ids,
+            extension_id=extension_id,
+            manifest_path=manifest_path,
+            issues=issues,
+        )
         _validate_discovered_manifest_dirs(
             extensions_payload.get('manifestsDirs'),
             service_path=service_path,
@@ -260,14 +307,20 @@ def _validate_discovered_service_activation(
     enabled_ids: list[str],
     *,
     extension_id: str,
+    manifest_path: Path,
     issues: list[str],
 ) -> None:
-    allowed_ids = {_PLATFORM_EXTENSION_ID, extension_id}
+    required_dependency_ids = _required_dependency_ids_for_manifest(manifest_path, issues=issues)
+    allowed_ids = {_PLATFORM_EXTENSION_ID, extension_id, *required_dependency_ids}
+    for dependency_id in required_dependency_ids:
+        if dependency_id not in enabled_ids:
+            issues.append(f'service profile must enable required dependency {dependency_id}')
     extra_ids = [item for item in enabled_ids if item not in allowed_ids]
     if extra_ids:
         issues.append(
             'service profile may only enable '
-            f'{_PLATFORM_EXTENSION_ID} and extension id {extension_id}: {", ".join(extra_ids)}'
+            f'{_PLATFORM_EXTENSION_ID}, required dependencies, and extension id {extension_id}: '
+            f'{", ".join(extra_ids)}'
         )
 
 
@@ -289,6 +342,12 @@ def _validate_discovered_manifest_dirs(
         (repo_root / _PLATFORM_MANIFEST_REL_DIR).resolve(),
         manifest_path.parent.resolve(),
     }
+    required_dependency_ids = _required_dependency_ids_for_manifest(manifest_path, issues=issues)
+    expected_dependency_dirs = {
+        _manifest_path_for_extension_id(repo_root, dependency_id).parent.resolve()
+        for dependency_id in required_dependency_ids
+    }
+    expected_dirs.update(expected_dependency_dirs)
     resolved_dirs: list[Path] = []
     for idx, value in enumerate(manifest_dirs):
         text = str(value or '').strip()
@@ -304,12 +363,14 @@ def _validate_discovered_manifest_dirs(
         if expected not in resolved_dirs:
             if expected == manifest_path.parent.resolve():
                 issues.append(f'service profile must load own manifest from convention path: {manifest_path}')
+            elif expected in expected_dependency_dirs:
+                issues.append(f'service profile must load required dependency manifest dir: {expected}')
             else:
                 issues.append(f'service profile must load platform manifest dir: {expected}')
     extra_dirs = [path for path in resolved_dirs if path not in expected_dirs]
     if extra_dirs:
         issues.append(
-            'service profile may only load platform and own manifest dirs: '
+            'service profile may only load platform, required dependency, and own manifest dirs: '
             + ', '.join(str(path) for path in extra_dirs)
         )
     return True
@@ -334,7 +395,12 @@ def _prevalidate_service_profile_shape(
         for item in (extensions.get('enabledExtensionIds') or [])
         if str(item).strip()
     ]
-    _validate_discovered_service_activation(enabled_ids, extension_id=extension_id, issues=issues)
+    _validate_discovered_service_activation(
+        enabled_ids,
+        extension_id=extension_id,
+        manifest_path=manifest_path,
+        issues=issues,
+    )
     if _PLATFORM_EXTENSION_ID not in enabled_ids:
         issues.append(f'service profile must enable {_PLATFORM_EXTENSION_ID}')
     if extension_id not in enabled_ids:
@@ -514,7 +580,6 @@ def discover_extension_profiles(
     *,
     skip_ids: set[str] | frozenset[str] | tuple[str, ...] = (),
 ) -> tuple[DiscoveredExtensionProfile, ...]:
-    """Scan repository-local extension directories without changing registry truth files."""
     try:
         repo_root = _discovery_repo_root(start_path)
     except RepoRootResolutionError:

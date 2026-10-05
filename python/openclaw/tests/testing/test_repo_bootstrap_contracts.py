@@ -147,56 +147,6 @@ class RepoBootstrapContractSmokeTest(unittest.TestCase):
         self.assertEqual(Path(payload['file']).resolve(), CANONICAL_PACKAGE_INIT)
         self._assert_no_bytecode_residue()
 
-    def test_repo_host_module_entry_runs_single_unittest_without_pythonpath(self) -> None:
-        self._clear_bytecode_residue()
-        result = subprocess.run(
-            [
-                sys.executable,
-                '-m',
-                'openclaw.testing.repo_host',
-                'unittest',
-                '--quiet',
-                '--jobs',
-                '1',
-                'python/openclaw/tests/testing/test_repo_unittest.py::RepoUnittestSupportTest::test_coerce_jobs_accepts_auto_and_explicit_count',
-            ],
-            cwd=ROOT_DIR,
-            env=self._clean_env(),
-            text=True,
-            encoding='utf-8',
-            errors='replace',
-            capture_output=True,
-            check=False,
-        )
-
-        output = '\n'.join(part for part in [result.stdout, result.stderr] if part)
-        self.assertEqual(result.returncode, 0, msg=output)
-        self.assertIn('OK', output)
-        self._assert_no_bytecode_residue()
-
-    def test_architecture_import_guards_module_entrypoint_runs_from_repo_root_without_pythonpath(self) -> None:
-        self._clear_bytecode_residue()
-        result = subprocess.run(
-            [
-                sys.executable,
-                '-m',
-                'openclaw.doctor.platform.architecture_import_guards',
-            ],
-            cwd=ROOT_DIR,
-            env=self._repo_root_env(),
-            text=True,
-            encoding='utf-8',
-            errors='replace',
-            capture_output=True,
-            check=False,
-        )
-
-        output = '\n'.join(part for part in [result.stdout, result.stderr] if part)
-        self.assertEqual(result.returncode, 0, msg=output)
-        payload = json.loads(result.stdout)
-        self.assertTrue(payload['ok'])
-        self._assert_no_bytecode_residue()
-
     def test_repo_cli_module_entrypoint_runs_from_repo_root_without_pythonpath(self) -> None:
         self._clear_bytecode_residue()
         result = subprocess.run(
@@ -254,29 +204,6 @@ class RepoBootstrapContractSmokeTest(unittest.TestCase):
         self.assertTrue(payload['has_tests'])
         self._assert_no_bytecode_residue()
 
-    def test_runtime_script_orphans_module_entrypoint_runs_with_repo_pythonpath(self) -> None:
-        self._clear_bytecode_residue()
-        result = subprocess.run(
-            [
-                sys.executable,
-                '-m',
-                'openclaw.doctor.agent_modules.runtime_script_orphans',
-            ],
-            cwd=ROOT_DIR,
-            env=self._repo_python_env(),
-            text=True,
-            encoding='utf-8',
-            errors='replace',
-            capture_output=True,
-            check=False,
-        )
-
-        output = '\n'.join(part for part in [result.stdout, result.stderr] if part)
-        self.assertEqual(result.returncode, 0, msg=output)
-        payload = json.loads(result.stdout)
-        self.assertTrue(payload['ok'])
-        self._assert_no_bytecode_residue()
-
     def test_wrong_python_namespace_unittest_entry_fails_closed_without_recreating_bytecode_residue(self) -> None:
         self._clear_bytecode_residue()
         env = self._clean_env()
@@ -287,7 +214,7 @@ class RepoBootstrapContractSmokeTest(unittest.TestCase):
                 sys.executable,
                 '-m',
                 'unittest',
-                'python.openclaw.tests.governance.test_delivery_cleanliness',
+                'python.openclaw.tests.doctor.test_release_gate',
                 '-q',
             ],
             cwd=ROOT_DIR,

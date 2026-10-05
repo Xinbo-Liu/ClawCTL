@@ -17,6 +17,7 @@ MODULE_REF_PATTERN = re.compile(r'^[a-z0-9_]+$')
 
 @dataclass(frozen=True)
 class ScaffoldRequest:
+    """模块脚手架生成请求。"""
     repo_root: Path
     config_path: Path | None
     module_ref: str
@@ -40,6 +41,7 @@ class ScaffoldRequest:
 
 @dataclass(frozen=True)
 class ScaffoldLayout:
+    """模块脚手架目标路径布局。"""
     repo_root: Path
     config_path: Path
     managed_layout: Any
@@ -64,6 +66,7 @@ class ScaffoldLayout:
 
 @dataclass(frozen=True)
 class ScaffoldPayloads:
+    """模块脚手架生成的文件内容集合。"""
     module_payload: dict[str, Any]
     permissions_payload: dict[str, Any]
     tools_payload: dict[str, Any]
@@ -80,6 +83,7 @@ class ScaffoldPayloads:
 
 @dataclass(frozen=True)
 class PlannedWrite:
+    """模块脚手架写入计划。"""
     path: Path
     content: str | dict[str, Any]
     executable: bool = False

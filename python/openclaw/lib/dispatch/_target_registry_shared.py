@@ -17,12 +17,10 @@ DEFAULT_PROVIDER_REGISTRY_PATH: Path | Sequence[Path] | None = None
 
 
 def _default_registry_paths() -> list[Path]:
-    """从仓库静态真源解析默认 target 注册表路径。"""
     return dispatch_target_registry_paths(ROOT_DIR)
 
 
 def _default_provider_registry_paths() -> list[Path]:
-    """从仓库静态真源解析默认 provider 注册表路径。"""
     return dispatch_provider_registry_paths(ROOT_DIR)
 
 

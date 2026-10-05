@@ -37,7 +37,7 @@
       "scenarios": {
         "readiness_passed_online": {
           "title": "宿主机 readiness 已通过（在线）",
-          "when": "Docker / Compose、CentOS 7 宿主机支持策略与当前运行来源前提已满足继续进入主链的条件。",
+          "when": "Docker / Compose、Docker MTU、Ubuntu 22.04 推荐基线或 CentOS 7 legacy 宿主机支持策略与当前运行来源前提已满足继续进入主链的条件。",
           "commands": [
             "cp deploy/site.env.example deploy/site.env",
             "vim deploy/site.env",
@@ -56,7 +56,7 @@
         },
         "readiness_passed_offline": {
           "title": "宿主机 readiness 已通过（离线）",
-          "when": "Docker / Compose、CentOS 7 宿主机支持策略与离线运行来源前提已满足继续进入离线主链的条件。",
+          "when": "Docker / Compose、Docker MTU、Ubuntu 22.04 推荐基线或 CentOS 7 legacy 宿主机支持策略与离线运行来源前提已满足继续进入离线主链的条件。",
           "commands": [
             "cp deploy/site.env.example deploy/site.env",
             "vim deploy/site.env",
@@ -139,7 +139,7 @@
             "bash ./scripts/runtime/show_runtime_service_status.sh"
           ],
           "notes": [
-            "默认部署链已经自动执行 required_run_ledger_jobs 对应的 run_all_once、one_click_test_full 与 runtime acceptance evidence 导出；使用 --skip-acceptance 后，按 run ledger 状态选择 post_deploy_acceptance 或 post_deploy_full_acceptance 闭合 deployment acceptance 与 runtime evidence。",
+            "默认部署链已经按平台 deployment acceptance manifest 自动执行 required_run_ledger_jobs 对应的 run_all_once、one_click_test_full 与 runtime acceptance evidence 导出；使用 --skip-acceptance 后，按 run ledger 状态选择 post_deploy_acceptance 或 post_deploy_full_acceptance 闭合 deployment acceptance 与 runtime evidence。",
             "deployment acceptance 默认顺序、通过标准与证据产物统一查看 runtime-service-reference。"
           ],
           "references": [

@@ -14,7 +14,6 @@ source "$ROOT_DIR/scripts/lib/repo_python_env.sh"
 source "$ROOT_DIR/scripts/lib/control_plane_config_paths.sh"
 # shellcheck source=../lib/control_plane_scheduler_exec.sh
 source "$ROOT_DIR/scripts/lib/control_plane_scheduler_exec.sh"
-
 runner_env_args() {
   local -a args=()
   local -A seen=()
@@ -42,7 +41,6 @@ runner_env_args() {
   ((${#args[@]} > 0)) || return 0
   printf '%s\0' "${args[@]}"
 }
-
 runner_mount_args() {
   local -a args=()
   local runtime_view="${OPENCLAW_RUNTIME_PATH_VIEW:-}"
@@ -56,7 +54,6 @@ runner_mount_args() {
   ((${#args[@]} > 0)) || return 0
   printf '%s\0' "${args[@]}"
 }
-
 usage() {
   cat <<'USAGE'
 用法：

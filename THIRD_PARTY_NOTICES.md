@@ -14,7 +14,7 @@
 ### 1. OpenClaw 官方 Gateway 镜像
 
 - 识别方式：`config/image_pins/openclaw.env`、`deploy/docker-compose.yml`
-- 当前引用：`ghcr.io/openclaw/openclaw:2026.6.1@sha256:b12f76a7947e4cdd328bf3ea1045d41a5494b33852c911e9bc4fdd03dde469d5`
+- 当前引用：`ghcr.io/openclaw/openclaw:2026.7.1@sha256:6a31d44b2944e7adcd2b582bf6fb463111264ebca97a0201795b799135bd102c`
 - 上游仓库：`openclaw/openclaw`
 - 上游许可：MIT License
 - 本仓库处理口径：本项目仅引用其官方 Gateway 运行时镜像，不主张该镜像及其上游源代码的著作权；上游 MIT 许可文本见 `LICENSES/openclaw-MIT.txt`。

@@ -141,7 +141,7 @@ class ManagedExtensionIndexConsistencyTest(unittest.TestCase):
 
             issues = validate_managed_explicit_extension_index(repo_root)
 
-        self.assertTrue(any('may only enable agent_platform and own extension id' in issue for issue in issues), msg=issues)
+        self.assertTrue(any('may only enable agent_platform, required dependencies, and own extension id' in issue for issue in issues), msg=issues)
 
     def test_validation_requires_profile_load_own_manifest_dir(self) -> None:
         with isolated_test_root('managed-extension-profile-manifest-dir-drift') as repo_root:
@@ -167,7 +167,7 @@ class ManagedExtensionIndexConsistencyTest(unittest.TestCase):
 
             issues = validate_managed_explicit_extension_index(repo_root)
 
-        self.assertTrue(any('may only load platform and own manifest dirs' in issue for issue in issues), msg=issues)
+        self.assertTrue(any('may only load platform, required dependency, and own manifest dirs' in issue for issue in issues), msg=issues)
 
     def test_validation_rejects_manifest_registry_paths_outside_extension_root(self) -> None:
         with isolated_test_root('managed-extension-registry-path-escape') as repo_root:

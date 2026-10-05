@@ -1,3 +1,5 @@
+"""根据 workspace 模板和所选配置更新 USER 文档的自动生成区块。"""
+
 from __future__ import annotations
 
 import argparse

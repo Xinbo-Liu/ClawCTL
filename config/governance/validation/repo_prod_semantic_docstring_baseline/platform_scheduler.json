@@ -1,0 +1,775 @@
+{
+  "fileBaselines": {
+    "python/openclaw/scheduler/__init__.py": {
+      "itemBaselines": {
+        "module:<module>": {
+          "issues": [],
+          "kind": "module",
+          "qualname": "<module>"
+        }
+      },
+      "moduleHasChineseDocstring": true,
+      "semanticIssueItems": 0,
+      "semanticIssues": 0
+    },
+    "python/openclaw/scheduler/cron.py": {
+      "itemBaselines": {
+        "function:_ensure_range": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_ensure_range"
+        },
+        "function:_parse_int_token": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_parse_int_token"
+        },
+        "function:cron_matches": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "cron_matches"
+        },
+        "function:next_cron_occurrence": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "next_cron_occurrence"
+        },
+        "function:parse_value_set": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "parse_value_set"
+        },
+        "function:resolve_timezone": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "resolve_timezone"
+        },
+        "function:validate_cron_expr": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "validate_cron_expr"
+        },
+        "module:<module>": {
+          "issues": [],
+          "kind": "module",
+          "qualname": "<module>"
+        }
+      },
+      "moduleHasChineseDocstring": true,
+      "semanticIssueItems": 7,
+      "semanticIssues": 7
+    },
+    "python/openclaw/scheduler/engine.py": {
+      "itemBaselines": {
+        "function:_candidate_due": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_candidate_due"
+        },
+        "function:_dependency_block_reason": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_dependency_block_reason"
+        },
+        "function:_history_row": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_history_row"
+        },
+        "function:_job_state": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_job_state"
+        },
+        "function:_mark_blocked": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_mark_blocked"
+        },
+        "function:_normalize_dep": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_normalize_dep"
+        },
+        "function:_parse_iso": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_parse_iso"
+        },
+        "function:_refresh_next_scheduled": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_refresh_next_scheduled"
+        },
+        "function:_retry_metadata": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_retry_metadata"
+        },
+        "function:_update_job_state_after_run": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_update_job_state_after_run"
+        },
+        "function:active_runtime_job_keys": {
+          "issues": [],
+          "kind": "function",
+          "qualname": "active_runtime_job_keys"
+        },
+        "function:candidate_due": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "candidate_due"
+        },
+        "function:dependency_block_reason": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "dependency_block_reason"
+        },
+        "function:ensure_job_state": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "ensure_job_state"
+        },
+        "function:execute_due_jobs": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "execute_due_jobs"
+        },
+        "function:local_job_id": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "local_job_id"
+        },
+        "function:make_due_key": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "make_due_key"
+        },
+        "function:now_utc": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "now_utc"
+        },
+        "function:now_utc_iso": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "now_utc_iso"
+        },
+        "function:prune_scheduler_state_jobs": {
+          "issues": [],
+          "kind": "function",
+          "qualname": "prune_scheduler_state_jobs"
+        },
+        "function:refresh_next_scheduled": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "refresh_next_scheduled"
+        },
+        "function:run_job": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "run_job"
+        },
+        "function:run_subprocess_job": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "run_subprocess_job"
+        },
+        "function:runtime_job_key": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "runtime_job_key"
+        },
+        "module:<module>": {
+          "issues": [],
+          "kind": "module",
+          "qualname": "<module>"
+        }
+      },
+      "moduleHasChineseDocstring": true,
+      "semanticIssueItems": 22,
+      "semanticIssues": 22
+    },
+    "python/openclaw/scheduler/evidence.py": {
+      "itemBaselines": {
+        "function:_agent_group_evidence_failure": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_agent_group_evidence_failure"
+        },
+        "function:_agent_group_evidence_success": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_agent_group_evidence_success"
+        },
+        "function:_should_export_agent_group_evidence": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_should_export_agent_group_evidence"
+        },
+        "function:maybe_export_agent_group_evidence": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "maybe_export_agent_group_evidence"
+        },
+        "module:<module>": {
+          "issues": [],
+          "kind": "module",
+          "qualname": "<module>"
+        }
+      },
+      "moduleHasChineseDocstring": true,
+      "semanticIssueItems": 4,
+      "semanticIssues": 4
+    },
+    "python/openclaw/scheduler/locking.py": {
+      "itemBaselines": {
+        "function:acquire_lock": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "acquire_lock"
+        },
+        "function:lock_age_seconds": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "lock_age_seconds"
+        },
+        "function:lock_is_stale": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "lock_is_stale"
+        },
+        "function:lock_path": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "lock_path"
+        },
+        "function:pid_is_running": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "pid_is_running"
+        },
+        "function:read_lock_metadata": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "read_lock_metadata"
+        },
+        "function:release_lock": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "release_lock"
+        },
+        "function:scheduler_cycle_lock_stale_after_seconds": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "scheduler_cycle_lock_stale_after_seconds"
+        },
+        "function:scheduler_lock_metadata": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "scheduler_lock_metadata"
+        },
+        "function:scheduler_lock_stale_after_seconds": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "scheduler_lock_stale_after_seconds"
+        },
+        "module:<module>": {
+          "issues": [],
+          "kind": "module",
+          "qualname": "<module>"
+        }
+      },
+      "moduleHasChineseDocstring": true,
+      "semanticIssueItems": 10,
+      "semanticIssues": 10
+    },
+    "python/openclaw/scheduler/runtime.py": {
+      "itemBaselines": {
+        "function:_apply_env_backed_defaults": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_apply_env_backed_defaults"
+        },
+        "function:_cycle_lock_busy_sleep_seconds": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_cycle_lock_busy_sleep_seconds"
+        },
+        "function:_cycle_lock_path": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_cycle_lock_path"
+        },
+        "function:_cycle_lock_payload": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_cycle_lock_payload"
+        },
+        "function:_cycle_lock_stale_after_seconds": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_cycle_lock_stale_after_seconds"
+        },
+        "function:_flag_provided": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_flag_provided"
+        },
+        "function:_handle_stop": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_handle_stop"
+        },
+        "function:_load_env_file_into_process": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_load_env_file_into_process"
+        },
+        "function:_maintenance_state_root": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_maintenance_state_root"
+        },
+        "function:_maybe_export_agent_group_evidence": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_maybe_export_agent_group_evidence"
+        },
+        "function:_resolve_config_path": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_resolve_config_path"
+        },
+        "function:_sync_gateway_cron_jobs_projection": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_sync_gateway_cron_jobs_projection"
+        },
+        "function:build_parser": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "build_parser"
+        },
+        "function:fail": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "fail"
+        },
+        "function:main": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "main"
+        },
+        "function:maintenance_entry": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "maintenance_entry"
+        },
+        "function:read_scheduler_maintenance": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "read_scheduler_maintenance"
+        },
+        "function:run_healthcheck": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "run_healthcheck"
+        },
+        "function:scheduler_maintenance_path": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "scheduler_maintenance_path"
+        },
+        "function:write_scheduler_maintenance": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "write_scheduler_maintenance"
+        },
+        "module:<module>": {
+          "issues": [],
+          "kind": "module",
+          "qualname": "<module>"
+        }
+      },
+      "moduleHasChineseDocstring": true,
+      "semanticIssueItems": 20,
+      "semanticIssues": 20
+    },
+    "python/openclaw/scheduler/status_surface.py": {
+      "itemBaselines": {
+        "function:build_status_payload": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "build_status_payload"
+        },
+        "function:next_due_sleep_seconds": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "next_due_sleep_seconds"
+        },
+        "function:parse_iso": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "parse_iso"
+        },
+        "function:payload_fingerprint": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "payload_fingerprint"
+        },
+        "function:write_json_if_dirty": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "write_json_if_dirty"
+        },
+        "module:<module>": {
+          "issues": [],
+          "kind": "module",
+          "qualname": "<module>"
+        }
+      },
+      "moduleHasChineseDocstring": true,
+      "semanticIssueItems": 5,
+      "semanticIssues": 5
+    },
+    "python/openclaw/scheduler/subprocess_runner.py": {
+      "itemBaselines": {
+        "function:_execute_subprocess": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_execute_subprocess"
+        },
+        "function:_final_artifacts_payload": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_final_artifacts_payload"
+        },
+        "function:_finalize_run": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_finalize_run"
+        },
+        "function:_mark_job_running": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_mark_job_running"
+        },
+        "function:_running_artifacts_payload": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_running_artifacts_payload"
+        },
+        "function:_scheduler_env": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_scheduler_env"
+        },
+        "function:run_subprocess_job_impl": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "run_subprocess_job_impl"
+        },
+        "module:<module>": {
+          "issues": [],
+          "kind": "module",
+          "qualname": "<module>"
+        }
+      },
+      "moduleHasChineseDocstring": true,
+      "semanticIssueItems": 7,
+      "semanticIssues": 7
+    },
+    "python/openclaw/scheduler/subprocess_support.py": {
+      "itemBaselines": {
+        "class:SubprocessExecutionOutcome": {
+          "issues": [],
+          "kind": "class",
+          "qualname": "SubprocessExecutionOutcome"
+        },
+        "class:SubprocessRunContext": {
+          "issues": [],
+          "kind": "class",
+          "qualname": "SubprocessRunContext"
+        },
+        "function:blocked_result": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "blocked_result"
+        },
+        "function:build_command": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "build_command"
+        },
+        "function:build_run_context": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "build_run_context"
+        },
+        "function:history_result": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "history_result"
+        },
+        "function:local_job_id": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "local_job_id"
+        },
+        "function:pre_execution_failure_result": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "pre_execution_failure_result"
+        },
+        "function:resolve_command": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "resolve_command"
+        },
+        "function:result_payload": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "result_payload"
+        },
+        "function:run_materialized_dir": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "run_materialized_dir"
+        },
+        "function:run_payload": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "run_payload"
+        },
+        "function:running_result_payload": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "running_result_payload"
+        },
+        "function:runtime_job_key": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "runtime_job_key"
+        },
+        "function:safe_fragment": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "safe_fragment"
+        },
+        "function:setup_failure_result": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "setup_failure_result"
+        },
+        "function:write_run_manifests": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "write_run_manifests"
+        },
+        "module:<module>": {
+          "issues": [],
+          "kind": "module",
+          "qualname": "<module>"
+        }
+      },
+      "moduleHasChineseDocstring": true,
+      "semanticIssueItems": 15,
+      "semanticIssues": 15
+    }
+  },
+  "kind": "openclaw_repo_prod_semantic_docstring_baseline_shard",
+  "policy": {
+    "mode": "semantic-baseline-ratchet",
+    "newFilesRequireZeroSemanticIssues": true,
+    "scope": "repo-prod",
+    "trackedItemKinds": [
+      "module",
+      "class",
+      "function"
+    ]
+  },
+  "schemaVersion": 2,
+  "shardKey": "platform_scheduler"
+}

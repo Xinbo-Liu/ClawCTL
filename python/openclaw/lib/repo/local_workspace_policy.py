@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Shared truth and helpers for local workspace residue policy."""
+"""提供OpenClaw lib子系统的生产实现。"""
 from __future__ import annotations
 
 import fnmatch
@@ -31,6 +31,7 @@ CLI_EXIT_CODE = 97
 
 @dataclass(frozen=True)
 class LocalWorkspaceTarget:
+    """本地可清理工作区目标。"""
     id: str
     path: str
     target_class: str
@@ -46,6 +47,7 @@ class LocalWorkspaceTarget:
 
 @dataclass(frozen=True)
 class LocalWorkspacePolicy:
+    """本地工作区清理策略。"""
     schema_version: int
     targets: tuple[LocalWorkspaceTarget, ...]
     derived_globs: tuple[str, ...]
@@ -285,7 +287,6 @@ def _derived_residue_paths_for_policy(
     root_dir: Path,
     prune_policy_targets: bool = False,
 ) -> list[str]:
-    """按策略枚举派生残留；disposable 扫描可提前剪掉保留目标以免走进运行态大目录。"""
     fast = _derived_residue_paths_single_walk(policy, root_dir=root_dir, prune_policy_targets=prune_policy_targets)
     if fast is not None:
         return fast
@@ -305,7 +306,6 @@ def _derived_residue_paths_single_walk(
     root_dir: Path,
     prune_policy_targets: bool = False,
 ) -> list[str] | None:
-    """对标准派生残留规则做一次仓库遍历，避免每条 glob 重复扫描整仓。"""
     global_dir_leafs: set[str] = set()
     global_dir_suffixes: set[tuple[str, ...]] = set()
     global_file_patterns: set[str] = set()

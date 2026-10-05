@@ -1,0 +1,165 @@
+{
+  "fileBaselines": {
+    "python/openclaw/__init__.py": {
+      "itemBaselines": {
+        "module:<module>": {
+          "issues": [],
+          "kind": "module",
+          "qualname": "<module>"
+        }
+      },
+      "moduleHasChineseDocstring": true,
+      "semanticIssueItems": 0,
+      "semanticIssues": 0
+    },
+    "python/openclaw/cli.py": {
+      "itemBaselines": {
+        "function:_config_path_from_env": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_config_path_from_env"
+        },
+        "function:_config_path_hint": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_config_path_hint"
+        },
+        "function:_consume_selection_arg": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_consume_selection_arg"
+        },
+        "function:_print_tree_help": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_print_tree_help"
+        },
+        "function:_resolve_command_target": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_resolve_command_target"
+        },
+        "function:_selection_path_hint": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_selection_path_hint"
+        },
+        "function:fail": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "fail"
+        },
+        "function:main": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "main"
+        },
+        "function:run_target": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "run_target"
+        },
+        "module:<module>": {
+          "issues": [],
+          "kind": "module",
+          "qualname": "<module>"
+        }
+      },
+      "moduleHasChineseDocstring": true,
+      "semanticIssueItems": 9,
+      "semanticIssues": 9
+    },
+    "python/openclaw/cli_registry.py": {
+      "itemBaselines": {
+        "function:active_config_path": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "active_config_path"
+        },
+        "function:command_node": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "command_node"
+        },
+        "function:control_plane_command_tree": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "control_plane_command_tree"
+        },
+        "function:control_plane_extension_commands": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "control_plane_extension_commands"
+        },
+        "function:root_command_tree": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "root_command_tree"
+        },
+        "function:supported_control_plane_group_namespaces": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "supported_control_plane_group_namespaces"
+        },
+        "function:supported_root_commands": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "supported_root_commands"
+        },
+        "module:<module>": {
+          "issues": [],
+          "kind": "module",
+          "qualname": "<module>"
+        }
+      },
+      "moduleHasChineseDocstring": true,
+      "semanticIssueItems": 7,
+      "semanticIssues": 7
+    }
+  },
+  "kind": "openclaw_repo_prod_semantic_docstring_baseline_shard",
+  "policy": {
+    "mode": "semantic-baseline-ratchet",
+    "newFilesRequireZeroSemanticIssues": true,
+    "scope": "repo-prod",
+    "trackedItemKinds": [
+      "module",
+      "class",
+      "function"
+    ]
+  },
+  "schemaVersion": 2,
+  "shardKey": "platform_root"
+}

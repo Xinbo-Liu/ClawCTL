@@ -12,7 +12,6 @@ CURRENT_DIR="$(pwd -P)"
 source "$ROOT_DIR/scripts/lib/repo_python_env.sh"
 MOUNTS=()
 PASSTHRU=()
-
 abs_path() {
   local raw="$1"
   if [[ "$raw" = /* ]]; then
@@ -45,7 +44,6 @@ abs_path() {
   fi
   printf '%s/%s\n' "$CURRENT_DIR" "$raw"
 }
-
 maybe_add_mount() {
   local candidate="$1"
   [[ "$candidate" = /* ]] || return 0

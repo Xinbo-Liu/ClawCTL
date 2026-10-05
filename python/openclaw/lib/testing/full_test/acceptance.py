@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Acceptance and validation helpers for the full-test surface."""
+"""提供OpenClaw lib子系统的生产实现。"""
 from __future__ import annotations
 
 import shlex

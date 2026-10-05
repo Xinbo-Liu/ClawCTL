@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Scheduler job lock helpers."""
+"""提供OpenClaw 调度器子系统的生产实现。"""
 from __future__ import annotations
 
 import json
@@ -27,7 +27,6 @@ def scheduler_lock_stale_after_seconds(timeout_seconds: int) -> int:
 
 
 def scheduler_cycle_lock_stale_after_seconds(timeout_seconds: int) -> int:
-    """返回调度器主循环锁的恢复窗口，避免容器重建后被旧 cycle lock 长时间阻塞。"""
     configured = max(60, int(os.environ.get('OPENCLAW_SCHEDULER_CYCLE_LOCK_STALE_SECONDS', '120')))
     return max(configured, int(timeout_seconds) * 2)
 

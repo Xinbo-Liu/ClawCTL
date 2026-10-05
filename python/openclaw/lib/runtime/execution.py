@@ -56,7 +56,6 @@ def import_module_reference(
     exc_type: type[BaseException],
     label: str,
 ):
-    """按模块名导入目标模块，并把底层异常收口为调用方指定的错误类型。"""
     try:
         return importlib.import_module(module_name)
     except Exception as exc:
@@ -73,7 +72,6 @@ def import_callable(
     exc_type: type[BaseException],
     label: str,
 ) -> ExecutionCallable:
-    """导入模块中的 callable，用于 CLI、扩展与运行适配器的统一入口解析。"""
     module = import_module_reference(module_name, exc_type, label)
     func = getattr(module, attr_name, None)
     if not callable(func):
@@ -87,7 +85,6 @@ def validate_callable_reference(
     exc_type: type[BaseException],
     label: str,
 ) -> None:
-    """只校验 callable 引用是否可解析，不执行目标函数。"""
     import_callable(module_name, attr_name, exc_type, label)
 
 
@@ -97,7 +94,6 @@ def run_module_main(
     exc_type: type[BaseException],
     label: str,
 ) -> int:
-    """执行模块的 main(argv)，并把 None 结果规范为退出码 0。"""
     entry = import_callable(module_name, 'main', exc_type, label)
     result = entry(list(argv))
     return 0 if result is None else int(result)
@@ -138,7 +134,6 @@ def build_subprocess_env(
     base_env: dict[str, str] | None = None,
     extra_env: dict[str, str] | None = None,
 ) -> dict[str, str]:
-    """构造子进程环境，统一注入仓库 Python 路径和控制面配置上下文。"""
     env = dict(os.environ if base_env is None else base_env)
     if extra_env:
         env.update({str(key): str(value) for key, value in extra_env.items()})

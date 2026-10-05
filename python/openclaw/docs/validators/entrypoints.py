@@ -10,8 +10,10 @@ from pathlib import Path
 from openclaw.lib.repo.layout import resolve_repo_root
 from typing import Any
 
-from openclaw.docs.support.docs_registry import REGISTRY_PATH, documentation_entrypoint_entries, load_registry
+from openclaw.docs.support.docs_registry import REGISTRY_PATH, documentation_entrypoint_entries
 from openclaw.docs.support.text_contracts import check_text_contract
+from openclaw.docs.validators.registry_context import load_validator_context
+from openclaw.docs.support.shared_cache import read_text
 
 ROOT_DIR = resolve_repo_root(Path(__file__))
 
@@ -21,6 +23,7 @@ def usage() -> str:
         '用法：',
         '  bash ./scripts/docs/check_documentation_entrypoints.sh',
         '  bash ./scripts/docs/check_documentation_entrypoints.sh --stdout',
+        '  bash ./scripts/docs/check_documentation_entrypoints.sh --config-path <control-plane-config-path>',
         '',
         '说明：',
         '  检查 entrypointContract 声明的必需文本与禁止文本。',
@@ -34,7 +37,7 @@ def check_entry(entry: dict[str, Any]) -> dict[str, Any]:
     if not file_path.exists():
         errors.append(f'{rel_path} 不存在')
         return {'file_path': file_path, 'errors': errors}
-    content = file_path.read_text(encoding='utf-8')
+    content = read_text(file_path)
     errors.extend(
         check_text_contract(
             rel_path=rel_path,
@@ -49,28 +52,20 @@ def check_entry(entry: dict[str, Any]) -> dict[str, Any]:
 
 def main(argv: list[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
-    stdout = False
-    for arg in args:
-        if arg == '--stdout':
-            stdout = True
-        elif arg in {'-h', '--help'}:
-            stdout_write(f'{usage()}\n')
-            return 0
-        else:
-            stderr_write(f'[check_documentation_entrypoints][FAIL] 未知参数：{arg}\n')
-            stderr_write(f'{usage()}\n')
-            return 2
-    try:
-        registry = load_registry()
-    except Exception as exc:
-        stderr_write(f'[check_documentation_entrypoints][FAIL] {exc}\n')
-        return 1
-    entries = documentation_entrypoint_entries(registry)
+    context = load_validator_context(
+        args,
+        usage_text=usage(),
+        error_prefix='[check_documentation_entrypoints][FAIL]',
+        root_dir=ROOT_DIR,
+    )
+    if isinstance(context, int):
+        return context
+    entries = documentation_entrypoint_entries(context.registry)
     results = [check_entry(entry) for entry in entries]
     errors = [error for item in results for error in item['errors']]
-    if stdout:
+    if context.stdout:
         stdout_write(
-            f'[check_documentation_entrypoints] registry={REGISTRY_PATH.relative_to(ROOT_DIR)} '
+            f'[check_documentation_entrypoints] registry={REGISTRY_PATH.relative_to(ROOT_DIR)} config={context.config_label} '
             f'entries={len(entries)}\n'
         )
         for item in results:

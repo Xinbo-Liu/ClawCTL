@@ -5,8 +5,26 @@ import sys
 from pathlib import Path
 
 from openclaw.docs.support import reference_specs as specs
+from openclaw.lib.repo.static_truth import repo_contract_relpath
 
 ROOT_DIR = specs.ROOT_DIR
+
+
+def usage() -> str:
+    """渲染脚本目录说明生成器的命令行帮助。
+
+    返回：
+        返回 str，表示脚本目录说明生成器的命令行帮助文本。
+    """
+    return '\n'.join([
+        '用法：',
+        '  python -m openclaw.docs.renderers.script_catalog [--check|--stdout]',
+        '  python -m openclaw.docs.renderers.script_catalog [--control-plane-profile <profile-id>]',
+        '',
+        '说明：',
+        f'  根据 {repo_contract_relpath("governance.script_catalog_surface")} 渲染 scripts/README.md。',
+        '  --control-plane-profile 不改变输出；脚本目录说明固定按脚本清单生成。',
+    ])
 
 
 def collect_script_files(dir_path: Path, base_dir: Path | None = None) -> list[str]:
@@ -49,20 +67,39 @@ def validate_catalog_against_filesystem(root_dir: Path) -> list[str]:
 def render_entry(argv: list[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
     mode = 'write'
-    if '--check' in args:
-        mode = 'check'
-    elif '--stdout' in args:
-        mode = 'stdout'
     index = 0
     while index < len(args):
         arg = args[index]
-        if arg == '--config-path':
+        if arg == '--check':
+            mode = 'check'
+        elif arg == '--stdout':
+            mode = 'stdout'
+        elif arg == '--config-path':
             index += 1
             if index >= len(args):
                 sys.stderr.write('[render_script_docs] --config-path 缺少路径参数\n')
+                sys.stderr.write(f'{usage()}\n')
                 return 2
         elif arg.startswith('--config-path=') and not arg.split('=', 1)[1].strip():
             sys.stderr.write('[render_script_docs] --config-path 缺少路径参数\n')
+            sys.stderr.write(f'{usage()}\n')
+            return 2
+        elif arg == '--control-plane-profile':
+            index += 1
+            if index >= len(args) or not str(args[index]).strip():
+                sys.stderr.write('[render_script_docs] --control-plane-profile 缺少 profile 参数\n')
+                sys.stderr.write(f'{usage()}\n')
+                return 2
+        elif arg.startswith('--control-plane-profile=') and not arg.split('=', 1)[1].strip():
+            sys.stderr.write('[render_script_docs] --control-plane-profile 缺少 profile 参数\n')
+            sys.stderr.write(f'{usage()}\n')
+            return 2
+        elif arg in {'-h', '--help'}:
+            sys.stdout.write(f'{usage()}\n')
+            return 0
+        else:
+            sys.stderr.write(f'[render_script_docs] 未知参数：{arg}\n')
+            sys.stderr.write(f'{usage()}\n')
             return 2
         index += 1
     errors = validate_catalog_against_filesystem(ROOT_DIR) + specs.validate_script_surface_manifest()

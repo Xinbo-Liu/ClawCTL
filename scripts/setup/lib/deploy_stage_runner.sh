@@ -23,12 +23,25 @@ _deploy_run_step() {
 
 # 执行 release 对齐检查，并将失败语义写入部署日志。
 deploy_run_release_check() {
+  local output_file=''
+  local exit_code=0
+  local err_trap=''
   flow_log_line "$LOG_PATH" "[STEP] check_openclaw_release"
   flow_set_var CURRENT_STAGE_NAME check_openclaw_release
+  output_file="$(mktemp)"
+  err_trap="$(trap -p ERR || true)"
+  trap - ERR
   set +e
-  IMAGE_ENV_DEPLOY_ENV_PATH="$ENV_FILE" bash "$ROOT_DIR/scripts/images/check_openclaw_release.sh" 2>&1 | flow_redact_sensitive_stream | tee -a "$LOG_PATH"
-  local exit_code=${PIPESTATUS[0]}
+  IMAGE_ENV_DEPLOY_ENV_PATH="$ENV_FILE" bash "$ROOT_DIR/scripts/images/check_openclaw_release.sh" >"$output_file" 2>&1
+  exit_code=$?
   set -e
+  if [[ -n "$err_trap" ]]; then
+    eval "$err_trap"
+  else
+    trap - ERR
+  fi
+  flow_redact_sensitive_stream <"$output_file" | tee -a "$LOG_PATH"
+  rm -f "$output_file"
   if [[ "$exit_code" -eq 0 ]]; then
     flow_log_line "$LOG_PATH" "[OK] check_openclaw_release"
     return 0
@@ -114,6 +127,10 @@ deploy_run_ingress_boundary_evidence_stage() {
 # 按阶段注册表执行指定阶段命令。
 deploy_run_registered_stage() {
   local stage="$1"
+  if [[ -n "${DEPLOY_STAGE_INTERNAL_RUNNER_MAP[$stage]:-}" && "$stage" == "check_openclaw_release" ]]; then
+    deploy_run_release_check
+    return $?
+  fi
   deploy_stage_prepare_command "$stage"
   if [[ "$stage" == "check_ingress_boundary_evidence" ]]; then
     deploy_run_ingress_boundary_evidence_stage

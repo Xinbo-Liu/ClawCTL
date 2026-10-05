@@ -1,1 +1,1 @@
-"""Canonical helpers for deploy_success summary surface."""
+"""提供OpenClaw setup子系统的生产实现。"""

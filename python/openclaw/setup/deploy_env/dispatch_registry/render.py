@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Render-side helpers for deploy-env dispatch registry operations."""
+"""提供OpenClaw setup子系统的生产实现。"""
 from __future__ import annotations
 
 import json
@@ -81,12 +81,6 @@ def collect_model_env_requirements(registry: dict[str, Any], *, include_api_key:
 
 
 def collect_extension_runtime_env_names(config_path: Path, *, schema: dict[str, Any] | None = None) -> list[str]:
-    """把 active profile 的扩展部署变量带入 scheduler 类运行态 env。
-
-    长连接 listener 和正式 agent bin 都在 scheduler 运行态内执行；扩展专属
-    provider 凭据、通知目标、机器人 mention 身份和角色清单不能只停留在
-    deploy/.env 派生产物之外。
-    """
     schema = schema if schema is not None else load_schema(config_path=config_path)
     result: list[str] = []
     for field in schema.get('fields', []):

@@ -13,6 +13,12 @@ def register_group_evidence_commands(
     *,
     default_config: str,
 ) -> None:
+    """registergroup证据命令集合。
+
+    参数：
+        subparsers（argparse._SubParsersAction[argparse.ArgumentParser]）：subparsers。
+        default_config（str）：default配置。
+    """
     agent_access_log_parser = register_config_only(
         subparsers,
         default_config=default_config,
@@ -39,15 +45,6 @@ def register_group_evidence_commands(
     agent_group_access_parser.add_argument('--group-ref', default='')
     agent_group_access_parser.add_argument('--status', default='')
     agent_group_access_parser.add_argument('--source', default='')
-
-    agent_group_acceptance_bindings_parser = register_config_only(
-        subparsers,
-        default_config=default_config,
-        command='agent-group-acceptance-bindings',
-        help_text='输出 agent-group acceptance binding 摘要',
-        handler=handlers.cmd_agent_group_acceptance_bindings,
-    )
-    agent_group_acceptance_bindings_parser.add_argument('--group-ref', default='')
 
     agent_group_release_gates_parser = register_config_only(
         subparsers,

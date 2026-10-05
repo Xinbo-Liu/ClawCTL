@@ -5,7 +5,6 @@ if [[ -n "${OPENCLAW_LOCAL_WORKSPACE_POLICY_SH_LOADED:-}" ]]; then
   return 0 2>/dev/null || exit 0
 fi
 OPENCLAW_LOCAL_WORKSPACE_POLICY_SH_LOADED=1
-
 openclaw_local_workspace_policy_shell_path() {
   local raw_path="${1-}"
   if command -v cygpath >/dev/null 2>&1 && [[ "$raw_path" =~ ^[A-Za-z]:[\\/].*$ ]]; then
@@ -27,7 +26,6 @@ repo_contract_assign_relpath OPENCLAW_LOCAL_WORKSPACE_POLICY_REL_PATH governance
 repo_contract_assign_relpath OPENCLAW_LOCAL_WORKSPACE_INSTALL_DEFAULTS_REL_PATH governance.install_defaults
 OPENCLAW_LOCAL_WORKSPACE_POLICY_PATH="$OPENCLAW_LOCAL_WORKSPACE_POLICY_ROOT_DIR/$OPENCLAW_LOCAL_WORKSPACE_POLICY_REL_PATH"
 OPENCLAW_LOCAL_WORKSPACE_INSTALL_DEFAULTS_PATH="$OPENCLAW_LOCAL_WORKSPACE_POLICY_ROOT_DIR/$OPENCLAW_LOCAL_WORKSPACE_INSTALL_DEFAULTS_REL_PATH"
-
 openclaw_local_workspace_policy_wait_for_file() {
   local target_path="$1"
   target_path="$(openclaw_local_workspace_policy_shell_path "$target_path")"
@@ -39,12 +37,10 @@ openclaw_local_workspace_policy_wait_for_file() {
   done
   return 1
 }
-
 openclaw_local_workspace_policy_trim_cr() {
   local value="${1-}"
   printf '%s\n' "${value%$'\r'}"
 }
-
 openclaw_local_workspace_policy_require_runtime() {
   openclaw_local_workspace_policy_wait_for_file "$OPENCLAW_LOCAL_WORKSPACE_POLICY_PATH" || {
     echo "[local_workspace_policy][FAIL] 缺少真源：$OPENCLAW_LOCAL_WORKSPACE_POLICY_PATH" >&2
@@ -55,7 +51,6 @@ openclaw_local_workspace_policy_require_runtime() {
     return 97
   }
 }
-
 openclaw_local_workspace_policy_require_jq() {
   openclaw_local_workspace_policy_require_runtime
   command -v jq >/dev/null 2>&1 || {
@@ -63,12 +58,10 @@ openclaw_local_workspace_policy_require_jq() {
     return 97
   }
 }
-
 openclaw_local_workspace_policy_use_jq() {
   [[ "${OPENCLAW_LOCAL_WORKSPACE_POLICY_FORCE_AWK:-0}" == '1' ]] && return 1
   command -v jq >/dev/null 2>&1
 }
-
 openclaw_local_workspace_policy_jq() {
   local target_rel="${1:?target_rel is required}"
   shift
@@ -84,7 +77,6 @@ openclaw_local_workspace_policy_jq() {
     jq -r "$@" < "$target_file"
   )
 }
-
 openclaw_local_workspace_policy_json_string_awk() {
   local target_file="$1"
   local key="$2"
@@ -125,7 +117,6 @@ openclaw_local_workspace_policy_json_string_awk() {
     }
   ' "$target_file"
 }
-
 openclaw_local_workspace_policy_target_records_awk() {
   local row_sep=$'\037'
   awk -v row_sep="$row_sep" '
@@ -222,7 +213,6 @@ openclaw_local_workspace_policy_target_records_awk() {
     }
   ' "$OPENCLAW_LOCAL_WORKSPACE_POLICY_PATH"
 }
-
 openclaw_local_workspace_policy_derived_globs_awk() {
   awk '
     function json_array_string(line,    value) {
@@ -261,13 +251,11 @@ openclaw_local_workspace_policy_derived_globs_awk() {
     }
   ' "$OPENCLAW_LOCAL_WORKSPACE_POLICY_PATH"
 }
-
 openclaw_local_workspace_policy_normalize_rel_path() {
   local normalized=''
   openclaw_local_workspace_policy_normalize_rel_path_assign normalized "${1-}" || return $?
   printf '%s\n' "$normalized"
 }
-
 openclaw_local_workspace_policy_normalize_rel_path_assign() {
   local __target_var="${1:?target var is required}"
   local raw="${2-}"
@@ -293,13 +281,11 @@ openclaw_local_workspace_policy_normalize_rel_path_assign() {
   esac
   printf -v "$__target_var" '%s' "$raw"
 }
-
 openclaw_local_workspace_policy_resolve_truth_ref() {
   local resolved=''
   openclaw_local_workspace_policy_resolve_truth_ref_assign resolved "${1:?truth_ref is required}" || return $?
   printf '%s\n' "$resolved"
 }
-
 openclaw_local_workspace_policy_resolve_truth_ref_assign() {
   local __target_var="${1:?target var is required}"
   local truth_ref="${2:?truth_ref is required}"
@@ -332,11 +318,9 @@ openclaw_local_workspace_policy_resolve_truth_ref_assign() {
       ;;
   esac
 }
-
 openclaw_local_workspace_policy_dedupe_lines() {
   awk '!seen[$0]++'
 }
-
 openclaw_local_workspace_policy_target_rows() {
   openclaw_local_workspace_policy_require_runtime || return $?
   local row_sep=$'\037'
@@ -378,20 +362,16 @@ openclaw_local_workspace_policy_target_rows() {
     fi
   )
 }
-
 openclaw_local_workspace_policy_targets() {
   openclaw_local_workspace_policy_target_rows
 }
-
 openclaw_local_workspace_policy_host_state_root() {
   openclaw_local_workspace_policy_resolve_truth_ref host_state_root
 }
-
 openclaw_local_workspace_policy_truth_path() {
   local truth_ref="${1:?truth_ref is required}"
   openclaw_local_workspace_policy_resolve_truth_ref "$truth_ref"
 }
-
 openclaw_local_workspace_policy_default_cleanup_targets() {
   openclaw_local_workspace_policy_require_runtime || return $?
   local rel_path=''
@@ -434,7 +414,6 @@ openclaw_local_workspace_policy_default_cleanup_targets() {
     fi
   done < <(openclaw_local_workspace_policy_target_records_awk)
 }
-
 openclaw_local_workspace_policy_target_paths() {
   local rel_path=''
   while IFS=$'\t' read -r _target_id rel_path _target_class _cleanup_by_default _gitignore_pattern; do
@@ -442,7 +421,6 @@ openclaw_local_workspace_policy_target_paths() {
     printf '%s\n' "$rel_path"
   done < <(openclaw_local_workspace_policy_target_rows)
 }
-
 openclaw_local_workspace_policy_iter_derived_globs() {
   openclaw_local_workspace_policy_require_runtime || return $?
   if openclaw_local_workspace_policy_use_jq; then
@@ -451,7 +429,6 @@ openclaw_local_workspace_policy_iter_derived_globs() {
   fi
   openclaw_local_workspace_policy_derived_globs_awk | tr -d '\r'
 }
-
 openclaw_local_workspace_policy_gitignore_patterns() {
   local pattern=''
   while IFS=$'\t' read -r _target_id _rel_path _target_class _cleanup_by_default pattern; do
@@ -460,7 +437,6 @@ openclaw_local_workspace_policy_gitignore_patterns() {
   done < <(openclaw_local_workspace_policy_target_rows)
   openclaw_local_workspace_policy_iter_derived_globs
 }
-
 openclaw_local_workspace_policy_bundle_excludes() {
   local rel_path=''
   while IFS=$'\t' read -r _target_id rel_path _target_class _cleanup_by_default _pattern; do
@@ -469,7 +445,6 @@ openclaw_local_workspace_policy_bundle_excludes() {
   done < <(openclaw_local_workspace_policy_target_rows)
   openclaw_local_workspace_policy_iter_derived_globs
 }
-
 openclaw_local_workspace_policy_expand_glob() {
   local pattern="${1:?pattern is required}"
   local expr="$pattern"
@@ -492,7 +467,6 @@ openclaw_local_workspace_policy_expand_glob() {
     done | LC_ALL=C sort
   )
 }
-
 openclaw_local_workspace_policy_find_pruned() {
   (
     cd "$OPENCLAW_LOCAL_WORKSPACE_POLICY_ROOT_DIR" || exit 97
@@ -517,7 +491,6 @@ openclaw_local_workspace_policy_find_pruned() {
       \) -print -prune -o -print
   )
 }
-
 openclaw_local_workspace_policy_find_recursive_suffix_matches() {
   (( $# > 0 )) || return 0
   (
@@ -560,7 +533,6 @@ openclaw_local_workspace_policy_find_recursive_suffix_matches() {
       \) -prune -o -false
   )
 }
-
 openclaw_local_workspace_policy_derived_residue_paths() {
   local pattern=''
   local expr=''
@@ -596,7 +568,6 @@ openclaw_local_workspace_policy_derived_residue_paths() {
     done
   } | LC_ALL=C sort -u
 }
-
 openclaw_local_workspace_policy_disposable_paths() {
   openclaw_local_workspace_policy_require_runtime || return $?
   local cleanup_target=''

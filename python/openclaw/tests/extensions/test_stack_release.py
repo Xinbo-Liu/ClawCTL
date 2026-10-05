@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import argparse
+import io
 import json
 import subprocess
 import unittest
+from contextlib import redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
 
@@ -13,6 +16,7 @@ from openclaw.control_plane.stack.release import (
     StackReleaseError,
     base_release_bundle_hash,
     build_stack_lock_payload,
+    cmd_verify,
     materialize_stack,
     main as stack_release_main,
     update_stack_source_provenance,
@@ -84,6 +88,23 @@ def _commit_all(git, path: Path, message: str) -> str:
 
 
 class StackReleaseTest(unittest.TestCase):
+    def test_cmd_verify_json_returns_nonzero_when_payload_fails(self) -> None:
+        args = argparse.Namespace(
+            repo_root=str(ROOT_DIR),
+            lock_path='',
+            source_metadata='',
+            strict_release=True,
+            json=True,
+        )
+
+        with patch(
+            'openclaw.control_plane.stack.release.verify_stack_lock',
+            return_value={'status': 'fail', 'issues': ['stack lock drift']},
+        ), redirect_stdout(io.StringIO()):
+            exit_code = cmd_verify(args)
+
+        self.assertEqual(exit_code, 1)
+
     def test_build_stack_lock_records_base_versions_and_extension_hashes(self) -> None:
         with isolated_test_root('stack-release-build') as repo_root:
             fixture = materialize_managed_probe_extension(repo_root, base_repo_root=ROOT_DIR)
@@ -134,6 +155,25 @@ class StackReleaseTest(unittest.TestCase):
             for path in protected_files:
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_text('runtime-local\n', encoding='utf-8')
+
+            after = base_release_bundle_hash(repo_root)
+
+        self.assertEqual(after, before)
+
+    def test_base_release_bundle_excludes_local_tool_caches(self) -> None:
+        with isolated_test_root('stack-release-tool-cache-hash') as repo_root:
+            ensure_repo_markers(repo_root, ROOT_DIR)
+            _set_platform_version(repo_root, '1.0.0')
+            before = base_release_bundle_hash(repo_root)
+            cache_files = [
+                repo_root / '__pycache__' / 'module.pyc',
+                repo_root / '.pytest_cache' / 'v' / 'cache' / 'nodeids',
+                repo_root / '.mypy_cache' / '3.12' / 'module.meta.json',
+                repo_root / '.ruff_cache' / '0.15.13' / 'lint-result',
+            ]
+            for path in cache_files:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(b'local-cache\x00payload')
 
             after = base_release_bundle_hash(repo_root)
 
@@ -728,6 +768,31 @@ class StackReleaseTest(unittest.TestCase):
         self.assertEqual(result['status'], 'ok', msg=result)
         self.assertEqual(provenance['base']['commit'], commit)
         self.assertEqual(provenance['extensions'][fixture.extension_id]['commit'], commit)
+
+    def test_plain_lock_in_materialized_directory_requires_source_metadata(self) -> None:
+        with isolated_test_root('stack-release-materialized-lock-requires-source-metadata') as repo_root:
+            fixture = materialize_managed_probe_extension(repo_root, base_repo_root=ROOT_DIR)
+            _set_platform_version(repo_root, '1.0.0')
+            _with_stack_metadata(fixture.manifest_path, version='1.0.0', compat='>=1.0.0')
+            write_lock(repo_root)
+            update_stack_source_provenance(
+                repo_root,
+                source_metadata={
+                    'base': {
+                        'repo': 'https://example.invalid/base.git',
+                        'commit': 'b' * 40,
+                        'releaseBundleHash': base_release_bundle_hash(repo_root),
+                    }
+                },
+            )
+            _with_stack_metadata(fixture.manifest_path, version='1.1.0', compat='>=1.0.0')
+
+            code = stack_release_main(['lock', '--repo-root', str(repo_root)])
+            provenance = json.loads((repo_root / EXTENSIONS_PROVENANCE_REL_PATH).read_text(encoding='utf-8'))
+
+        self.assertEqual(code, 2)
+        self.assertEqual(provenance['base']['commit'], 'b' * 40)
+        self.assertEqual(provenance['extensions'][fixture.extension_id]['commit'], 'b' * 40)
 
     def test_strict_verify_accepts_lock_only_commit_with_release_equivalent_base(self) -> None:
         with isolated_test_root('stack-release-worktree-lock-only-commit') as repo_root:

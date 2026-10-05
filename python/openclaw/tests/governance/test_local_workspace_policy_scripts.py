@@ -178,6 +178,17 @@ class LocalWorkspacePolicyScriptsTest(unittest.TestCase):
         assert_static_text_absent(self, 'openclaw_repo_default_python_bin', policy_shell)
         assert_static_text_absent(self, 'openclaw.lib.repo.local_workspace_policy', policy_shell)
 
+    def test_export_check_only_does_not_create_default_output_dir(self) -> None:
+        export_text = EXPORT_SCRIPT.read_text(encoding='utf-8')
+
+        check_only_index = export_text.index('if [[ "$CHECK_ONLY" == \'1\' ]]; then')
+        default_output_index = export_text.index('default_name="$(default_output_name "$BUNDLE_ID")"')
+        mkdir_output_index = export_text.index('mkdir -p "$(dirname "$OUTPUT_PATH")"')
+
+        self.assertLess(check_only_index, default_output_index)
+        self.assertLess(check_only_index, mkdir_output_index)
+        self.assertIn('run_bundle_python -m openclaw.release.bundle_governance validate --bundle "$BUNDLE_ID"', export_text)
+
     def test_local_workspace_policy_shell_awk_fallback_is_self_contained(self) -> None:
         source = (ROOT_DIR / 'scripts' / 'lib' / 'local_workspace_policy.sh').read_text(encoding='utf-8')
 

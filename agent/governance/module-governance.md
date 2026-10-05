@@ -13,26 +13,26 @@
 
 ### 1. `agent/extensions/<extension-id>/agent/modules/<module_ref>/`
 
-| 资产                                              | 责任                                                                        |
-|-------------------------------------------------|---------------------------------------------------------------------------|
+| 资产                                            | 责任                                                                                    |
+|-------------------------------------------------|-----------------------------------------------------------------------------------------|
 | `module.json`                                   | 模块身份、ownerDomain、contract、operations、runtime、assembly 与 controlPlane 派生真源 |
-| `README.md`                                     | 模块职责、输入输出、运行方式与依赖说明                                                       |
-| `skills.md` / `permissions.json` / `tools.json` | 模块局部能力边界                                                                  |
-| `bin/<module_ref>`                              | 薄启动入口；统一桥接到主仓库 runtime 入口                                                 |
+| `README.md`                                     | 模块职责、输入输出、运行方式与依赖说明                                                  |
+| `skills.md` / `permissions.json` / `tools.json` | 模块局部能力边界                                                                        |
+| `bin/<module_ref>`                              | 薄启动入口；统一桥接到主仓库 runtime 入口                                               |
 
 ### 2. `agent/extensions/<extension-id>/python/<python-package>/modules/<module_ref>/`
 
-| 资产           | 责任                 |
-|--------------|--------------------|
-| `main.py`    | 模块主运行入口或 CLI 入口    |
+| 资产             | 责任                                 |
+|------------------|--------------------------------------|
+| `main.py`        | 模块主运行入口或 CLI 入口            |
 | 其他 Python 文件 | 单模块私有编排、视图、校验与业务实现 |
 
 ### 3. `agent/extensions/<extension-id>/tests/`
 
-| 资产                                   | 责任                             |
-|--------------------------------------|--------------------------------|
-| `tests/modules/<module_ref>/`        | 模块 smoke / regression 测试       |
-| `tests/unit/` / `tests/regression/`  | 扩展级单元、回归与业务链路测试                |
+| 资产                                 | 责任                                                 |
+|--------------------------------------|------------------------------------------------------|
+| `tests/modules/<module_ref>/`        | 模块 smoke / regression 测试                         |
+| `tests/unit/` / `tests/regression/`  | 扩展级单元、回归与业务链路测试                       |
 | `tests/support/` / `tests/fixtures/` | 扩展测试私有辅助代码与 fixture，不进入主仓库测试真源 |
 
 `tests/` 根目录和包含 Python 测试或辅助源码的直接子目录必须提供 `__init__.py` 字节码守卫；守卫必须禁写 bytecode 并清理本目录 `__pycache__`。这些 package marker 只服务测试导入与缓存治理，不改变 agent authoring 边界。
@@ -50,3 +50,4 @@
 2. 单模块私有 Python 只能进入 `agent/extensions/<extension-id>/python/<python-package>/modules/<module_ref>/`；shell / control-check 模块的薄启动器也只能停留在模块目录 `bin/`，实现逻辑进入模块私有 Python 或扩展包共享 Python domains。
 3. 跨模块共享逻辑必须进入扩展包内领域共享层，不得通过读取其他模块目录形成隐式耦合。
 4. 模块 README 必须能明确说明“做什么、不做什么、依赖什么、输出什么、如何运行”。
+5. 模块运行视图从 `module.json` 派生；README、job JSON 和脚本帮助不得维护并列快照。主仓库 `agent/control_plane/jobs/*.json` 也不得重复声明应由模块清单派生的合同字段。

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Payload helpers for the agent governance baseline doctor."""
+"""提供OpenClaw doctor子系统的生产实现。"""
 from __future__ import annotations
 
 from pathlib import Path
@@ -7,7 +7,6 @@ from typing import Any
 
 
 def resolve_governance_baseline_config_path(config_path: Path | None, *, root_dir: Path) -> Path:
-    """解析治理基线检查应使用的配置路径。"""
     return Path(config_path or (root_dir / 'config' / 'control_plane' / 'service.json')).resolve()
 
 
@@ -20,7 +19,6 @@ def build_governance_baseline_payload(
     workspace_registry: dict[str, Any],
     errors: list[str],
 ) -> dict[str, Any]:
-    """构造治理基线检查结果载荷。"""
     return {
         'ok': not errors,
         'root': str(root_dir),

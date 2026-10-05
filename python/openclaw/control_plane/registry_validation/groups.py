@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Group-level runtime validation helpers for the control-plane registry."""
+"""提供OpenClaw 控制平面子系统的生产实现。"""
 from __future__ import annotations
 
 from pathlib import Path
@@ -9,11 +9,8 @@ from openclaw.control_plane.registry.owners import qualified_registry_id, row_ow
 from openclaw.control_plane.registry.binding_topology import _derive_group_agent_views
 from openclaw.control_plane.registry_validation.runtime_policy import _normalize_group_recovery_policy
 from openclaw.control_plane.registry.support import _AGENT_GROUP_RELEASE_CHECK_IDS, _ensure_unique_text_list
-from openclaw.control_plane.surfaces import load_testing_manifest
 from openclaw.lib.cli.common import CliError
-from openclaw.lib.control_plane.object_families import get_family
 from openclaw.lib.io.json_access import json_object
-from openclaw.lib.repo.static_truth import repo_contract_path
 from openclaw.scheduler.cron import resolve_timezone
 
 
@@ -23,48 +20,6 @@ def _path_is_relative_to(path: Path, base: Path) -> bool:
         return True
     except ValueError:
         return False
-
-
-def _runtime_acceptance_truth(
-    repo_root: Path,
-    *,
-    config_path: Path | None = None,
-    extensions: list[dict[str, Any]] | None = None,
-) -> dict[str, set[str]]:
-    """加载运行态 acceptance 真源集合。"""
-    testing_manifest_path = repo_contract_path('runtime.testing_manifest', root_dir=repo_root)
-    payload = load_testing_manifest(testing_manifest_path, config_path=config_path, extensions=extensions)
-    acceptance = json_object(payload.get('acceptance_reference'))
-    required_checks = set(
-        _ensure_unique_text_list(
-            acceptance.get('required_checks'),
-            label='runtime testing manifest acceptance_reference.required_checks',
-        )
-    )
-    required_run_ledger_jobs = set(
-        _ensure_unique_text_list(
-            acceptance.get('required_run_ledger_jobs'),
-            label='runtime testing manifest acceptance_reference.required_run_ledger_jobs',
-        )
-    )
-    runtime_evidence_ids = {
-        str(item.get('id') or '').strip()
-        for item in (
-            get_family(
-                'runtime_evidence',
-                repo_root,
-                config_path=config_path,
-                resolve_paths=False,
-                extensions=extensions,
-            ).get('entries') or []
-        )
-        if isinstance(item, dict) and str(item.get('id') or '').strip()
-    }
-    return {
-        'required_checks': required_checks,
-        'required_run_ledger_jobs': required_run_ledger_jobs,
-        'runtime_evidence_ids': runtime_evidence_ids,
-    }
 
 
 def _validate_group_topology_and_members(
@@ -179,45 +134,6 @@ def _resolve_group_release_gate(group_id: str, release_policy: dict[str, Any]) -
     }
 
 
-def _resolve_group_acceptance_binding(
-    group_id: str,
-    release_policy: dict[str, Any],
-    *,
-    acceptance_truth: dict[str, set[str]],
-    schedule_job_refs: list[str],
-) -> dict[str, Any]:
-    acceptance_binding = json_object(release_policy.get('acceptanceBinding'))
-    deployment_acceptance_check_ids = _ensure_unique_text_list(
-        acceptance_binding.get('deploymentAcceptanceCheckIds'),
-        label=f'agent group {group_id} releasePolicy.acceptanceBinding.deploymentAcceptanceCheckIds',
-    )
-    unknown_acceptance_check_ids = sorted(set(deployment_acceptance_check_ids) - acceptance_truth['required_checks'])
-    if unknown_acceptance_check_ids:
-        raise CliError(f'agent group {group_id} unknown deployment acceptance checks: {", ".join(unknown_acceptance_check_ids)}', 2)
-    runtime_evidence_entry_ids = _ensure_unique_text_list(
-        acceptance_binding.get('runtimeEvidenceEntryIds'),
-        label=f'agent group {group_id} releasePolicy.acceptanceBinding.runtimeEvidenceEntryIds',
-    )
-    unknown_runtime_evidence_ids = sorted(set(runtime_evidence_entry_ids) - acceptance_truth['runtime_evidence_ids'])
-    if unknown_runtime_evidence_ids:
-        raise CliError(f'agent group {group_id} unknown runtime evidence ids: {", ".join(unknown_runtime_evidence_ids)}', 2)
-    required_run_ledger_job_refs = _ensure_unique_text_list(
-        acceptance_binding.get('requiredRunLedgerJobRefs'),
-        label=f'agent group {group_id} releasePolicy.acceptanceBinding.requiredRunLedgerJobRefs',
-    )
-    if not set(required_run_ledger_job_refs).issubset(set(schedule_job_refs)):
-        raise CliError(f'agent group {group_id} requiredRunLedgerJobRefs must be subset of scheduleJobRefs', 2)
-    unknown_required_run_ledger_job_refs = sorted(set(required_run_ledger_job_refs) - acceptance_truth['required_run_ledger_jobs'])
-    if unknown_required_run_ledger_job_refs:
-        raise CliError(f'agent group {group_id} unknown required_run_ledger_jobs: {", ".join(unknown_required_run_ledger_job_refs)}', 2)
-    return {
-        'deploymentAcceptanceCheckIds': deployment_acceptance_check_ids,
-        'runtimeEvidenceEntryIds': runtime_evidence_entry_ids,
-        'requiredRunLedgerJobRefs': required_run_ledger_job_refs,
-        'notes': [str(item).strip() for item in (acceptance_binding.get('notes') or []) if str(item).strip()],
-    }
-
-
 def _resolve_group_rollback_contract(group_id: str, release_policy: dict[str, Any]) -> dict[str, Any]:
     rollback_contract = json_object(release_policy.get('rollbackContract'))
     trigger_signals = _ensure_unique_text_list(
@@ -249,8 +165,6 @@ def _resolve_group_release_policy(
     group: dict[str, Any],
     *,
     repo_root: Path,
-    acceptance_truth: dict[str, set[str]],
-    schedule_job_refs: list[str],
 ) -> dict[str, Any]:
     release_policy = json_object(group.get('releasePolicy'))
     single_source_docs = _ensure_unique_text_list(
@@ -271,12 +185,6 @@ def _resolve_group_release_policy(
             label=f'agent group {group_id} releasePolicy.requiredEvidence',
         ),
         'releaseGate': _resolve_group_release_gate(group_id, release_policy),
-        'acceptanceBinding': _resolve_group_acceptance_binding(
-            group_id,
-            release_policy,
-            acceptance_truth=acceptance_truth,
-            schedule_job_refs=schedule_job_refs,
-        ),
         'rollbackContract': _resolve_group_rollback_contract(group_id, release_policy),
     }
 
@@ -287,6 +195,13 @@ def _materialize_group_resolved_fields(
     topology_state: dict[str, Any],
     release_policy: dict[str, Any],
 ) -> None:
+    """materializegroupresolvedfields。
+
+    参数：
+        group（dict[str, Any]）：group。
+        topology_state（dict[str, Any]）：topology状态。
+        release_policy（dict[str, Any]）：release策略。
+    """
     group['resolvedMembers'] = topology_state['members']
     group['resolvedEntryAgentRefs'] = topology_state['entryAgentRefs']
     group['resolvedExitAgentRefs'] = topology_state['exitAgentRefs']

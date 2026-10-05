@@ -4,7 +4,7 @@
     "run_failure_doc": "docs/operations/troubleshooting.md"
   },
   "intro": [
-    "本页只负责统一说明 `setup flow deploy-failure` 控制面的人工入口、失败摘要结构与输出边界。",
+    "`setup flow deploy-failure` 控制面提供失败摘要的查询与写出入口，记录失败阶段、排障结论和下一步动作。",
     "`summary_hint` 与阶段级 `next_steps` 由 `deploy_flow_control_plane` 基于失败阶段动态生成；setup 主链失败分流总览统一回到 `docs/operations/troubleshooting.md`。",
     "run_failure 的 fixed latest mirror 读取 `config/governance/release/summary_manifest.json`；失败摘要标题与固定分节统一来自 `config/governance/docs/summary_output_surface.json`。",
     "`write-failure-summary` 写出 run-specific 摘要的同时，也会把最近一次 one_click_deploy 失败摘要镜像到 `<current-host-state-root>/control_plane/setup/one_click_deploy.latest.summary.*`。",
@@ -24,8 +24,8 @@
     "next_steps_heading": "[run_failure] 下一步动作："
   },
   "boundary": [
-    "失败阶段标签、summary_hint 与动态 next steps 统一来自 deploy flow 真源；本页只引用同一套阶段顺序与 resume-from 规则。",
-    "setup 主链分流、basic gate / deploy / full test 的默认第一跳入口统一查看 docs/operations/troubleshooting.md；本页只负责失败摘要结构与控制面入口。",
+    "失败阶段标签、summary_hint 与 next steps 按 deploy flow 声明的阶段顺序与 resume-from 规则生成。",
+    "setup 主链、basic gate / deploy / full test 的故障分流见 docs/operations/troubleshooting.md；失败摘要控制面负责记录诊断并给出阶段恢复命令。",
     "one_click_deploy 的正式阶段说明与恢复执行入口以 `docs/getting-started/quickstart.md` 为准。",
     "部署镜像合同、统一镜像状态命令与离线归档命名以 `docs/getting-started/image-preparation.md` 为准。"
   ]

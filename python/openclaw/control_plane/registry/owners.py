@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Owner-aware registry reference helpers."""
+"""提供OpenClaw 控制平面子系统的生产实现。"""
 from __future__ import annotations
 
 from collections import defaultdict
@@ -13,18 +13,15 @@ QUALIFIED_REF_SEPARATOR = ':'
 
 
 def normalize_owner_id(value: Any) -> str:
-    """Normalize an owner id, falling back to the base registry owner."""
     text = str(value or '').strip()
     return text or BASE_OWNER_ID
 
 
 def row_owner_id(row: dict[str, Any]) -> str:
-    """Return the effective owner id for a materialized registry row."""
     return normalize_owner_id(row.get('ownerId') or row.get('extensionId') or row.get('sourceExtensionId'))
 
 
 def split_registry_ref(value: Any) -> tuple[str, str]:
-    """Split a registry ref into owner/local-id parts."""
     text = str(value or '').strip()
     if not text:
         return '', ''
@@ -35,14 +32,12 @@ def split_registry_ref(value: Any) -> tuple[str, str]:
 
 
 def qualified_registry_id(owner_id: Any, local_id: Any) -> str:
-    """Build the canonical owner-qualified registry id."""
     owner = normalize_owner_id(owner_id)
     item_id = str(local_id or '').strip()
     return f'{owner}{QUALIFIED_REF_SEPARATOR}{item_id}'
 
 
 def annotate_owned_row(row: dict[str, Any], *, owner_id: Any) -> dict[str, Any]:
-    """Attach owner metadata to a materialized registry row in place."""
     owner = normalize_owner_id(owner_id)
     item_id = str(row.get('id') or '').strip()
     row['ownerId'] = owner
@@ -54,7 +49,6 @@ def annotate_owned_row(row: dict[str, Any], *, owner_id: Any) -> dict[str, Any]:
 
 
 def owned_index_bundle(rows: list[dict[str, Any]], *, label: str) -> dict[str, Any]:
-    """Build qualified, owner, ambiguous, and unqualified-id indexes."""
     by_qualified_id: dict[str, dict[str, Any]] = {}
     by_owner: dict[str, dict[str, dict[str, Any]]] = defaultdict(dict)
     buckets: dict[str, list[dict[str, Any]]] = defaultdict(list)
@@ -97,7 +91,6 @@ def resolve_owned_ref(
     owner_id: Any = '',
     label: str,
 ) -> dict[str, Any]:
-    """Resolve a local or owner-qualified ref to a materialized row."""
     selector_owner, local_id = split_registry_ref(ref)
     if not local_id:
         raise CliError(f'{label} 不能为空', 2)
@@ -130,7 +123,6 @@ def resolved_owned_ref(
     owner_id: Any = '',
     label: str,
 ) -> str:
-    """Resolve a local or owner-qualified ref and return its canonical qualified id."""
     row = resolve_owned_ref(
         ref,
         by_id=by_id,
@@ -150,7 +142,6 @@ def resolve_collection_ref(
     owner_id: Any = '',
     label: str | None = None,
 ) -> dict[str, Any]:
-    """Resolve a ref against an owner-aware materialized collection."""
     prefix = collection_key
     return resolve_owned_ref(
         ref,
@@ -170,7 +161,6 @@ def resolved_collection_ref(
     owner_id: Any = '',
     label: str | None = None,
 ) -> str:
-    """Resolve a collection ref and return its qualified id."""
     row = resolve_collection_ref(
         registry_or_collections,
         collection_key,

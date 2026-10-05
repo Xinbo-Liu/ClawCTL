@@ -10,7 +10,6 @@ unset __openclaw_script_dir
 # shellcheck source=../lib/local_workspace_policy.sh
 source "$ROOT_DIR/scripts/lib/local_workspace_policy.sh"
 APPLY=0
-
 cleanup_usage() {
   cat <<'USAGE'
 用法：
@@ -26,21 +25,17 @@ cleanup_usage() {
   - 粗粒度目标 `state` 不支持，请改用 `state/openclaw`、`state/image_artifacts`、`state/image_pull`、`state/remote_first_install`
 USAGE
 }
-
 cleanup_fail() {
   echo "[cleanup_local_workspace][FAIL] $*" >&2
   exit "${2:-2}"
 }
-
 cleanup_note() {
   echo "[cleanup_local_workspace] $*"
 }
-
 cleanup_target_path() {
   local rel_path="$1"
   printf '%s/%s' "$ROOT_DIR" "$rel_path"
 }
-
 cleanup_assert_in_repo() {
   local target_path="$1"
   case "$target_path" in

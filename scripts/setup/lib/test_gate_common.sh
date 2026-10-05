@@ -13,11 +13,9 @@ source "$SETUP_GATE_COMMON_LIB_DIR/repo_root_bootstrap.sh"
 openclaw_setup_lib_source_repo_root "$SETUP_GATE_COMMON_LIB_DIR" || return 2 2>/dev/null || exit 2
 unset -f openclaw_setup_lib_source_repo_root
 SETUP_GATE_COMMON_ROOT="$(openclaw_repo_root_from "$SETUP_GATE_COMMON_LIB_DIR")"
-
 setup_gate_epoch_seconds() {
   date +%s
 }
-
 setup_gate_duration_seconds() {
   local started_at="$1" finished_at="$2"
   if [[ "$started_at" =~ ^[0-9]+$ && "$finished_at" =~ ^[0-9]+$ && "$finished_at" -ge "$started_at" ]]; then
@@ -26,7 +24,6 @@ setup_gate_duration_seconds() {
     printf ''
   fi
 }
-
 setup_gate_run_and_capture() {
   local __outvar="$1"
   shift
@@ -43,7 +40,6 @@ setup_gate_run_and_capture() {
   printf -v "$__outvar" '%s' "$__captured"
   return "$rc"
 }
-
 setup_gate_env_file_cache_key() {
   local env_file="$1"
   local _default_env_file="$2"
@@ -58,7 +54,6 @@ setup_gate_env_file_cache_key() {
   fingerprint="$(stat -c '%Y:%s' "$resolved_env" 2>/dev/null || true)"
   printf '%s|%s|%s' "$resolved_env" "$_default_env_file" "$fingerprint"
 }
-
 setup_gate_load_env_context() {
   local env_file="$1"
   local default_env_file="$2"
@@ -91,7 +86,6 @@ setup_gate_load_env_context() {
   SETUP_GATE_ENV_CONTEXT_CACHE_OUTPUT="$output"
   SETUP_GATE_ENV_CONTEXT_OUTPUT="$output"
 }
-
 setup_gate_apply_env_context() {
   local env_file="$1"
   shift
@@ -109,7 +103,6 @@ setup_gate_apply_env_context() {
   ((${#export_keys[@]} > 0)) && export "${export_keys[@]}"
   IMAGE_ENV_DEPLOY_ENV_PATH="$env_file" ENV_FILE="$env_file" "$@"
 }
-
 setup_gate_with_env_context() {
   local env_file="$1"
   local default_env_file="$2"
@@ -122,7 +115,6 @@ setup_gate_with_env_context() {
   }
   setup_gate_apply_env_context "$env_file" "$@"
 }
-
 setup_gate_run_and_capture_with_env() {
   local __outvar="$1"
   local env_file="$2"
@@ -147,14 +139,12 @@ setup_gate_run_and_capture_with_env() {
   printf -v "$__outvar" '%s' "$__captured"
   return "$rc"
 }
-
 setup_gate_trim_space() {
   local value="$1"
   value="${value#"${value%%[![:space:]]*}"}"
   value="${value%"${value##*[![:space:]]}"}"
   printf '%s' "$value"
 }
-
 setup_gate_missing_required_keys() {
   local file="$1" raw="" line="" key="" value=""
   while IFS= read -r raw || [[ -n "$raw" ]]; do
@@ -168,7 +158,6 @@ setup_gate_missing_required_keys() {
   done < "$file"
   return 0
 }
-
 setup_gate_csv_contains() {
   local csv="$1" needle="$2"
   [[ -z "$csv" ]] && return 1
@@ -179,7 +168,6 @@ setup_gate_csv_contains() {
   done
   return 1
 }
-
 setup_gate_json_escape() {
   local s="$1"
   s=${s//\\/\\\\}
@@ -187,12 +175,10 @@ setup_gate_json_escape() {
   s=${s//$'\n'/\\n}
   printf '%s' "$s"
 }
-
 setup_gate_append_unique_action() {
   local array_name="$1" item="$2"
   setup_gate_append_unique_array_item "$array_name" "$item"
 }
-
 setup_gate_append_unique_array_item() {
   local array_name="$1" item="$2"
   local existing=''
@@ -222,7 +208,6 @@ setup_gate_append_unique_array_item() {
       ;;
   esac
 }
-
 setup_gate_collect_scenario_actions() {
   local array_name="$1"
   local entry="$2"
@@ -242,7 +227,6 @@ setup_gate_collect_scenario_actions() {
 
 # shellcheck source=scripts/setup/lib/setup_failure_surface_shell.sh
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/setup_failure_surface_shell.sh"
-
 setup_gate_read_env_key() {
   local file_path="$1"
   local key="$2"
@@ -278,7 +262,6 @@ setup_gate_read_env_key() {
 
   printf ''
 }
-
 setup_gate_default_host_state_root() {
   local common_root=''
   common_root="$SETUP_GATE_COMMON_ROOT"
@@ -290,7 +273,6 @@ setup_gate_default_host_state_root() {
   }
   jq -r '.defaults.host_state_root // empty' "$common_root/$(repo_contract_relpath governance.install_defaults)"
 }
-
 setup_gate_runtime_host_env_path_default() {
   local root_dir="$1"
   local common_root='' host_state_root=''
@@ -306,15 +288,12 @@ setup_gate_runtime_host_env_path_default() {
       ;;
   esac
 }
-
 setup_gate_failure_doc_path() {
   setup_failure_surface_doc_path
 }
-
 setup_gate_failure_scenario_field() {
   setup_failure_surface_field "$@"
 }
-
 setup_gate_failure_scenario_lines() {
   setup_failure_surface_lines "$@"
 }

@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 # 用途：为 deploy / release / full test 的摘要 helper 提供统一桥接函数，减少重复的 summary_write / summary_emit 调用。
 set -euo pipefail
-
 flow_summary_resolve_args() {
   local array_name="$1"
   FLOW_SUMMARY_RESOLVED_ARGS=()
@@ -72,7 +71,6 @@ flow_summary_json_get() {
   fi
   printf '%s' "$default_value"
 }
-
 flow_summary_relative_or_self() {
   local root_dir="$1"
   local file_path="${2:-}"
@@ -86,7 +84,6 @@ flow_summary_relative_or_self() {
     *) printf '%s' "$file_path" ;;
   esac
 }
-
 flow_summary_bool_literal() {
   if [[ "${1:-}" == '1' ]]; then
     printf 'true'
@@ -94,7 +91,6 @@ flow_summary_bool_literal() {
     printf 'false'
   fi
 }
-
 flow_summary_json_array_from_items() {
   local escape_func="$1"
   shift
@@ -107,7 +103,6 @@ flow_summary_json_array_from_items() {
   done
   printf ']'
 }
-
 flow_summary_json_array_from_lines() {
   local escape_func="$1"
   local lines_file="$2"
@@ -123,7 +118,6 @@ flow_summary_json_array_from_lines() {
   fi
   printf ']'
 }
-
 flow_summary_generator_json_object() {
   local escape_func="$1"
   local mode="$2"
@@ -134,7 +128,6 @@ flow_summary_generator_json_object() {
   fi
   printf '{"mode":"%s"}' "$("$escape_func" "$mode")"
 }
-
 flow_summary_copy_latest_artifacts() {
   local summary_json_path="$1"
   local latest_json_path="$2"

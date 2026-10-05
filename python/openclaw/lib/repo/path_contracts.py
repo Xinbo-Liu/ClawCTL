@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Repository and extension anchored path contract helpers."""
+"""提供OpenClaw lib子系统的生产实现。"""
 from __future__ import annotations
 
 from pathlib import Path
 from typing import Any
 
-from openclaw.lib.repo.layout import resolve_repo_root
+from openclaw.lib.repo.layout import relative_path_within_root, resolve_repo_root
 from openclaw.lib.repo.repo_root import RepoRootResolutionError
 
 
@@ -15,7 +15,7 @@ EXTENSION_ANCHORED_PATH_PREFIX = '@extension/'
 
 def _path_is_relative_to(path: Path, base: Path) -> bool:
     try:
-        path.resolve().relative_to(base.resolve())
+        relative_path_within_root(path.resolve(), base.resolve())
         return True
     except ValueError:
         return False
@@ -74,7 +74,7 @@ def resolve_path_contract(
             raise ValueError('repo-anchored path must include a repository-relative suffix')
         resolved = (resolved_repo_root / Path(relative)).resolve()
         try:
-            resolved.relative_to(resolved_repo_root)
+            relative_path_within_root(resolved, resolved_repo_root)
         except ValueError as exc:
             raise ValueError(f'repo-anchored path must stay inside the repository: {text}') from exc
         return resolved

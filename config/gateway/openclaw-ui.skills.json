@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "targetOpenClawVersion": "2026.6.1",
-  "purpose": "OpenClaw 2026.6.1 Control UI attention 聚合会同时展示 missing dependencies 与 blockedByAllowlist；当前运行环境不可用的 skills 必须显式 disabled，不能用 allowBundled 阻断。",
+  "targetOpenClawVersion": "2026.7.1",
+  "purpose": "OpenClaw 2026.7.1 Control UI attention 聚合会同时展示 missing dependencies 与 blockedByAllowlist；当前运行环境不可用的 skills 必须显式 disabled，不能用 allowBundled 阻断。",
   "disabledSkills": [
     "1password",
     "apple-notes",

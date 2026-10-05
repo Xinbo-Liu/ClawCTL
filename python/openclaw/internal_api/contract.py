@@ -14,10 +14,26 @@ ROOT_DIR = resolve_repo_root(Path(__file__))
 
 
 def read_json(path: Path) -> Any:
+    """读取 UTF-8 JSON 文件。
+
+    参数：
+        path（Path）：要读取的 JSON 文件路径。
+
+    返回：
+        返回 Any，表示 `json.loads` 解析后的 payload。
+    """
     return json.loads(path.read_text(encoding="utf-8"))
 
 
 def read_contract(root_dir: Path = ROOT_DIR) -> dict[str, Any]:
+    """读取并校验 internal-api 路由合同真源。
+
+    参数：
+        root_dir（Path）：仓库根目录，默认使用当前代码解析出的根目录。
+
+    返回：
+        返回 dict[str, Any]，表示 `config/services/internal_api.json` 的顶层对象。
+    """
     contract_path = root_dir / "config" / "services" / "internal_api.json"
     contract = read_json(contract_path)
     if not isinstance(contract, dict):
@@ -32,6 +48,15 @@ def read_contract(root_dir: Path = ROOT_DIR) -> dict[str, Any]:
 
 
 def route_surface(root_dir: Path = ROOT_DIR, *, include_extensions: bool = False) -> dict[str, str]:
+    """返回 internal-api 对外路由表。
+
+    参数：
+        root_dir（Path）：仓库根目录，决定读取哪份 internal-api 合同。
+        include_extensions（bool）：为 `True` 时把扩展声明的 internal API 路由并入结果。
+
+    返回：
+        返回 dict[str, str]，键为路由逻辑 id，值为 HTTP path 或 path template。
+    """
     contract = read_contract(root_dir)
     routes = contract["routes"]
     control_plane = contract["control_plane"]
@@ -51,7 +76,6 @@ def route_surface(root_dir: Path = ROOT_DIR, *, include_extensions: bool = False
         "control_plane_agent_modules": str(control_plane.get("agentModulesRoute") or "/v1/control-plane/agent-modules"),
         "control_plane_agent_access_log": str(control_plane.get("agentAccessLogRoute") or "/v1/control-plane/agent-access-log"),
         "control_plane_agent_group_access": str(control_plane.get("agentGroupAccessRoute") or "/v1/control-plane/agent-group-access"),
-        "control_plane_agent_group_acceptance_bindings": str(control_plane.get("agentGroupAcceptanceBindingsRoute") or "/v1/control-plane/agent-group-acceptance-bindings"),
         "control_plane_agent_group_release_gates": str(control_plane.get("agentGroupReleaseGatesRoute") or "/v1/control-plane/agent-group-release-gates"),
         "control_plane_skill_sets": str(control_plane.get("skillSetsRoute") or "/v1/control-plane/skill-sets"),
         "control_plane_permission_policies": str(control_plane.get("permissionPoliciesRoute") or "/v1/control-plane/permission-policies"),
@@ -69,5 +93,13 @@ def route_surface(root_dir: Path = ROOT_DIR, *, include_extensions: bool = False
 
 
 def control_plane_job_detail_prefix(root_dir: Path = ROOT_DIR) -> str:
+    """返回 control-plane job 详情路由的固定前缀。
+
+    参数：
+        root_dir（Path）：仓库根目录，决定读取哪份 internal-api 合同。
+
+    返回：
+        返回 str，表示 `<job_id>` 之前的路由前缀，用于请求分派。
+    """
     template = route_surface(root_dir)["control_plane_job_detail"]
     return template.split("<", 1)[0]

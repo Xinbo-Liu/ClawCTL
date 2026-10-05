@@ -33,12 +33,23 @@ class RuntimeHealthcheckTest(unittest.TestCase):
             self._write_json(
                 status_path,
                 {
-                    'schemaVersion': 1,
+                    'schemaVersion': 2,
                     'stage': 'dispatch',
                     'validation': {'ok': True},
                     'formal_dispatch': {
+                        'schemaVersion': 2,
                         'ready': True,
                         'status': 'ok',
+                        'requiredAggregateStatus': 'accepted',
+                        'businessDeliveryReady': True,
+                        'operationalCoverageReady': True,
+                        'advisoryAttention': False,
+                        'required_target_ids': ['dispatch_primary', 'dispatch_ops'],
+                        'advisory_target_ids': [],
+                        'targetOutcomes': [],
+                        'deliveryContractSnapshot': {},
+                        'required_target_count': 2,
+                        'required_accepted_count': 2,
                         'issues': [],
                         'queue_total_count': 0,
                         'queue_due_count': 0,
@@ -65,7 +76,46 @@ class RuntimeHealthcheckTest(unittest.TestCase):
         self.assertTrue(payload['preflight_ok'])
         self.assertTrue(payload['dispatch_ready'])
         self.assertTrue(payload['validation_ok'])
+        self.assertTrue(payload['business_delivery_ready'])
+        self.assertTrue(payload['operational_coverage_ready'])
         self.assertEqual(payload['latest_run_id'], 'run-1')
+
+    def test_dispatch_contract_rejects_legacy_status_without_delivery_acceptance(self) -> None:
+        with isolated_test_root('runtime-healthcheck-legacy-dispatch') as root:
+            preflight_path = root / 'preflight.json'
+            status_path = root / 'status.json'
+            self._write_json(preflight_path, {
+                'schemaVersion': 1,
+                'stage': 'dispatch',
+                'status': 'ok',
+                'ready': True,
+                'validation': {'ok': True},
+                'target_summary': {'enabled_target_count': 1},
+            })
+            self._write_json(status_path, {
+                'schemaVersion': 1,
+                'stage': 'dispatch',
+                'validation': {'ok': True},
+                'formal_dispatch': {
+                    'ready': True,
+                    'status': 'ok',
+                    'issues': [],
+                    'queue_total_count': 0,
+                    'queue_due_count': 0,
+                    'missing_target_count': 0,
+                    'failed_count': 0,
+                },
+            })
+
+            exit_code = healthcheck.main([
+                'dispatch-json',
+                '--preflight',
+                str(preflight_path),
+                '--status',
+                str(status_path),
+            ])
+
+        self.assertEqual(exit_code, 1)
 
 
 if __name__ == '__main__':

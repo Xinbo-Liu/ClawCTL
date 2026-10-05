@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Script-catalog helpers for reference_specs surfaces."""
+"""提供OpenClaw 文档子系统的生产实现。"""
 from __future__ import annotations
 
 from pathlib import Path

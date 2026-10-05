@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 # 用途：在 scheduler 容器内受控执行一次 run-all-once，作为唯一人工全链触发入口。
 set -euo pipefail
-
 usage() {
   cat <<'USAGE'
 用法：
@@ -33,6 +32,14 @@ ROOT_DIR="$(openclaw_repo_root_from "$__openclaw_script_dir")"
 unset __openclaw_script_dir
 RUNNER="$ROOT_DIR/scripts/runtime/run_runtime_container_command.sh"
 [[ -f "$RUNNER" && -r "$RUNNER" ]] || { echo "[run_control_plane_run_all_once][FAIL] 缺少统一容器入口：$RUNNER" >&2; exit 2; }
+emit_run_all_once_summary() {
+  echo
+  echo '== control-plane run ledger summary =='
+  bash "$RUNNER" --target scheduler -- /opt/openclaw-tools/scripts/runtime/container_openclaw_cli control-plane runtime run-ledger-summary
+  echo
+  echo '== runtime acceptance summary (read-only snapshot) =='
+  bash "$ROOT_DIR/scripts/runtime/run_openclaw_python_tool.sh" runtime acceptance acceptance-summary
+}
 
 RUN_ALL_ONCE_MAX_ATTEMPTS="${OPENCLAW_RUN_ALL_ONCE_MAX_ATTEMPTS:-12}"
 RUN_ALL_ONCE_RETRY_SLEEP_SECONDS="${OPENCLAW_RUN_ALL_ONCE_RETRY_SLEEP_SECONDS:-10}"
@@ -51,6 +58,7 @@ while [[ "$attempt" -le "$RUN_ALL_ONCE_MAX_ATTEMPTS" ]]; do
   if bash "$RUNNER" --target scheduler -- /opt/openclaw-tools/scripts/runtime/container_openclaw_cli control-plane scheduler-runtime --run-all-once >"$output_path" 2>&1; then
     cat "$output_path"
     rm -f "$output_path"
+    emit_run_all_once_summary
     exit 0
   fi
   rc=$?

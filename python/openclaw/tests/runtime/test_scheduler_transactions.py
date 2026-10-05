@@ -6,6 +6,7 @@ import json
 import sys
 import tempfile
 import unittest
+from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
@@ -20,7 +21,8 @@ from openclaw.lib.cli.common import CliError
 from openclaw.lib.repo.layout import resolve_repo_root
 from openclaw.scheduler import engine
 from openclaw.scheduler import runtime
-from openclaw.scheduler.subprocess_runner import run_subprocess_job_impl
+from openclaw.scheduler.subprocess_runner import _finalize_run, run_subprocess_job_impl
+from openclaw.scheduler.subprocess_support import SubprocessRunContext
 from openclaw.tests.support.managed_probe import managed_probe_repo
 ROOT_DIR = resolve_repo_root(Path(__file__))
 AGENT_PLATFORM_CONFIG = (ROOT_DIR / 'config' / 'control_plane' / 'profiles' / 'agent_platform.service.json').resolve()
@@ -39,6 +41,46 @@ def _history_row(**kwargs: object) -> dict[str, object]:
 
 
 class SchedulerTransactionTest(unittest.TestCase):
+    def test_scheduler_state_prunes_jobs_absent_from_current_registry(self) -> None:
+        state = {
+            'schemaVersion': 1,
+            'jobs': {
+                'agent_demo:current_job': {'currentStatus': 'succeeded'},
+                'agent_demo:removed_job': {'currentStatus': 'succeeded'},
+            },
+        }
+        config = {
+            'jobs': [
+                {
+                    'id': 'current_job',
+                    'qualifiedId': 'agent_demo:current_job',
+                },
+            ],
+        }
+
+        removed = engine.prune_scheduler_state_jobs(state, config)
+
+        self.assertEqual(removed, ['agent_demo:removed_job'])
+        self.assertEqual(set(state['jobs']), {'agent_demo:current_job'})
+
+    def test_scheduler_gateway_cron_sync_prunes_gateway_migration_backups(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state_root = Path(tmpdir)
+            cron_dir = state_root / 'gateway' / 'cron'
+            cron_dir.mkdir(parents=True)
+            stale_path = cron_dir / 'jobs.json.migrated'
+            stale_path.write_text('{}\n', encoding='utf-8')
+
+            runtime._sync_gateway_cron_jobs_projection(
+                state_root=state_root,
+                config={'jobs': []},
+                state={'jobs': {}},
+                previous_fingerprint=None,
+            )
+
+            self.assertFalse(stale_path.exists())
+            self.assertTrue((cron_dir / 'jobs.json').is_file())
+
     def test_agent_runtime_runner_prepares_job_from_resolved_execution_plan_only(self) -> None:
         job = {
             'id': 'demo_job',
@@ -429,6 +471,37 @@ class SchedulerTransactionTest(unittest.TestCase):
         self.assertEqual(result['run_dir'], None)
         self.assertEqual(result['log_path'], None)
 
+    def test_blocked_result_without_manifests_preserves_previous_run_evidence(self) -> None:
+        job_state = {
+            'currentStatus': 'succeeded',
+            'lastRunId': 'demo_job@schedule@2026-04-22T00:00',
+            'lastFinishedAt': '2026-04-22T00:00:01Z',
+            'lastRunManifestPath': '/state/runs/demo/run.json',
+            'lastResultManifestPath': '/state/runs/demo/result.json',
+            'lastArtifactsPath': '/state/runs/demo/artifacts.json',
+            'lastAcceptedByLedger': True,
+        }
+
+        engine._update_job_state_after_run(
+            job_state,
+            {
+                'status': 'blocked',
+                'runId': 'demo_job@schedule@2026-04-22T00:05',
+                'reason': 'concurrency_policy=forbid：已有活动运行',
+                'finished_at': '2026-04-22T00:05:00Z',
+                'run_manifest_path': '',
+                'result_manifest_path': '',
+                'artifacts_path': '',
+            },
+        )
+
+        self.assertEqual(job_state['currentStatus'], 'blocked')
+        self.assertEqual(job_state['lastRunId'], 'demo_job@schedule@2026-04-22T00:00')
+        self.assertEqual(job_state['lastRunManifestPath'], '/state/runs/demo/run.json')
+        self.assertEqual(job_state['lastResultManifestPath'], '/state/runs/demo/result.json')
+        self.assertEqual(job_state['lastArtifactsPath'], '/state/runs/demo/artifacts.json')
+        self.assertEqual(job_state['lastBlockedRunId'], 'demo_job@schedule@2026-04-22T00:05')
+
     def test_run_subprocess_job_impl_writes_consistent_run_result_and_artifact_manifests(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             files = SimpleNamespace(runs_dir=Path(tmpdir) / 'runs')
@@ -569,6 +642,187 @@ class SchedulerTransactionTest(unittest.TestCase):
 
             self.assertTrue(target.is_file())
             self.assertIn('"ok": true', target.read_text(encoding='utf-8'))
+
+    def _delivery_context(self, root: Path) -> SubprocessRunContext:
+        run_dir = root / 'run'
+        run_dir.mkdir()
+        outcome_path = run_dir / 'outcome.json'
+        outcome_path.write_text('{}\n', encoding='utf-8')
+        return SubprocessRunContext(
+            job={
+                'id': 'dispatch_job',
+                'qualifiedId': 'agent_probe:dispatch_job',
+                'resolvedRuntimeJobKey': 'agent_probe:dispatch_job',
+                'resolvedDeliveryContract': {
+                    'successStatuses': ['sent', 'noop'],
+                    'retryableStatuses': ['retry_pending', 'rate_limited'],
+                    'terminalStatuses': ['failed', 'blocked'],
+                },
+                'artifactPolicy': {'runArtifactRoot': 'delivery_artifact_root'},
+                'resolvedInputs': {},
+                'resolvedOutputs': {},
+            },
+            config={},
+            due_key='scheduler-1',
+            current=datetime(2026, 4, 22, tzinfo=timezone.utc),
+            command=['python', '-c', 'pass'],
+            timeout_seconds=30,
+            trigger='schedule',
+            execution_env={},
+            started_at='2026-04-22T00:00:00Z',
+            run_dir=run_dir,
+            log_path=run_dir / 'stdout.log',
+            artifacts_path=run_dir / 'artifacts.json',
+            outcome_path=outcome_path,
+            run_manifest_path=run_dir / 'run.json',
+            result_manifest_path=run_dir / 'result.json',
+            repo_root=root,
+            runs_root=root / 'runs',
+        )
+
+    def test_nonzero_process_cannot_accept_sent_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            context = self._delivery_context(Path(tmpdir))
+            validation = {
+                'manifestValid': True,
+                'contractAccepted': True,
+                'artifactAccepted': True,
+                'schedulerStatus': 'succeeded',
+                'failureClass': None,
+                'reasons': [],
+                'evidence': [],
+                'manifest': {
+                    'status': 'sent',
+                    'businessRunId': 'business-1',
+                    'statusSignals': ['dispatch_sent'],
+                    'recoveries': [],
+                },
+            }
+            with mock.patch('openclaw.scheduler.subprocess_runner.load_and_validate_outcome_manifest', return_value=validation):
+                with mock.patch('openclaw.scheduler.subprocess_runner.write_run_manifests'):
+                    result = _finalize_run(
+                        context,
+                        result={'status': 'failed', 'return_code': 7, 'finished_at': '2026-04-22T00:01:00Z'},
+                        env={},
+                        job_state={},
+                        now_utc_iso=lambda: '2026-04-22T00:01:00Z',
+                        release_lock=lambda _path: None,
+                        lock_path=Path(tmpdir) / 'lock',
+                    )
+
+        self.assertFalse(result['process_accepted'])
+        self.assertTrue(result['contract_accepted'])
+        self.assertFalse(result['execution_accepted'])
+        self.assertFalse(result['accepted_by_ledger'])
+        self.assertEqual(result['status'], 'failed')
+
+    def test_zero_process_with_blocked_manifest_remains_business_blocked(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            context = self._delivery_context(Path(tmpdir))
+            validation = {
+                'manifestValid': True,
+                'contractAccepted': False,
+                'artifactAccepted': True,
+                'schedulerStatus': 'blocked',
+                'failureClass': 'delivery_ack_unknown',
+                'reasons': [],
+                'evidence': [],
+                'manifest': {
+                    'status': 'blocked',
+                    'businessRunId': 'business-1',
+                    'statusSignals': ['dispatch_blocked'],
+                    'recoveries': [],
+                },
+            }
+            with mock.patch('openclaw.scheduler.subprocess_runner.load_and_validate_outcome_manifest', return_value=validation):
+                with mock.patch('openclaw.scheduler.subprocess_runner.write_run_manifests'):
+                    result = _finalize_run(
+                        context,
+                        result={'status': 'succeeded', 'return_code': 0, 'finished_at': '2026-04-22T00:01:00Z'},
+                        env={},
+                        job_state={},
+                        now_utc_iso=lambda: '2026-04-22T00:01:00Z',
+                        release_lock=lambda _path: None,
+                        lock_path=Path(tmpdir) / 'lock',
+                    )
+
+        self.assertTrue(result['process_accepted'])
+        self.assertFalse(result['contract_accepted'])
+        self.assertFalse(result['accepted_by_ledger'])
+        self.assertEqual(result['status'], 'blocked')
+
+    def test_recovery_requires_exact_unaccepted_origin_result(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            context = self._delivery_context(root)
+            origin_job = {
+                'id': 'source_dispatch_job',
+                'qualifiedId': 'agent_probe:source_dispatch_job',
+                'resolvedRuntimeJobKey': 'agent_probe:source_dispatch_job',
+            }
+            context = replace(context, config={'jobs': [origin_job, context.job]})
+            origin_dir = context.runs_root / 'agent_probe_source_dispatch_job' / 'origin-run'
+            origin_dir.mkdir(parents=True)
+            (origin_dir / 'result.json').write_text(json.dumps({
+                'schemaVersion': 1,
+                'jobId': 'agent_probe:source_dispatch_job',
+                'runId': 'failed-run-1',
+                'businessRunId': 'business-1',
+                'status': 'blocked',
+                'acceptedByLedger': False,
+            }), encoding='utf-8')
+            validation = {
+                'manifestValid': True,
+                'contractAccepted': True,
+                'artifactAccepted': True,
+                'schedulerStatus': 'succeeded',
+                'failureClass': None,
+                'reasons': [],
+                'evidence': [],
+                'manifest': {
+                    'status': 'sent',
+                    'businessRunId': 'business-1',
+                    'statusSignals': ['dispatch_sent'],
+                    'recoveries': [{
+                        'ofJobId': 'agent_probe:source_dispatch_job',
+                        'ofSchedulerRunId': 'failed-run-1',
+                        'businessRunId': 'business-1',
+                    }],
+                },
+            }
+            with mock.patch('openclaw.scheduler.subprocess_runner.load_and_validate_outcome_manifest', return_value=validation):
+                with mock.patch('openclaw.scheduler.subprocess_runner.write_run_manifests'):
+                    result = _finalize_run(
+                        context,
+                        result={'status': 'succeeded', 'return_code': 0, 'finished_at': '2026-04-22T00:01:00Z'},
+                        env={},
+                        job_state={},
+                        now_utc_iso=lambda: '2026-04-22T00:01:00Z',
+                        release_lock=lambda _path: None,
+                        lock_path=root / 'lock',
+                    )
+
+            self.assertTrue(result['accepted_by_ledger'])
+
+            origin_payload = json.loads((origin_dir / 'result.json').read_text(encoding='utf-8'))
+            origin_payload['businessRunId'] = 'business-other'
+            (origin_dir / 'result.json').write_text(json.dumps(origin_payload), encoding='utf-8')
+            with mock.patch('openclaw.scheduler.subprocess_runner.load_and_validate_outcome_manifest', return_value=validation):
+                with mock.patch('openclaw.scheduler.subprocess_runner.write_run_manifests'):
+                    rejected = _finalize_run(
+                        context,
+                        result={'status': 'succeeded', 'return_code': 0, 'finished_at': '2026-04-22T00:02:00Z'},
+                        env={},
+                        job_state={},
+                        now_utc_iso=lambda: '2026-04-22T00:02:00Z',
+                        release_lock=lambda _path: None,
+                        lock_path=root / 'lock',
+                    )
+
+            self.assertFalse(rejected['contract_accepted'])
+            self.assertFalse(rejected['accepted_by_ledger'])
+            self.assertEqual(rejected['status'], 'blocked')
+            self.assertIn('origin_result_business_run_mismatch', str(rejected.get('reason') or ''))
 
 
 if __name__ == '__main__':

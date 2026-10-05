@@ -8,7 +8,6 @@ source "$__openclaw_script_dir/../lib/repo_root.sh"
 ROOT_DIR="$(openclaw_repo_root_from "$__openclaw_script_dir")"
 unset __openclaw_script_dir
 STATIC_PYTHON_RUNNER="$ROOT_DIR/scripts/lib/run_static_python.sh"
-
 usage() {
   cat <<'USAGE'
 用法：
@@ -22,7 +21,6 @@ usage() {
   - 生成或更新基线使用内部参数：--write-baseline <path> [--write-baseline-format auto|monolithic|sharded]。
 USAGE
 }
-
 fail() {
   echo "[check_platform_docstring_governance][FAIL] $*" >&2
   exit "${2:-2}"

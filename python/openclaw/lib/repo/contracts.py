@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Shared repo-contract truth loader for Python and shell consumers."""
+"""提供OpenClaw lib子系统的生产实现。"""
 from __future__ import annotations
 
 import json
@@ -19,6 +19,7 @@ UTF8_BOM = '\ufeff'
 
 @dataclass(frozen=True)
 class RepoContract:
+    """仓库合同路径登记项。"""
     id: str
     relative_path: str
     format: str
@@ -53,12 +54,22 @@ def _contracts_truth_text(truth_path: Path) -> str:
     return '\n'.join(lines)
 
 
-@lru_cache(maxsize=None)
-def _load_repo_contracts(root_dir_text: str) -> dict[str, RepoContract]:
-    root_dir = Path(root_dir_text).resolve()
-    truth_path = _contracts_truth_path(root_dir)
-    if not truth_path.is_file():
-        raise ValueError(f'repo contracts truth is missing: {truth_path}')
+@lru_cache(maxsize=128)
+def _parse_repo_contracts(truth_path: Path, identity: tuple[int, int, int, int, int]) -> dict[str, RepoContract]:
+    """解析一个真源版本的仓库路径合同。
+
+    参数：
+        truth_path（Path）：合同真源的规范绝对路径。
+        identity（tuple[int, int, int, int, int]）：设备、inode、大小和两个纳秒时间组成的缓存版本键。
+    返回：
+        dict[str, RepoContract]：通过结构和路径校验的合同集合。
+    异常：
+        ValueError：真源 JSON、合同字段、格式或路径不满足合同。
+        OSError：真源不可读取。
+        UnicodeDecodeError：真源不是 UTF-8 文本。
+    副作用：
+        读取并缓存该版本的真源，不改写文件。
+    """
 
     try:
         payload = json.loads(_contracts_truth_text(truth_path))
@@ -89,6 +100,28 @@ def _load_repo_contracts(root_dir_text: str) -> dict[str, RepoContract]:
             raise ValueError(f'duplicate repo contract id: {contract.id}')
         contracts[contract.id] = contract
     return contracts
+
+
+def _load_repo_contracts(root_dir_text: str) -> dict[str, RepoContract]:
+    """读取所选仓库的路径合同，按真源文件版本复用解析缓存。
+
+    参数：
+        root_dir_text（str）：调用方所选择的仓库根目录。
+    返回：
+        dict[str, RepoContract]：该根目录当前版本的合同集合。
+    异常：
+        ValueError：真源缺失或合同无效。
+        OSError：真源元数据或正文不可读取。
+        UnicodeDecodeError：真源不是 UTF-8 文本。
+    副作用：
+        检查文件元数据；文件版本变化时解析正文，未变化时复用缓存，不写文件。
+    """
+    truth_path = _contracts_truth_path(Path(root_dir_text))
+    if not truth_path.is_file():
+        raise ValueError(f'repo contracts truth is missing: {truth_path}')
+    metadata = truth_path.stat()
+    identity = (metadata.st_dev, metadata.st_ino, metadata.st_size, metadata.st_mtime_ns, metadata.st_ctime_ns)
+    return _parse_repo_contracts(truth_path, identity)
 
 
 def repo_contracts(root_dir: Path = ROOT_DIR) -> dict[str, RepoContract]:

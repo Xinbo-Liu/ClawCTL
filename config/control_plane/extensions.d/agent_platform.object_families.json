@@ -2,8 +2,8 @@
   "schema_version": 1,
   "families": {
     "dispatch_runtime_state": {
-      "label": "dispatch runtime objects",
-      "purpose": "Collect dispatch runtime summary, target registry, runs, queue, and queue_done paths for platform observability and troubleshooting.",
+      "label": "投递运行态对象族",
+      "purpose": "统一说明投递运行摘要、目标注册表、每次运行及重试队列的路径，供平台观测与排障使用。",
       "references": [
         "docs/operations/dispatch-targets.md",
         "docs/operations/troubleshooting.md"
@@ -15,7 +15,7 @@
           "path_kind": "runtime_path",
           "path_ref": "dispatch_runtime_summary_json",
           "producer": "setup env render-dispatch-runtime / bootstrap",
-          "usage": "Structured summary of the active target registry, provider bindings, default target groups, and dispatch runtime state."
+          "usage": "记录当前目标注册表、provider 绑定、默认目标组与投递运行状态的结构化摘要。"
         },
         {
           "id": "dispatch_targets_json",
@@ -23,7 +23,7 @@
           "path_kind": "runtime_path",
           "path_ref": "dispatch_targets_json",
           "producer": "setup env render-dispatch-runtime / bootstrap",
-          "usage": "Scheduler-side dispatch target snapshot used by runtime execution and troubleshooting."
+          "usage": "scheduler 侧的投递目标快照，供运行执行与排障使用。"
         },
         {
           "id": "dispatch_out_dir",
@@ -31,7 +31,7 @@
           "path_kind": "runtime_path",
           "path_ref": "dispatch_out_dir",
           "producer": "delivery_adapter / dispatcher",
-          "usage": "Root directory for dispatch.json, status.json, ledger.jsonl, queue, and queue_done outputs."
+          "usage": "dispatch.json、status.json、ledger.jsonl、queue 与 queue_done 等投递产物的根目录。"
         },
         {
           "id": "dispatch_runs_dir",
@@ -39,7 +39,7 @@
           "path_kind": "runtime_path",
           "path_ref": "dispatch_runs_dir",
           "producer": "delivery_adapter / dispatcher",
-          "usage": "Per-run dispatch output directories for run-scoped audit artifacts."
+          "usage": "按运行分隔的投递输出目录，保存每次运行的审计产物。"
         },
         {
           "id": "dispatch_queue_dir",
@@ -47,7 +47,7 @@
           "path_kind": "runtime_path",
           "path_ref": "dispatch_queue_dir",
           "producer": "dispatcher queue manager",
-          "usage": "Host-side resend and retry backlog directory."
+          "usage": "宿主机侧等待重试的投递队列目录。"
         },
         {
           "id": "dispatch_queue_done_dir",
@@ -55,13 +55,13 @@
           "path_kind": "runtime_path",
           "path_ref": "dispatch_queue_done_dir",
           "producer": "dispatcher queue manager",
-          "usage": "Completed, expired, or failed resend and retry queue directory."
+          "usage": "已完成、过期或失败的重试队列归档目录。"
         }
       ]
     },
     "dispatch_governance_state": {
-      "label": "dispatch governance audit objects",
-      "purpose": "Collect target acceptance, batch acceptance, rotation sequence, governance audit, and lifecycle audit outputs under one neutral platform family.",
+      "label": "投递治理审计对象族",
+      "purpose": "统一说明平台共享的目标验收、批次验收、轮换顺序、治理检查与生命周期变更审计产物。",
       "references": [
         "docs/operations/dispatch-targets.md",
         "docs/operations/troubleshooting.md"
@@ -73,7 +73,7 @@
           "path_kind": "runtime_path",
           "path_ref": "dispatch_target_acceptance_audit_dir",
           "producer": "bash ./scripts/runtime/run_openclaw_python_tool.sh dispatch observability show-target-acceptance --target <target_id> --gate-env-file deploy/.env --write-audit",
-          "usage": "Default audit directory for target-scoped acceptance payloads."
+          "usage": "按投递目标保存验收结果的默认审计目录。"
         },
         {
           "id": "dispatch_target_batch_acceptance_audit_dir",
@@ -81,7 +81,7 @@
           "path_kind": "runtime_path",
           "path_ref": "dispatch_target_batch_acceptance_audit_dir",
           "producer": "bash ./scripts/runtime/run_openclaw_python_tool.sh dispatch observability show-batch-acceptance --batch <batch_id> --gate-env-file deploy/.env --write-audit",
-          "usage": "Default audit directory for batch-scoped acceptance and release-gate payloads."
+          "usage": "按批次保存验收结果与发布门禁结果的默认审计目录。"
         },
         {
           "id": "dispatch_target_rotation_sequence_audit_dir",
@@ -89,7 +89,7 @@
           "path_kind": "runtime_path",
           "path_ref": "dispatch_target_rotation_sequence_audit_dir",
           "producer": "bash ./scripts/runtime/run_openclaw_python_tool.sh dispatch ops verify-rotation-sequence --gate-env-file deploy/.env --control-plane-profile <profile_id> --write-audit",
-          "usage": "Default audit directory for rotation-sequence verification payloads."
+          "usage": "保存轮换顺序验证结果的默认审计目录。"
         },
         {
           "id": "dispatch_governance_audit_dir",
@@ -97,7 +97,7 @@
           "path_kind": "runtime_path",
           "path_ref": "dispatch_governance_audit_dir",
           "producer": "bash ./scripts/runtime/run_openclaw_python_tool.sh dispatch ops verify-rotation-sequence --gate-env-file deploy/.env --control-plane-profile <profile_id> --write-audit",
-          "usage": "Default audit directory for platform-level dispatch governance checks."
+          "usage": "保存平台级投递治理检查结果的默认审计目录。"
         },
         {
           "id": "dispatch_target_lifecycle_audit_dir",
@@ -105,7 +105,7 @@
           "path_kind": "runtime_path",
           "path_ref": "dispatch_target_lifecycle_audit_dir",
           "producer": "bash ./scripts/setup/update_dispatch_target_lifecycle.sh --write-audit",
-          "usage": "Default audit directory for disable and decommission lifecycle changes."
+          "usage": "保存目标停用与退役等生命周期变更的默认审计目录。"
         }
       ]
     }

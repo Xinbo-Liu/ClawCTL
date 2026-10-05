@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Context loading helpers for dispatch runtime audit surfaces."""
+"""提供OpenClaw 控制平面子系统的生产实现。"""
 from __future__ import annotations
 
 import os
@@ -49,6 +49,7 @@ def shared_extension_label(labels: list[str]) -> str:
 
 @dataclass(frozen=True)
 class DispatchAuditContext:
+    """dispatch 审计记录写入上下文。"""
     config_path: Path
     target_registry_paths: tuple[Path, ...]
     target_rows_by_id: dict[str, dict[str, Any]]

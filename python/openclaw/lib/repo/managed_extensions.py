@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Managed explicit extension index and python-root helpers."""
+"""提供OpenClaw lib子系统的生产实现。"""
 from __future__ import annotations
 
 import json
@@ -54,11 +54,12 @@ _MANAGED_EXTENSION_REGISTRY_FILE_KEYS = (
 
 
 class ManagedExtensionError(RuntimeError):
-    """Managed extension index is missing or malformed."""
+    """受管扩展索引读取失败。"""
 
 
 @dataclass(frozen=True)
 class ManagedExtensionRow:
+    """受管扩展索引条目。"""
     id: str
     title: str
     root_dir: Path
@@ -70,6 +71,7 @@ class ManagedExtensionRow:
 
 @dataclass(frozen=True)
 class ManagedExtensionLayout:
+    """受管扩展目录布局。"""
     row: ManagedExtensionRow
     module_root: Path
     python_root: Path
@@ -317,6 +319,74 @@ def managed_extension_for_config_path(
     return None
 
 
+def _manifest_path_for_extension_id(repo_root: Path, extension_id: str) -> Path:
+    """返回扩展 manifest 的仓库约定路径。"""
+    if extension_id == _PLATFORM_EXTENSION_ID:
+        return (repo_root / _PLATFORM_MANIFEST_DIR_REL_PATH / f'{_PLATFORM_EXTENSION_ID}.json').resolve()
+    return (
+        repo_root
+        / MANAGED_EXTENSIONS_REL_DIR
+        / extension_id
+        / 'config'
+        / 'control_plane'
+        / 'extensions.d'
+        / f'{extension_id}.json'
+    ).resolve()
+
+
+def _required_dependency_ids_for_manifest(
+    repo_root: Path,
+    manifest_path: Path,
+    *,
+    seen: set[str] | None = None,
+) -> tuple[str, ...]:
+    """读取 manifest required dependency 闭包，顺序为依赖优先。"""
+    payload = _read_json(manifest_path)
+    if seen is None:
+        seen = set()
+    result: list[str] = []
+    for dep in payload.get('dependencies') or []:
+        if not isinstance(dep, dict) or bool(dep.get('optional', False)):
+            continue
+        dep_id = str(dep.get('id') or '').strip()
+        if not dep_id or dep_id == _PLATFORM_EXTENSION_ID or dep_id in seen:
+            continue
+        seen.add(dep_id)
+        dep_manifest_path = _manifest_path_for_extension_id(repo_root, dep_id)
+        if dep_manifest_path.is_file():
+            for nested_id in _required_dependency_ids_for_manifest(repo_root, dep_manifest_path, seen=seen):
+                if nested_id not in result:
+                    result.append(nested_id)
+        if dep_id not in result:
+            result.append(dep_id)
+    return tuple(result)
+
+
+def _row_required_dependency_ids(repo_root: Path, row: ManagedExtensionRow) -> tuple[str, ...]:
+    """返回受管扩展默认 profile 必须启用的 required dependency 集合。"""
+    manifest_path = managed_extension_manifest_path(row)
+    if not manifest_path.is_file():
+        return ()
+    return _required_dependency_ids_for_manifest(repo_root, manifest_path)
+
+
+def _enabled_extension_ids_from_service_config(config_path: str | Path | None) -> tuple[str, ...]:
+    """从 service config 中读取启用扩展顺序；读取失败时返回空集合供调用方回退。"""
+    if config_path in (None, ''):
+        return ()
+    try:
+        from openclaw.control_plane.config_loader import load_control_plane_service_payload
+
+        _, payload = load_control_plane_service_payload(Path(config_path).resolve())
+    except Exception:
+        return ()
+    extensions = payload.get('extensions') if isinstance(payload.get('extensions'), dict) else {}
+    enabled_values = extensions.get('enabledExtensionIds') or []
+    if not isinstance(enabled_values, list):
+        return ()
+    return tuple(str(item).strip() for item in enabled_values if str(item).strip())
+
+
 def managed_extension_for_agent_ref(
     agent_ref: str,
     *,
@@ -364,6 +434,24 @@ def managed_extension_python_roots_for_config_path(
     *,
     start_path: Path | None = None,
 ) -> tuple[Path, ...]:
+    enabled_ids = _enabled_extension_ids_from_service_config(config_path)
+    if enabled_ids:
+        roots: list[Path] = []
+        row_by_id = {
+            row.id: row
+            for row in managed_explicit_extensions(start_path)
+            if row.status == MANAGED_EXPLICIT_EXTENSION_STATUS
+        }
+        for extension_id in enabled_ids:
+            row = row_by_id.get(extension_id)
+            if row is None:
+                continue
+            for root in row.python_roots:
+                if root not in roots:
+                    roots.append(root)
+        if roots:
+            return tuple(roots)
+
     row = managed_extension_for_config_path(config_path, start_path=start_path)
     if row is None or row.status != MANAGED_EXPLICIT_EXTENSION_STATUS:
         return ()
@@ -445,10 +533,18 @@ def _validate_service_profile_contract(
         issues.append(
             f'{row.id}: default service config does not enable extension id -> {row.default_service_config_path}'
         )
-    extra_enabled_ids = [extension_id for extension_id in enabled_ids if extension_id not in {_PLATFORM_EXTENSION_ID, row.id}]
+    required_dependency_ids = _row_required_dependency_ids(repo_root, row)
+    for dependency_id in required_dependency_ids:
+        if dependency_id not in enabled_ids:
+            issues.append(
+                f'{row.id}: default service config does not enable required dependency {dependency_id} -> '
+                f'{row.default_service_config_path}'
+            )
+    allowed_enabled_ids = {_PLATFORM_EXTENSION_ID, row.id, *required_dependency_ids}
+    extra_enabled_ids = [extension_id for extension_id in enabled_ids if extension_id not in allowed_enabled_ids]
     if extra_enabled_ids:
         issues.append(
-            f'{row.id}: default service config may only enable {_PLATFORM_EXTENSION_ID} and own extension id -> '
+            f'{row.id}: default service config may only enable {_PLATFORM_EXTENSION_ID}, required dependencies, and own extension id -> '
             f'{", ".join(extra_enabled_ids)}'
         )
 
@@ -474,22 +570,37 @@ def _validate_service_profile_contract(
 
     expected_platform_manifest_dir = (repo_root / _PLATFORM_MANIFEST_DIR_REL_PATH).resolve()
     expected_own_manifest_dir = row.manifest_dir.resolve()
+    expected_dependency_manifest_dirs = tuple(
+        _manifest_path_for_extension_id(repo_root, dependency_id).parent.resolve()
+        for dependency_id in required_dependency_ids
+    )
     if expected_platform_manifest_dir not in resolved_dirs:
         issues.append(
             f'{row.id}: default service config must load {_PLATFORM_EXTENSION_ID} manifest dir -> {expected_platform_manifest_dir}'
         )
+    for dependency_id, dependency_manifest_dir in zip(required_dependency_ids, expected_dependency_manifest_dirs):
+        if dependency_manifest_dir not in resolved_dirs:
+            issues.append(
+                f'{row.id}: default service config must load required dependency {dependency_id} manifest dir -> '
+                f'{dependency_manifest_dir}'
+            )
     if expected_own_manifest_dir not in resolved_dirs:
         issues.append(
             f'{row.id}: default service config must load own manifest dir -> {expected_own_manifest_dir}'
         )
+    expected_manifest_dirs = {
+        expected_platform_manifest_dir,
+        expected_own_manifest_dir,
+        *expected_dependency_manifest_dirs,
+    }
     extra_manifest_dirs = [
         path
         for path in resolved_dirs
-        if path not in {expected_platform_manifest_dir, expected_own_manifest_dir}
+        if path not in expected_manifest_dirs
     ]
     if extra_manifest_dirs:
         issues.append(
-            f'{row.id}: default service config may only load platform and own manifest dirs -> '
+            f'{row.id}: default service config may only load platform, required dependency, and own manifest dirs -> '
             f'{", ".join(str(path) for path in extra_manifest_dirs)}'
         )
 

@@ -16,6 +16,7 @@ from openclaw.lib.repo.static_truth import runtime_paths_host_entry as truth_run
 from openclaw.setup.deploy_env import dispatch_registry as deploy_env_dispatch_registry_lib
 from openclaw.setup.deploy_env import bootstrap_runtime as deploy_env_bootstrap_runtime_lib
 from openclaw.setup.deploy_env import docs as deploy_env_docs_lib
+from openclaw.setup.deploy_env import input_values as deploy_env_input_values_lib
 from openclaw.setup.deploy_env import query as deploy_env_query_lib
 from openclaw.setup.deploy_env import render_validate as deploy_env_render_validate_lib
 from openclaw.setup.deploy_env.support import load_schema
@@ -40,18 +41,6 @@ def note(prefix: str, message: str) -> None:
 
 
 def docs_entry(argv: list[str]) -> int:
-    """分发部署输入文档相关子命令。
-
-    参数：
-        argv: `docs` 后面的子命令与参数，例如 `render-deployment-inputs --check` 或
-            `render-site-env-example --output deploy/site.env.example`。
-    返回：
-        子命令退出码；`check` 模式发现漂移时返回 1，写入或同步时返回 0。
-    副作用：
-        write 模式会写入部署输入说明或 `deploy/site.env.example`；`stdout` 模式只打印内容。
-    失败：
-        缺少子命令、未知子命令、未知参数或真源不可解析时通过 `SystemExit` 失败。
-    """
     if not argv:
         fail('deploy_env_control_plane', '缺少 docs 子命令；当前支持 render-deployment-inputs / render-site-env-example', 2)
     command = argv.pop(0)
@@ -102,7 +91,8 @@ def main(argv: list[str] | None = None) -> int:
             'deploy_env_control_plane',
             '缺少命令；仅支持 render / validate / query-env / query-env-batch / docs / '
             'render-dispatch-runtime / render-runtime-service-envs / validate-dispatch-registry / '
-            'query-dispatch-registry / sync-dispatch-compose-env / bootstrap-runtime / render-local-ro-mirror',
+            'query-dispatch-registry / sync-dispatch-compose-env / bootstrap-runtime / render-local-ro-mirror / '
+            'input-values',
             2,
         )
 
@@ -146,6 +136,8 @@ def main(argv: list[str] | None = None) -> int:
         return deploy_env_bootstrap_runtime_lib.bootstrap_runtime(args)
     if command == 'render-local-ro-mirror':
         return deploy_env_bootstrap_runtime_lib.render_local_ro_mirror_cli(args)
+    if command == 'input-values':
+        return deploy_env_input_values_lib.main(args)
     fail('deploy_env_control_plane', f'未知命令：{command}', 2)
 
 

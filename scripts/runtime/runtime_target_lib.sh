@@ -15,8 +15,8 @@ repo_contract_assign_path SERVICE_REGISTRY_PATH runtime.service_registry
 source "$ROOT_DIR/scripts/lib/control_plane_config_paths.sh"
 # shellcheck source=../lib/repo_python_env.sh
 source "$ROOT_DIR/scripts/lib/repo_python_env.sh"
-RUNTIME_TARGET_RESOLVED_CONFIG_PATH="${RUNTIME_TARGET_RESOLVED_CONFIG_PATH:-}"
-RUNTIME_TARGET_REGISTRY_CACHE="${RUNTIME_TARGET_REGISTRY_CACHE:-}"
+_OPENCLAW_RUNTIME_TARGET_RESOLVED_CONFIG_PATH=""
+_OPENCLAW_RUNTIME_TARGET_REGISTRY_CACHE=""
 
 # 统一输出 runtime target 解析失败信息，并返回标准错误码。
 runtime_target_fail() {
@@ -34,16 +34,16 @@ runtime_target_normalize_target() {
 # 按需解析 runtime target 所依赖的 control-plane config，避免 source 阶段触发容器化 Python。
 runtime_target_control_plane_config_path() {
   local requested_config_path='' profile_id='agent_platform' explicit_profile='0'
-  if [[ -z "$RUNTIME_TARGET_RESOLVED_CONFIG_PATH" ]]; then
+  if [[ -z "$_OPENCLAW_RUNTIME_TARGET_RESOLVED_CONFIG_PATH" ]]; then
     openclaw_control_plane_apply_default_selection_from_env_files \
       requested_config_path \
       profile_id \
       explicit_profile \
       "$ROOT_DIR/deploy/.env|deploy/.env" \
       "$ROOT_DIR/deploy/site.env|deploy/site.env" || return $?
-    RUNTIME_TARGET_RESOLVED_CONFIG_PATH="$(openclaw_control_plane_resolve_config_path "$profile_id" "$requested_config_path" "$explicit_profile")" || return 1
+    _OPENCLAW_RUNTIME_TARGET_RESOLVED_CONFIG_PATH="$(openclaw_control_plane_resolve_config_path "$profile_id" "$requested_config_path" "$explicit_profile")" || return 1
   fi
-  printf '%s\n' "$RUNTIME_TARGET_RESOLVED_CONFIG_PATH"
+  printf '%s\n' "$_OPENCLAW_RUNTIME_TARGET_RESOLVED_CONFIG_PATH"
 }
 
 runtime_target_resolve_path_from_dir() {
@@ -106,18 +106,18 @@ runtime_target_load_registry_cache_fast() {
   if runtime_target_config_declares_service_registry_fragments "$config_path"; then
     return 1
   fi
-  RUNTIME_TARGET_REGISTRY_CACHE="$(jq -r '
+  _OPENCLAW_RUNTIME_TARGET_REGISTRY_CACHE="$(jq -r '
     .targets[]?
     | select((.target // "") != "" and (.service // "") != "" and (.container // "") != "")
     | [.target, .service, .container]
     | @tsv
   ' "$SERVICE_REGISTRY_PATH" | awk -F '\t' '{print $1 "|" $2 "|" $3}')" || return 1
-  [[ -n "$RUNTIME_TARGET_REGISTRY_CACHE" ]] || return 1
+  [[ -n "$_OPENCLAW_RUNTIME_TARGET_REGISTRY_CACHE" ]] || return 1
 }
 
 # 加载并缓存 runtime service registry，供后续解析复用。
 runtime_target_load_registry_cache() {
-  [[ -n "$RUNTIME_TARGET_REGISTRY_CACHE" ]] && return 0
+  [[ -n "$_OPENCLAW_RUNTIME_TARGET_REGISTRY_CACHE" ]] && return 0
   if runtime_target_load_registry_cache_fast; then
     return 0
   fi
@@ -129,7 +129,7 @@ runtime_target_load_registry_cache() {
   while IFS= read -r -d '' item; do
     repo_python_env_args+=("$item")
   done < <(openclaw_repo_python_env_args "$ROOT_DIR")
-  RUNTIME_TARGET_REGISTRY_CACHE="$(bash "$PYTHON_RUNNER" --workdir "$ROOT_DIR" "${repo_python_env_args[@]+"${repo_python_env_args[@]}"}" --env "OPENCLAW_CONTROL_PLANE_SERVICE_CONFIG_PATH=$config_path" -- - "$SERVICE_REGISTRY_PATH" "$config_path" <<'PY'
+  _OPENCLAW_RUNTIME_TARGET_REGISTRY_CACHE="$(bash "$PYTHON_RUNNER" --workdir "$ROOT_DIR" "${repo_python_env_args[@]+"${repo_python_env_args[@]}"}" --env "OPENCLAW_CONTROL_PLANE_SERVICE_CONFIG_PATH=$config_path" -- - "$SERVICE_REGISTRY_PATH" "$config_path" <<'PY'
 import sys
 from pathlib import Path
 
@@ -151,13 +151,13 @@ for item in rows:
         print(f'{target}|{service}|{container}')
 PY
 )" || runtime_target_fail "读取 runtime service registry 失败：$SERVICE_REGISTRY_PATH" || return 2
-  [[ -n "$RUNTIME_TARGET_REGISTRY_CACHE" ]] || runtime_target_fail "runtime service registry 为空：$SERVICE_REGISTRY_PATH" || return 2
+  [[ -n "$_OPENCLAW_RUNTIME_TARGET_REGISTRY_CACHE" ]] || runtime_target_fail "runtime service registry 为空：$SERVICE_REGISTRY_PATH" || return 2
 }
 
 # 列出 registry 中声明的全部 runtime target。
 runtime_target_known_targets() {
   runtime_target_load_registry_cache || return 1
-  printf '%s\n' "$RUNTIME_TARGET_REGISTRY_CACHE" | cut -d'|' -f1
+  printf '%s\n' "$_OPENCLAW_RUNTIME_TARGET_REGISTRY_CACHE" | cut -d'|' -f1
 }
 
 # 按 target 返回 registry 记录。
@@ -165,7 +165,7 @@ runtime_target_record_for_target() {
   local target=""
   target="$(runtime_target_normalize_target "$1")"
   runtime_target_load_registry_cache || return 1
-  printf '%s\n' "$RUNTIME_TARGET_REGISTRY_CACHE" | awk -F'|' -v target="$target" '$1 == target { print; found=1; exit } END { exit(found ? 0 : 1) }'
+  printf '%s\n' "$_OPENCLAW_RUNTIME_TARGET_REGISTRY_CACHE" | awk -F'|' -v target="$target" '$1 == target && !found { print; found=1 } END { exit(found ? 0 : 1) }'
 }
 
 # 根据 target 解析 compose service 名称。
@@ -186,14 +186,14 @@ runtime_target_container_name_for_target() {
 runtime_target_resolve_by_service_name() {
   local service_name="$1"
   runtime_target_load_registry_cache || return 1
-  printf '%s\n' "$RUNTIME_TARGET_REGISTRY_CACHE" | awk -F'|' -v service_name="$service_name" '$2 == service_name { print; found=1; exit } END { exit(found ? 0 : 1) }'
+  printf '%s\n' "$_OPENCLAW_RUNTIME_TARGET_REGISTRY_CACHE" | awk -F'|' -v service_name="$service_name" '$2 == service_name && !found { print; found=1 } END { exit(found ? 0 : 1) }'
 }
 
 # 按容器名反查 registry 记录。
 runtime_target_resolve_by_container_name() {
   local container_name="$1"
   runtime_target_load_registry_cache || return 1
-  printf '%s\n' "$RUNTIME_TARGET_REGISTRY_CACHE" | awk -F'|' -v container_name="$container_name" '$3 == container_name { print; found=1; exit } END { exit(found ? 0 : 1) }'
+  printf '%s\n' "$_OPENCLAW_RUNTIME_TARGET_REGISTRY_CACHE" | awk -F'|' -v container_name="$container_name" '$3 == container_name && !found { print; found=1 } END { exit(found ? 0 : 1) }'
 }
 
 # 对文本行做去重并保持首次出现顺序。

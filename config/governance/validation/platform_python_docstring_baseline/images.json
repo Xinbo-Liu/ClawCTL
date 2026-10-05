@@ -48,7 +48,7 @@
     },
     "python/openclaw/images/governance_surface.py": {
       "moduleHasChineseDocstring": true,
-      "publicChineseDocstrings": 2,
+      "publicChineseDocstrings": 1,
       "publicEnglishOnlyDocstrings": 0,
       "publicItemBaselines": {
         "function:contract_info": {
@@ -82,8 +82,8 @@
           "qualname": "parse_args"
         },
         "function:render_contract": {
-          "hasChineseDocstring": true,
-          "hasDocstring": true,
+          "hasChineseDocstring": false,
+          "hasDocstring": false,
           "kind": "function",
           "qualname": "render_contract"
         },
@@ -124,22 +124,22 @@
           "qualname": "<module>"
         }
       },
-      "publicMissingDocstrings": 10
+      "publicMissingDocstrings": 11
     },
     "python/openclaw/images/upstream_overlay_contract.py": {
-      "moduleHasChineseDocstring": false,
-      "publicChineseDocstrings": 0,
-      "publicEnglishOnlyDocstrings": 1,
+      "moduleHasChineseDocstring": true,
+      "publicChineseDocstrings": 3,
+      "publicEnglishOnlyDocstrings": 0,
       "publicItemBaselines": {
         "class:OverlayContext": {
-          "hasChineseDocstring": false,
-          "hasDocstring": false,
+          "hasChineseDocstring": true,
+          "hasDocstring": true,
           "kind": "class",
           "qualname": "OverlayContext"
         },
         "class:OverlayContractError": {
-          "hasChineseDocstring": false,
-          "hasDocstring": false,
+          "hasChineseDocstring": true,
+          "hasDocstring": true,
           "kind": "class",
           "qualname": "OverlayContractError"
         },
@@ -198,13 +198,13 @@
           "qualname": "require_file"
         },
         "module:<module>": {
-          "hasChineseDocstring": false,
+          "hasChineseDocstring": true,
           "hasDocstring": true,
           "kind": "module",
           "qualname": "<module>"
         }
       },
-      "publicMissingDocstrings": 11
+      "publicMissingDocstrings": 9
     }
   },
   "kind": "openclaw_platform_docstring_baseline_shard",

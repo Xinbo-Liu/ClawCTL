@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Manifest loading and merge helpers for runtime compose mounts."""
+"""提供OpenClaw 运行态子系统的生产实现。"""
 from __future__ import annotations
 
 import json

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Agent module detach plan helpers."""
+"""提供OpenClaw 控制平面子系统的生产实现。"""
 from __future__ import annotations
 
 import copy
@@ -13,7 +13,6 @@ from openclaw.lib.io.json_access import json_object
 
 
 def resolve_detach_operation_ref(module_payload: dict[str, Any], *, module_ref: str, job_id: str, operation_ref: str) -> str:
-    """Locate the operation currently bound to the requested job."""
     operations = json_object(module_payload.get('operations'))
     found_operation_ref = ''
     for current_operation_ref, current_operation in operations.items():
@@ -39,7 +38,6 @@ def build_detach_module_write(
     job_id: str,
     module_path: Path,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
-    """Build the module.json update that removes the job binding."""
     next_module_payload = copy.deepcopy(module_payload)
     operations = json_object(next_module_payload.get('operations'))
     next_operation_payload = operations.get(operation_ref)
@@ -64,7 +62,6 @@ def build_detach_group_write(
     group_ref: str,
     job_id: str,
 ) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
-    """Build the optional group update for detach."""
     if not group_ref:
         return None, None
     group_row = json_object(registry.get('agentGroupsById')).get(group_ref)
@@ -88,7 +85,6 @@ def build_detach_target_write(
     agent_ref: str,
     job_id: str,
 ) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
-    """Build the optional target update for detach."""
     if not target_binding_ref:
         return None, None
     target_row = json_object(registry.get('targetsById')).get(target_binding_ref)
@@ -141,7 +137,6 @@ def build_detach_plan_payload(
     target_change: dict[str, Any] | None,
     writes: list[dict[str, Any]],
 ) -> dict[str, Any]:
-    """Render the detach plan payload."""
     return {
         'status': 'ok',
         'mode': 'plan',

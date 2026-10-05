@@ -1,3 +1,5 @@
+"""提供OpenClaw doctor 子系统的生产实现。"""
+
 from __future__ import annotations
 
 import json

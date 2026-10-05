@@ -22,13 +22,11 @@ class TimePolicyError(ValueError):
 
 
 def app_timezone_name(env: dict[str, str] | None = None) -> str:
-    """返回当前应用业务时区名称。"""
     source = env if env is not None else os.environ
     return str(source.get("APP_TZ") or source.get("TZ") or DEFAULT_APP_TZ).strip() or DEFAULT_APP_TZ
 
 
 def resolve_timezone(name: object | None = None) -> tzinfo:
-    """严格解析 IANA 时区名称，拒绝静默退回 UTC。"""
     timezone_name = str(name or "").strip() or DEFAULT_APP_TZ
     if timezone_name.upper() in {"UTC", "Z"}:
         return timezone.utc
@@ -41,18 +39,15 @@ def resolve_timezone(name: object | None = None) -> tzinfo:
 
 
 def now_utc() -> datetime:
-    """返回 UTC aware datetime。"""
     return datetime.now(timezone.utc)
 
 
 def utc_iso(value: datetime | None = None) -> str:
-    """返回 UTC ISO 字符串，使用 Z 后缀。"""
     current = ensure_aware(value or now_utc()).astimezone(timezone.utc)
     return current.isoformat().replace("+00:00", "Z")
 
 
 def parse_iso_datetime(value: object, *, assume_tz: tzinfo = timezone.utc) -> datetime | None:
-    """解析 ISO 时间字符串；无时区时按 assume_tz 补齐。"""
     text = str(value or "").strip()
     if not text:
         return None
@@ -64,7 +59,6 @@ def parse_iso_datetime(value: object, *, assume_tz: tzinfo = timezone.utc) -> da
 
 
 def ensure_aware(value: datetime, *, assume_tz: tzinfo = timezone.utc) -> datetime:
-    """确保 datetime 带时区；无时区值按 assume_tz 解释。"""
     if value.tzinfo is None:
         return value.replace(tzinfo=assume_tz)
     return value
@@ -76,7 +70,6 @@ def align_datetime_for_compare(
     *,
     assume_tz: tzinfo = timezone.utc,
 ) -> datetime | None:
-    """把 value 对齐到 reference 的比较形态，避免丢失绝对时间语义。"""
     if value is None:
         return None
     reference_has_tz = reference.tzinfo is not None and reference.utcoffset() is not None

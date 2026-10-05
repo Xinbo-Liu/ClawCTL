@@ -49,7 +49,6 @@ ENV_FILE="$ROOT_DIR/deploy/.env"
 SUMMARY_JSON=""
 FAILURES=0
 WARNINGS=0
-
 usage() {
   cat <<'USAGE'
 用法：
@@ -74,11 +73,9 @@ scope：
   -h, --help              显示帮助
 USAGE
 }
-
 note() { printf '[INFO] %s\n' "$*"; }
 warn() { WARNINGS=1; printf '[WARN] %s\n' "$*"; }
 fail() { FAILURES=1; printf '[FAIL] %s\n' "$*" >&2; }
-
 model_runtime_enabled() {
   local expected_json=""
   local -a repo_python_env_args=()
@@ -119,7 +116,6 @@ PY
     printf 'false\n'
   fi
 }
-
 check_readable_file() {
   local path="$1"
   local label="$2"
@@ -129,7 +125,6 @@ check_readable_file() {
   fi
   [[ -r "$path" ]] || fail "$label 不可读：$path"
 }
-
 check_readable_dir() {
   local path="$1"
   local label="$2"
@@ -139,7 +134,6 @@ check_readable_dir() {
   fi
   [[ -r "$path" && -x "$path" ]] || fail "$label 不可读/不可遍历：$path"
 }
-
 resolve_deployment_acceptance_state() {
   local resolved=""
   if [[ -n "$DEPLOYMENT_ACCEPTANCE_STATE" ]]; then
@@ -155,7 +149,6 @@ resolve_deployment_acceptance_state() {
     DEPLOYMENT_ACCEPTANCE_STATE="$ROOT_DIR/$resolved"
   fi
 }
-
 runtime_prepare_checks() {
   check_readable_file "$ENV_FILE" "运行态 env 文件"
   check_readable_file "$HOST_GATEWAY_DIR/openclaw.json" "official Gateway 运行态 JSON"
@@ -167,7 +160,6 @@ runtime_prepare_checks() {
   check_readable_file "$HOST_GATEWAY_DIR/nginx.gateway.conf" "private ingress Nginx 运行态配置"
   check_readable_file "$HOST_GATEWAY_DIR/exec-approvals.json" "official Gateway exec approvals 运行态副本"
 }
-
 evidence_export_checks() {
   runtime_prepare_checks
   resolve_deployment_acceptance_state
@@ -181,7 +173,6 @@ evidence_export_checks() {
     note "当前 active profile 未声明 model_runtime，跳过 models status --probe JSON 前提"
   fi
 }
-
 clean_release_checks() {
   evidence_export_checks
   check_readable_dir "$HOST_CONTROL_PLANE_DIR/setup/shadow_verify" "shadow verify 产物目录"
@@ -259,7 +250,7 @@ fi
 if [[ "$FAILURES" != "0" ]]; then
   case "$SCOPE" in
     runtime-prepare)
-      note '建议先执行：bash ./scripts/setup/bootstrap.sh && bash ./scripts/runtime/run_openclaw_python_tool.sh setup ingress render-nginx --env-file deploy/.env；分阶段补跑与恢复入口统一查看 docs/getting-started/quickstart.md'
+      note '仅补运行态派生产物时执行：bash ./scripts/setup/bootstrap.sh && bash ./scripts/runtime/run_openclaw_python_tool.sh setup ingress render-nginx --env-file deploy/.env；配置变更后需要容器读取新 env 时执行：bash ./scripts/runtime/run_runtime_service_action.sh up --all --force-recreate。分阶段补跑与恢复入口统一查看 docs/getting-started/quickstart.md'
       ;;
     evidence-export)
       note '建议先执行：bash ./scripts/setup/one_click_test_full.sh，并确保 official_cli 产物已生成后再导出 runtime evidence'

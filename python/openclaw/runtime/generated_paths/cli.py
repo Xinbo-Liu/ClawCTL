@@ -1,4 +1,4 @@
-"""runtime paths render-generated/check-generated CLI。"""
+"""提供OpenClaw 运行态子系统的生产实现。"""
 from __future__ import annotations
 
 import argparse

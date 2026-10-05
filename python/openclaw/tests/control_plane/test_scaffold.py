@@ -133,7 +133,7 @@ class ModuleScaffoldTest(unittest.TestCase):
             module_payload['governance']['changeControlDocPaths'],
             [
                 '@repo/docs/architecture/agent-governance.md',
-                '@repo/docs/architecture/agent-module-governance.md',
+                '@repo/agent/governance/module-governance.md',
             ],
         )
         self.assertIn('python -m openclaw_ext_probe.modules.alpha_probe.main <command>', main_text)

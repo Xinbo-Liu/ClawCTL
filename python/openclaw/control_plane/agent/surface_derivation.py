@@ -14,7 +14,6 @@ from openclaw.lib.io.json_access import json_object
 
 
 def normalize_agent_capabilities(value: Any, *, label: str) -> dict[str, Any]:
-    """规范化 agent capabilities 载荷。"""
     if not isinstance(value, dict):
         raise CliError(f'{label} 必须为对象', 2)
     filesystem_write = _ensure_unique_text_list(value.get('filesystemWrite') or [], label=f'{label}.filesystemWrite')
@@ -29,7 +28,6 @@ def normalize_agent_capabilities(value: Any, *, label: str) -> dict[str, Any]:
 def build_expected_agent_control_plane_registry(
     modules: list[dict[str, Any]],
 ) -> dict[str, dict[str, dict[str, Any]]]:
-    """构建期望的 agent / implementation 虚拟 registry。"""
     expected: dict[str, dict[str, dict[str, Any]]] = {
         'agents': {},
         'implementations': {},

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Readonly and evidence-oriented control-plane CLI handlers."""
+"""提供OpenClaw 控制平面子系统的生产实现。"""
 from __future__ import annotations
 
 import argparse
@@ -9,7 +9,6 @@ from typing import Any
 from openclaw.control_plane.api import (
     render_agent_access_log_summary,
     render_agent_group_access_summary,
-    render_agent_group_acceptance_bindings_summary,
     render_agent_group_release_gates_summary,
     render_agent_groups_summary,
     render_agent_modules_summary,
@@ -85,17 +84,14 @@ def _print_extension_filtered_registry_json(args: argparse.Namespace, render: An
 
 
 def cmd_check_agent_control_plane_registry(args: argparse.Namespace) -> int:
-    """校验 agent / implementation 视图是否可由 module manifest 派生。"""
     return cli_support._print_json(ensure_agent_control_plane_registry(Path(cli_support._config_path_from_args(args)).resolve(), sync=False))
 
 
 def cmd_check_agent_assembly_registry(args: argparse.Namespace) -> int:
-    """校验 skill / permission / tool 视图是否可由 agent 内部资产派生。"""
     return cli_support._print_json(ensure_agent_internal_assembly_registry(Path(cli_support._config_path_from_args(args)).resolve(), sync=False))
 
 
 def cmd_validate_registry(args: argparse.Namespace) -> int:
-    """校验控制平面 registry 及其交叉引用。"""
     registry = cli_support._load_registry_from_args(args)
     payload = {
         'status': 'ok',
@@ -121,17 +117,14 @@ def cmd_validate_registry(args: argparse.Namespace) -> int:
 
 
 def cmd_summary(args: argparse.Namespace) -> int:
-    """输出控制平面摘要。"""
     return cli_support._print_config_scoped_json(args, render_control_plane_summary)
 
 
 def cmd_jobs(args: argparse.Namespace) -> int:
-    """输出全部 job 摘要。"""
     return _print_extension_filtered_config_json(args, render_jobs_summary)
 
 
 def cmd_job(args: argparse.Namespace) -> int:
-    """输出单个 job 详情。"""
     job_ref = _qualify_ref_for_extension(args.job_id, _extension_selector(args))
     payload = cli_support._render_config_scoped_payload(args, lambda: render_job_detail(job_ref))
     if 'error' in payload:
@@ -140,42 +133,34 @@ def cmd_job(args: argparse.Namespace) -> int:
 
 
 def cmd_agents(args: argparse.Namespace) -> int:
-    """输出 agent 契约摘要。"""
     return _print_extension_filtered_config_json(args, render_agents_summary)
 
 
 def cmd_agent_groups(args: argparse.Namespace) -> int:
-    """输出 agent group 契约与运行摘要。"""
     return _print_extension_filtered_config_json(args, render_agent_groups_summary)
 
 
 def cmd_agent_modules(args: argparse.Namespace) -> int:
-    """输出 agent module 契约摘要。"""
     return _print_extension_filtered_config_json(args, render_agent_modules_summary)
 
 
 def cmd_skill_sets(args: argparse.Namespace) -> int:
-    """输出 skill set 契约摘要。"""
     return _print_extension_filtered_config_json(args, render_skill_sets_summary)
 
 
 def cmd_permission_policies(args: argparse.Namespace) -> int:
-    """输出 permission policy 契约摘要。"""
     return _print_extension_filtered_config_json(args, render_permission_policies_summary)
 
 
 def cmd_toolsets(args: argparse.Namespace) -> int:
-    """输出 toolset 契约摘要。"""
     return _print_extension_filtered_config_json(args, render_toolsets_summary)
 
 
 def cmd_runtime_adapters(args: argparse.Namespace) -> int:
-    """输出 runtime adapter 契约摘要。"""
     return cli_support._print_config_scoped_json(args, render_runtime_adapters_summary)
 
 
 def cmd_agent_access_log(args: argparse.Namespace) -> int:
-    """输出 agent 访问日志摘要。"""
     return cli_support._print_config_scoped_json(
         args,
         lambda: render_agent_access_log_summary(
@@ -190,7 +175,6 @@ def cmd_agent_access_log(args: argparse.Namespace) -> int:
 
 
 def cmd_agent_group_access(args: argparse.Namespace) -> int:
-    """输出按 agent group 聚合的访问视图。"""
     return cli_support._print_config_scoped_json(
         args,
         lambda: render_agent_group_access_summary(
@@ -203,18 +187,7 @@ def cmd_agent_group_access(args: argparse.Namespace) -> int:
     )
 
 
-def cmd_agent_group_acceptance_bindings(args: argparse.Namespace) -> int:
-    """输出 agent group 的 acceptance 绑定摘要。"""
-    return cli_support._print_config_scoped_json(
-        args,
-        lambda: render_agent_group_acceptance_bindings_summary(
-            group_ref=getattr(args, 'group_ref', '') or '',
-        ),
-    )
-
-
 def cmd_agent_group_release_gates(args: argparse.Namespace) -> int:
-    """输出 agent group 的发布门禁摘要。"""
     return cli_support._print_config_scoped_json(
         args,
         lambda: render_agent_group_release_gates_summary(
@@ -224,7 +197,6 @@ def cmd_agent_group_release_gates(args: argparse.Namespace) -> int:
 
 
 def cmd_export_agent_group_evidence(args: argparse.Namespace) -> int:
-    """把 group 相关 evidence 导出到 control-plane state runtime evidence。"""
     state_root = Path(args.state_root).resolve() if str(args.state_root or '').strip() else None
     return cli_support._print_registry_json(
         args,
@@ -239,20 +211,16 @@ def cmd_export_agent_group_evidence(args: argparse.Namespace) -> int:
 
 
 def cmd_implementations(args: argparse.Namespace) -> int:
-    """输出 implementation 契约摘要。"""
     return _print_extension_filtered_registry_json(args, lambda registry: {'items': registry.get('implementations', [])})
 
 
 def cmd_models(args: argparse.Namespace) -> int:
-    """输出 model 契约摘要。"""
     return _print_extension_filtered_config_json(args, render_models_summary)
 
 
 def cmd_targets(args: argparse.Namespace) -> int:
-    """输出 target 契约摘要。"""
     return _print_extension_filtered_config_json(args, render_targets_summary)
 
 
 def cmd_run_ledger(args: argparse.Namespace) -> int:
-    """输出 run ledger 摘要。"""
     return cli_support._print_config_scoped_json(args, render_run_ledger_summary)

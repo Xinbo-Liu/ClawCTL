@@ -12,7 +12,6 @@ from typing import Any, Iterator
 from openclaw.control_plane.api import (
     _render_agent_access_log_summary_uncached,
     _render_agent_group_access_summary_uncached,
-    _render_agent_group_acceptance_bindings_summary_uncached,
     _render_agent_group_release_gates_summary_uncached,
     _render_run_ledger_summary_uncached,
 )
@@ -54,6 +53,12 @@ def _override_scheduler_state_root(state_root: Path | None) -> Iterator[None]:
 
 
 def _write_json(path: Path, payload: dict[str, Any]) -> None:
+    """写入JSON。
+
+    参数：
+        path（Path）：路径。
+        payload（dict[str, Any]）：payload。
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
 
@@ -71,7 +76,6 @@ def export_agent_group_evidence(
     with _override_scheduler_state_root(state_root_resolved):
         agent_access_path = _object_file_from_object_family('control_plane_agent_access_log', base_root=base_root)
         group_access_path = _object_file_from_object_family('control_plane_agent_group_access', base_root=base_root)
-        group_acceptance_bindings_path = _object_file_from_object_family('control_plane_agent_group_acceptance_bindings', base_root=base_root)
         group_release_gates_path = _object_file_from_object_family('control_plane_agent_group_release_gates', base_root=base_root)
         run_ledger_path = _object_file_from_object_family('control_plane_run_ledger', base_root=base_root)
         run_ledger = _render_run_ledger_summary_uncached(registry)
@@ -97,11 +101,6 @@ def export_agent_group_evidence(
     _write_json(group_access_path, group_access_payload)
 
     with _override_scheduler_state_root(state_root_resolved):
-        group_acceptance_bindings = _render_agent_group_acceptance_bindings_summary_uncached(registry)
-    group_acceptance_bindings_payload = {**metadata, 'kind': 'controlPlaneAgentGroupAcceptanceBindings', **group_acceptance_bindings}
-    _write_json(group_acceptance_bindings_path, group_acceptance_bindings_payload)
-
-    with _override_scheduler_state_root(state_root_resolved):
         group_release_gates = _render_agent_group_release_gates_summary_uncached(registry)
     group_release_gates_payload = {**metadata, 'kind': 'controlPlaneAgentGroupReleaseGates', **group_release_gates}
     _write_json(group_release_gates_path, group_release_gates_payload)
@@ -114,14 +113,12 @@ def export_agent_group_evidence(
             'runLedger': str(run_ledger_path),
             'agentAccessLog': str(agent_access_path),
             'agentGroupAccess': str(group_access_path),
-            'agentGroupAcceptanceBindings': str(group_acceptance_bindings_path),
             'agentGroupReleaseGates': str(group_release_gates_path),
         },
         'counts': {
             'runLedgerItems': int((run_ledger.get('counts') or {}).get('jobs') or 0),
             'agentAccessItems': int((agent_access.get('counts') or {}).get('items') or 0),
             'agentGroupAccessGroups': int((group_access.get('counts') or {}).get('groups') or 0),
-            'agentGroupAcceptanceBindings': int((group_acceptance_bindings.get('counts') or {}).get('items') or 0),
             'agentGroupReleaseGates': int((group_release_gates.get('counts') or {}).get('items') or 0),
         },
     }

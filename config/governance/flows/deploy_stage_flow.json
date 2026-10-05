@@ -142,8 +142,7 @@
         "bash ./scripts/images/check_openclaw_release.sh"
       ],
       "execution": {
-        "kind": "custom_handler",
-        "handler": "deploy_run_release_check"
+        "kind": "internal_runner"
       }
     },
     "pull_images": {
@@ -239,10 +238,10 @@
         "- compose up 前的 config 渲染结果是否已经稳定",
         "- 启用的 runtime 容器是否全部进入已创建状态",
         "- 若启动失败，先区分是镜像、端口、证书还是 bind mount 问题",
-        "- 若日志包含 INVALID_ZONE: docker，先以 root 复跑 prepare_docker_host.sh --open-firewall，再重放 apply_ingress_boundary_rules.sh"
+        "- 若日志包含 INVALID_ZONE: docker，先以 root 复跑 prepare_docker_host.sh --os auto --open-firewall，再重放 apply_ingress_boundary_rules.sh"
       ],
       "next_commands": [
-        "sudo bash ./scripts/setup/prepare_docker_host.sh --open-firewall",
+        "sudo bash ./scripts/setup/prepare_docker_host.sh --os auto --open-firewall",
         "sudo bash ./scripts/setup/apply_ingress_boundary_rules.sh --env-file deploy/.env",
         "bash ./scripts/runtime/run_runtime_service_action.sh up --all --force-recreate",
         "bash ./scripts/setup/one_click_deploy.sh --resume-from docker_compose_up",
@@ -499,7 +498,7 @@
         "- docs/operations/runtime-service-reference.md",
         "- docs/operations/troubleshooting.md",
         "重点检查：",
-        "- 当前 profile / extension 是否声明 required_run_ledger_jobs",
+        "- 平台 deployment acceptance manifest 是否声明 required_run_ledger_jobs",
         "- 当前 target 配置是否允许发送动作执行",
         "- run ledger latest run / result / artifacts manifest 是否来自当前机器"
       ],

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""控制平面 job artifact policy / latest alias / run manifest 统一控制面。"""
+"""汇总控制平面作业的产物策略、latest alias 声明与 scheduler manifest 路径模式。"""
 from __future__ import annotations
 
 import json
@@ -43,6 +43,17 @@ def _host_state_root(base_root: Path, *, path_resolver: Any | None = None) -> Pa
 
 
 def _resolved_artifact_root(run_artifact_root: str, base_root: Path, *, path_resolver: Any | None = None) -> str | None:
+    """将产物根逻辑 entry 解析为宿主机路径；未声明或未登记时返回 None。
+
+    参数：
+        run_artifact_root（str）：job 声明的逻辑路径 entry。
+        base_root（Path）：未注入解析器时使用的仓库根目录。
+        path_resolver（Any | None）：与 job registry 使用同一 profile 的解析器。
+    返回：
+        str | None：已登记 entry 的宿主机路径；空声明或未知 entry 返回 None。
+    副作用：
+        只解析仓库路径合同，不推测文件路径，也不读取运行产物。
+    """
     entry = str(run_artifact_root or '').strip()
     if not entry:
         return None
@@ -50,8 +61,7 @@ def _resolved_artifact_root(run_artifact_root: str, base_root: Path, *, path_res
         resolver = path_resolver or require_path_resolver(repo_root=base_root)
         return resolver.resolve_path(entry, view='host')
     except KeyError:
-        path = Path(entry)
-        return str(path if path.is_absolute() else (base_root / path).resolve())
+        return None
 
 
 def build_summary(
@@ -60,8 +70,20 @@ def build_summary(
     base_root: Path = ROOT_DIR,
     registry: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    """用同一 service 配置汇总 job 产物声明与 scheduler run 路径。
+
+    参数：
+        config_path（Path | None）：作业 registry 的 service 配置；缺省使用当前控制面选择。
+        base_root（Path）：显示相对路径时使用的仓库根目录。
+        registry（dict[str, Any] | None）：已加载的作业 registry，应与 config_path 一致；None 按 config_path 加载。
+
+    返回：
+        dict[str, Any]：作业产物策略、声明与 scheduler manifest 路径模式，不读取实际运行产物。
+    副作用：
+        读取所选 profile 的 registry 与路径合同，使用共享解析器缓存，不访问部署 env 文件或运行产物。
+    """
     registry = dict(registry) if registry is not None else load_registry(config_path)
-    path_resolver = require_path_resolver(repo_root=base_root)
+    path_resolver = require_path_resolver(repo_root=base_root, config_path=config_path)
     files = runtime_files(_host_state_root(base_root, path_resolver=path_resolver), registry)
     jobs = [job for job in list(registry.get('jobs') or []) if isinstance(job, dict)]
     jobs.sort(key=lambda item: (int(item.get('resolvedOrder') or item.get('order') or 0), str(item.get('id') or '')))

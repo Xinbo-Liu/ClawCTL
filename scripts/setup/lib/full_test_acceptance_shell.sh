@@ -105,8 +105,14 @@ full_test_evaluate_deployment_acceptance() {
   if ((${#RESULT_LINES[@]} > 0)); then
     printf '%s\n' "${RESULT_LINES[@]+"${RESULT_LINES[@]}"}" > "$RESULT_LINES_FILE"
   fi
-  local acceptance_kv=''
+  local acceptance_kv='' acceptance_started_at='' acceptance_finished_at=''
+  FULL_TEST_CURRENT_CHECK_ID=""
+  FULL_TEST_CURRENT_CHECK_STARTED_SECONDS=""
+  SETUP_GATE_LAST_DURATION_SECONDS=""
+  acceptance_started_at="$(full_test_epoch_seconds 2>/dev/null || true)"
   acceptance_kv="$("${FULL_TEST_SURFACE_CMD[@]}" acceptance-status --group "$GROUP" --only "$ONLY_RAW" --skip "$SKIP_RAW" --result-lines-file "$RESULT_LINES_FILE" --format kv-lines)"
+  acceptance_finished_at="$(full_test_epoch_seconds 2>/dev/null || true)"
+  SETUP_GATE_LAST_DURATION_SECONDS="$(full_test_duration_from_started "$acceptance_started_at" "$acceptance_finished_at")"
   local kv_line='' kv_key='' kv_value=''
   while IFS= read -r kv_line; do
     [[ -n "$kv_line" ]] || continue

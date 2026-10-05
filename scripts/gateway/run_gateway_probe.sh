@@ -5,7 +5,6 @@ __openclaw_script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 source "$__openclaw_script_dir/../lib/repo_root.sh"
 ROOT_DIR="$(openclaw_repo_root_from "$__openclaw_script_dir")"
 unset __openclaw_script_dir
-
 usage() {
   cat <<'USAGE'
 用法：

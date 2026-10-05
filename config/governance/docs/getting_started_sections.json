@@ -11,8 +11,9 @@
       "acceptance 产物与 required checks：`../operations/runtime-service-reference.md#deployment-acceptance-artifacts`"
     ],
     "step2_static_notes": [
-      "target 级变量维护入口固定为 `deploy/targets.d/<target_id>.env`；批量写入使用 `apply_target_env_values.sh --target <target_id>`，不要从 Windows PowerShell here-string 直接向远程 bash 写多行 env，也不要手改 `deploy/.env`。",
-      "启用业务扩展时，先执行 `bash ./scripts/setup/check_extension_env_values.sh --profile <profile_id>` 查看按 group 分组的 required / manual_required / secret 字段，再用 `apply_extension_env_values.sh --profile <profile_id> --init-from-example --set KEY=VALUE` 或 `--set-secret-from-env KEY` 写入扩展 env。",
+      "部署输入文件固定使用 `apply_deploy_input_values.sh --validate-only --profile <profile_id> --input <owner-only-env>` 先输出脱敏路由、未知键、错位键和缺失项诊断；命令也接受 `--input-env-file <path>`，语义与 `--input <path>` 相同；确认后再用 `--init` 由 active profile 路由写入 `deploy/site.env`、扩展 `extension.env` 与 `deploy/targets.d/<target_id>.env`；未知键、重复键、跨 profile target 与共享 site env 键位置错误会直接失败。",
+      "target 级变量维护入口固定为 `deploy/targets.d/<target_id>.env`；批量写入使用 `apply_target_env_values.sh --target <target_id>`，`--init-from-example` 从 active profile 的 dispatch target registry 初始化真实 `.env`；`deploy/targets.d/*.env.example` 是派生参考，交付真源为 `deploy/targets.d/<target_id>.env`。不要从 Windows PowerShell here-string 直接向远程 bash 写多行 env，也不要手改 `deploy/.env`。",
+      "启用业务扩展时，先执行 `bash ./scripts/setup/check_extension_env_values.sh --profile <profile_id>` 查看按 group 分组的 required / manual_required / secret 字段；多扩展 profile 可用 `apply_extension_env_values.sh --profile <profile_id> --init-from-example --set KEY=VALUE` 按 key owner 写入扩展 env，共享 site env 键会被拒绝并提示 `apply_site_env_values.sh`。",
       "需要逐项解释输入字段时，转到 `deployment-inputs.md`。",
       "one_click 入口职责、默认主链、阶段顺序与 `--resume-from` 语义统一查看本页。"
     ],
@@ -31,8 +32,8 @@
     ],
     "deploy_full_test_notes": [
       "`one_click_deploy.sh` 默认会校验或刷新 basic gate proof，启动 runtime 服务后自动执行 `one_click_test_full.sh` 并导出 runtime acceptance evidence。",
-      "若 `pull_images.sh` 在 `PULL_GATEWAY_CANDIDATE_MODE=auto-switch` 下改写了 `deploy/.env`，部署入口会重新加载镜像 env、重新渲染 effective compose、刷新 basic gate proof，并在 `docker_compose_up` 前用最终 compose image refs 做本地镜像合同检查。",
-      "若当前 profile / extension 声明 required run ledger jobs，`one_click_deploy.sh` 会先受控执行一次 `run_control_plane_run_all_once.sh` 生成真实 run ledger，再进入 full test；该入口只在 scheduler cycle lock busy 时有限重试，其他失败立即保留。发送动作按当前 target 配置执行；当前 target 配置不允许发送且 run ledger 缺失时，应改用 `--skip-acceptance` 仅启动服务，并把 deployment acceptance / runtime acceptance evidence 未闭合作为交接状态。run ledger execution 与 artifact evidence 必须同时闭合，执行失败、job 缺失、artifact root 缺失或声明输出没有可接受 evidence 都会阻断 full test / deployment acceptance。",
+      "若 `pull_images.sh` 在 `PULL_GATEWAY_CANDIDATE_MODE=auto-switch` 下改写了 `deploy/.env`，部署入口会重新加载镜像 env、重新渲染 effective compose、刷新 basic gate proof，并在 `docker_compose_up` 前用最终 compose image refs 做本地镜像合同检查；镜像拉取完成后默认移除未被当前部署选用的 Gateway 来源标签。",
+      "若平台 deployment acceptance manifest 声明 required run ledger jobs，`one_click_deploy.sh` 会先受控执行一次 `run_control_plane_run_all_once.sh` 生成真实 run ledger，再进入 full test；该入口只在 scheduler cycle lock busy 时有限重试，其他失败立即保留。发送动作按当前 target 配置执行；当前 target 配置不允许发送且 run ledger 缺失时，应改用 `--skip-acceptance` 仅启动服务，并把 deployment acceptance / runtime acceptance evidence 未闭合作为显式交接状态。run ledger execution 与 artifact evidence 必须同时闭合，执行失败、job 缺失、artifact root 缺失或声明输出没有可接受 evidence 都会阻断 full test / deployment acceptance。",
       "需要结构化 full test 摘要时，执行 `bash ./scripts/setup/one_click_test_full.sh --json`。",
       "需要快速恢复、验证服务启动或先定位部署根因时，可对部署入口追加 `--skip-acceptance`；该模式不会运行 full test，也不会把 deployment acceptance 置为通过。",
       "`--skip-acceptance` 后先执行 `show_runtime_service_status.sh`、`check_internal_api_runtime.sh`、`check_control_plane_runtime.sh` 与 root 侧 ingress 边界证据检查；当前 target 配置允许发送时，选择 `--resume-from post_deploy_acceptance` 闭合 required jobs、full test 与 runtime evidence；required run ledger jobs 已 accepted、仅 full test 或 runtime evidence 未闭合时，选择 `--resume-from post_deploy_full_acceptance`。",
@@ -46,7 +47,7 @@
     "manual_acceptance_notes": [
       "目标机先执行运行态人工补充核对：`../operations/runtime-service-reference.md#manual-post-deploy-checks`。",
       "访问端再执行 `/healthz`、`/readyz` 与浏览器访问。",
-      "访问端闭环可先在目标机生成辅助命令：`bash ./scripts/setup/check_client_access_acceptance.sh --env-file deploy/.env --client-cidr '<目标机实际看到的访问端私网CIDR[,CIDR]>' --tls-cn <OPENCLAW_TLS_CN>`；该入口区分目标机本机 `deployment_acceptance` 与外部浏览器/DNS/hosts/证书信任的 `client_access_acceptance`。",
+      "访问端闭环可先在目标机生成辅助命令：`bash ./scripts/setup/check_client_access_acceptance.sh --env-file deploy/.env --observed-source-cidr '<目标机或上游记录实际观测来源CIDR[,CIDR]>' --tls-cn <OPENCLAW_TLS_CN>`；该入口区分目标机本机 `deployment_acceptance` 与外部浏览器/DNS/hosts/证书信任的 `client_access_acceptance`。",
       "浏览器必须打开 `https://<OPENCLAW_TLS_CN>/`，Control UI 的 WebSocket URL 使用 `wss://<OPENCLAW_TLS_CN>`；若改用 IP 或其他别名访问，Gateway 会因 Origin 不在 `allowedOrigins` 中拒绝连接。",
       "Control UI 连接时必须填入 `OPENCLAW_GATEWAY_TOKEN` 的真实值；目标机可用 `bash ./scripts/runtime/run_openclaw_python_tool.sh setup env query-env OPENCLAW_GATEWAY_TOKEN --env-file deploy/.env` 查询。",
       "浏览器本地凭据丢失或更换浏览器时，不重新部署、不重新生成 token；重新读取当前 `OPENCLAW_GATEWAY_TOKEN` 并批准新设备配对即可恢复访问。",
@@ -121,7 +122,7 @@
       ],
       "resume_rules": [
         "`--resume-from` 必须从真实失败阶段或更早阶段继续；如果失败发生在 `docker_compose_config` 或更早阶段，不能固定从 `docker_compose_up` 开始恢复执行。",
-        "若 `docker_compose_up` 因 `INVALID_ZONE: docker` 失败，先以 root 执行 `prepare_docker_host.sh --open-firewall` 与 `apply_ingress_boundary_rules.sh --env-file deploy/.env`，再从 `docker_compose_up` 继续。",
+        "若 `docker_compose_up` 因 `INVALID_ZONE: docker` 失败，先以 root 执行 `prepare_docker_host.sh --os auto --open-firewall` 与 `apply_ingress_boundary_rules.sh --env-file deploy/.env`，再从 `docker_compose_up` 继续。",
         "若失败发生在服务启动后的 required run ledger jobs 阶段，使用 `--resume-from post_deploy_acceptance` 执行 required jobs、full test 与 runtime evidence；发送动作按当前 target 配置执行。",
         "若 required run ledger jobs 已 accepted，仅 full test 或 runtime evidence 导出阶段失败，使用 `--resume-from post_deploy_full_acceptance` 执行 full test 与 runtime evidence，且跳过 run_all_once。",
         "后置验收 resume 必须实际执行验收闭环，不能与 `--prepare-only` 或 `--skip-acceptance` 同用。",

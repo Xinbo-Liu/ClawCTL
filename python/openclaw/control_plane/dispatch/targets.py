@@ -12,11 +12,12 @@ from openclaw.lib.channels.provider_registry import endpoint_validator, resolve_
 
 
 ALLOWED_RELEASE_LEVELS = {"official", "review", "degraded"}
-REQUIRED_BOUNDARY_FIELDS = ("dispatchLane", "payloadScope", "publishLatestDefault")
+REQUIRED_BOUNDARY_FIELDS = ("dispatchLane", "payloadScope", "completionRole", "publishLatestDefault")
 
 
 @dataclass(frozen=True)
 class DispatchDefaults:
+    """dispatch target 默认值集合。"""
     dedupe_window_hours: int
     max_attempts: int
     backoff_seconds: list[int]
@@ -62,6 +63,7 @@ class ResolvedTarget:
     dispatch_lane: str = ""
     payload_scope: str = ""
     publish_latest: bool = False
+    completion_role: str = "advisory"
     boundary_description: str = ""
 
 
@@ -122,6 +124,11 @@ def parse_release_levels(value: object, default: list[str]) -> list[str]:
         if normalized in ALLOWED_RELEASE_LEVELS and normalized not in levels:
             levels.append(normalized)
     return levels or list(default)
+
+
+def _target_env_value(env_map: Any, primary_key: str) -> object:
+    """读取 target registry 声明的 canonical env 值。"""
+    return env_map.get(primary_key) if primary_key else None
 
 
 def load_dispatch_defaults(config_path: Path) -> DispatchDefaults:
@@ -188,11 +195,16 @@ def _load_target_boundary(
             f"dispatch target {target_id} boundary publishLatestDefault must be boolean "
             f"in registry v{registry_version}: {source_label}"
         )
+    completion_role = str(raw_boundary.get("completionRole") or "").strip()
+    if completion_role not in {"required", "advisory"}:
+        raise TargetConfigError(
+            f"dispatch target {target_id} boundary completionRole must be required/advisory "
+            f"in registry v{registry_version}: {source_label}"
+        )
     return raw_boundary
 
 
 def target_publishes_latest(target: object) -> bool:
-    """缺少显式 publish_latest 边界时，默认不推进 dispatch latest。"""
     return parse_bool(getattr(target, "publish_latest", None), False)
 
 
@@ -235,15 +247,22 @@ def load_targets_payload(
         silence_min_env = str(row.get("silenceMinDeltaEnv") or "").strip()
         allowed_levels_env = str(row.get("allowedReleaseLevelsEnv") or "").strip()
         enabled_default = parse_bool(row.get("enabledDefault"), False)
-        enabled = parse_bool(env_map.get(enabled_env), enabled_default) if enabled_env else enabled_default
-        endpoint_url = str(env_map.get(endpoint_env) or "").strip() if endpoint_env else ""
-        secret = str(env_map.get(secret_env) or "").strip() if secret_env else ""
-        title = str(env_map.get(title_env) or row.get("titleDefault") or row.get("id") or "").strip()
-        msg_format = str(env_map.get(format_env) or row.get("formatDefault") or "card").strip().lower() or "card"
-        at_all = parse_bool(env_map.get(at_all_env), parse_bool(row.get("atAllDefault"), False))
-        silence_enabled = parse_bool(env_map.get(silence_env), parse_bool(row.get("silenceEnabledDefault"), False))
-        silence_min_delta = parse_float(env_map.get(silence_min_env), parse_float(row.get("silenceMinDeltaDefault"), 0.2, 0.0), 0.0)
-        allowed_release_levels = parse_release_levels(env_map.get(allowed_levels_env), parse_release_levels(row.get("allowedReleaseLevelsDefault"), ["official"]))
+        enabled = parse_bool(_target_env_value(env_map, enabled_env), enabled_default) if enabled_env else enabled_default
+        endpoint_url = str(_target_env_value(env_map, endpoint_env) or "").strip() if endpoint_env else ""
+        secret = str(_target_env_value(env_map, secret_env) or "").strip() if secret_env else ""
+        title = str(_target_env_value(env_map, title_env) or row.get("titleDefault") or row.get("id") or "").strip()
+        msg_format = str(_target_env_value(env_map, format_env) or row.get("formatDefault") or "card").strip().lower() or "card"
+        at_all = parse_bool(_target_env_value(env_map, at_all_env), parse_bool(row.get("atAllDefault"), False))
+        silence_enabled = parse_bool(_target_env_value(env_map, silence_env), parse_bool(row.get("silenceEnabledDefault"), False))
+        silence_min_delta = parse_float(
+            _target_env_value(env_map, silence_min_env),
+            parse_float(row.get("silenceMinDeltaDefault"), 0.2, 0.0),
+            0.0,
+        )
+        allowed_release_levels = parse_release_levels(
+            _target_env_value(env_map, allowed_levels_env),
+            parse_release_levels(row.get("allowedReleaseLevelsDefault"), ["official"]),
+        )
         env_fields = {
             "enabled_env": enabled_env,
             "endpoint_env": endpoint_env,
@@ -288,6 +307,7 @@ def load_targets_payload(
             dispatch_lane=str(boundary.get("dispatchLane") or "").strip(),
             payload_scope=str(boundary.get("payloadScope") or "").strip(),
             publish_latest=parse_bool(boundary.get("publishLatestDefault"), False),
+            completion_role=str(boundary.get("completionRole") or "").strip(),
             boundary_description=str(boundary.get("description") or "").strip(),
         ))
     return defaults, targets
@@ -314,6 +334,13 @@ def evaluate_target_policies(targets: list[ResolvedTarget]) -> dict[str, dict[st
     for target in targets:
         blocking_issues: list[str] = []
         security_warnings: list[str] = []
+        formal_required = (
+            target.completion_role == 'required'
+            and target.dispatch_lane == 'formal_broadcast'
+            and target_publishes_latest(target)
+        )
+        if formal_required and not target.enabled:
+            blocking_issues.append('target_contract_violation:formal_required_disabled')
         if target.enabled and not target_provider_supported(target):
             blocking_issues.append("unsupported_provider_adapter")
         if target.enabled and not target.endpoint_present:
@@ -327,6 +354,12 @@ def evaluate_target_policies(targets: list[ResolvedTarget]) -> dict[str, dict[st
             shared = [item for item in shared_map.get(target.endpoint_url, []) if item != target.target_id]
             if shared:
                 blocking_issues.append(f"shared_target_endpoint:{','.join(sorted(shared))}")
+        if (
+            formal_required
+            and target.enabled
+            and target.silence_enabled
+        ):
+            blocking_issues.append('target_contract_violation:formal_silence_forbidden')
         policies[target.target_id] = {
             "blocking_issues": blocking_issues,
             "security_warnings": security_warnings,
@@ -344,12 +377,17 @@ def build_target_summary(targets: list[ResolvedTarget], policies: dict[str, dict
         policy = policies.get(target.target_id) or {"blocking_issues": [], "security_warnings": []}
         blocking_issues = list(policy.get("blocking_issues") or [])
         security_warnings = list(policy.get("security_warnings") or [])
+        formal_required = (
+            str(getattr(target, 'completion_role', '') or '') == 'required'
+            and str(getattr(target, 'dispatch_lane', '') or '') == 'formal_broadcast'
+            and target_publishes_latest(target)
+        )
         if target.enabled:
             enabled_count += 1
-            if blocking_issues:
-                blocking_enabled_count += 1
             if security_warnings:
                 security_warning_count += 1
+        if blocking_issues and (target.enabled or formal_required):
+            blocking_enabled_count += 1
         rows.append({
             "target_id": target.target_id,
             "transport": target.transport,
@@ -361,6 +399,7 @@ def build_target_summary(targets: list[ResolvedTarget], policies: dict[str, dict
             "dispatch_lane": str(getattr(target, "dispatch_lane", "") or ""),
             "payload_scope": str(getattr(target, "payload_scope", "") or ""),
             "publish_latest": target_publishes_latest(target),
+            "completion_role": str(getattr(target, "completion_role", "advisory") or "advisory"),
             "boundary_description": str(getattr(target, "boundary_description", "") or ""),
             "target_group": target.target_group,
             "delivery_tier": target.delivery_tier,

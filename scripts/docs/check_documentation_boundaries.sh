@@ -13,6 +13,7 @@ usage() {
 用法：
   bash ./scripts/docs/check_documentation_boundaries.sh
   bash ./scripts/docs/check_documentation_boundaries.sh --stdout
+  bash ./scripts/docs/check_documentation_boundaries.sh --config-path <control-plane-config-path>
 
 说明：
   - `--help` 可离线查看；

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Module lifecycle and pluggability control-plane CLI handlers."""
+"""提供OpenClaw 控制平面子系统的生产实现。"""
 from __future__ import annotations
 
 import argparse
@@ -25,13 +25,11 @@ from openclaw.control_plane.registry import CliError
 
 
 def cmd_agent_module_pluggability(args: argparse.Namespace) -> int:
-    """输出 agent module 的可插拔性与解绑影响摘要。"""
     registry = cli_support._load_registry_from_args(args)
     return cli_support._print_json(build_module_pluggability_summary(registry, module_ref=args.module_ref))
 
 
 def cmd_scaffold_agent_module(args: argparse.Namespace) -> int:
-    """生成新的 agent module 最小脚手架。"""
     payload = scaffold_agent_module(
         repo_root=Path(args.repo_root).resolve() if str(args.repo_root or '').strip() else None,
         config_path=cli_support._required_config_path_from_args(args),
@@ -57,7 +55,6 @@ def cmd_scaffold_agent_module(args: argparse.Namespace) -> int:
 
 
 def cmd_agent_module_attach(args: argparse.Namespace) -> int:
-    """将 standalone module 挂接到 scheduler / group / target。"""
     if bool(args.retry_enabled) and bool(args.retry_disabled):
         raise CliError('--retry-enabled 与 --retry-disabled 不能同时使用', 2)
     payload = (apply_agent_module_attach if bool(args.write) else plan_agent_module_attach)(
@@ -94,7 +91,6 @@ def cmd_agent_module_attach(args: argparse.Namespace) -> int:
 
 
 def cmd_agent_module_detach(args: argparse.Namespace) -> int:
-    """将 scheduler-bound module 从 scheduler / group / target 卸载。"""
     payload = (apply_agent_module_detach if bool(args.write) else plan_agent_module_detach)(
         config_path=cli_support._required_config_path_from_args(args),
         repo_root=Path(args.repo_root).resolve() if str(args.repo_root or '').strip() else None,
@@ -106,7 +102,6 @@ def cmd_agent_module_detach(args: argparse.Namespace) -> int:
 
 
 def cmd_agent_module_prune(args: argparse.Namespace) -> int:
-    """收紧 module 可选面到最小合同。"""
     payload = (apply_agent_module_prune if bool(args.write) else plan_agent_module_prune)(
         config_path=cli_support._required_config_path_from_args(args),
         repo_root=Path(args.repo_root).resolve() if str(args.repo_root or '').strip() else None,
@@ -116,7 +111,6 @@ def cmd_agent_module_prune(args: argparse.Namespace) -> int:
 
 
 def cmd_agent_module_drop(args: argparse.Namespace) -> int:
-    """删除 standalone module 及其本地实现面。"""
     payload = (apply_agent_module_drop if bool(args.write) else plan_agent_module_drop)(
         config_path=cli_support._required_config_path_from_args(args),
         repo_root=Path(args.repo_root).resolve() if str(args.repo_root or '').strip() else None,
@@ -126,7 +120,6 @@ def cmd_agent_module_drop(args: argparse.Namespace) -> int:
 
 
 def cmd_job_surface_prune(args: argparse.Namespace) -> int:
-    """收紧 job manifest 到最小合同。"""
     payload = (apply_job_surface_prune if bool(args.write) else plan_job_surface_prune)(
         config_path=Path(cli_support._config_path_from_args(args)).resolve(),
         repo_root=Path(args.repo_root).resolve() if str(args.repo_root or '').strip() else None,

@@ -22,7 +22,6 @@ ENV_FILE="${ROOT_DIR}/deploy/.env"
 SITE_ENV_FILE="${ROOT_DIR}/deploy/site.env"
 RESTART_CONTAINERS=0
 FORCE_RECOVER_ENV=0
-
 usage() {
   cat <<'USAGE'
 用法：bash ./scripts/setup/recover_runtime_generated_state.sh [--force-recover-env] [--restart]
@@ -35,11 +34,9 @@ usage() {
   -h, --help             显示本帮助
 USAGE
 }
-
 log() {
   printf '[recover-runtime] %s\n' "$*"
 }
-
 fail() {
   printf '[recover-runtime] ERROR: %s\n' "$*" >&2
   exit 1
@@ -64,16 +61,13 @@ while (($#)); do
       ;;
   esac
 done
-
 require_command() {
   local name="$1"
   command -v "${name}" >/dev/null 2>&1 || fail "缺少命令：${name}"
 }
-
 container_exists() {
   docker inspect "$1" >/dev/null 2>&1
 }
-
 docker_env_value() {
   local container="$1"
   local key="$2"
@@ -81,7 +75,6 @@ docker_env_value() {
   docker inspect "${container}" --format '{{range .Config.Env}}{{println .}}{{end}}' 2>/dev/null |
     awk -F= -v env_key="${key}" '$1 == env_key {print substr($0, index($0, "=") + 1); exit}'
 }
-
 first_container_env_value() {
   local key="$1"
   shift
@@ -94,13 +87,11 @@ first_container_env_value() {
     fi
   done
 }
-
 docker_image_ref() {
   local container="$1"
   container_exists "${container}" || return 0
   docker inspect "${container}" --format '{{.Config.Image}}' 2>/dev/null || true
 }
-
 first_container_image_ref() {
   local container value
   for container in "$@"; do
@@ -111,24 +102,20 @@ first_container_image_ref() {
     fi
   done
 }
-
 docker_port_host_ip() {
   local container="$1"
   local port="$2"
   container_exists "${container}" || return 0
   docker inspect "${container}" --format "{{with index .HostConfig.PortBindings \"${port}\"}}{{(index . 0).HostIp}}{{end}}" 2>/dev/null || true
 }
-
 state_mount_source() {
   local container="$1"
   container_exists "${container}" || return 0
   docker inspect "${container}" --format '{{range .Mounts}}{{if eq .Destination "/home/node/.openclaw"}}{{.Source}}{{end}}{{end}}' 2>/dev/null || true
 }
-
 default_host_ip() {
   hostname -I 2>/dev/null | awk '{for (i=1; i<=NF; i++) if ($i !~ /^127\./ && $i !~ /^169\.254\./) {print $i; exit}}'
 }
-
 single_host_cidr() {
   local ip="$1"
   [[ -n "${ip}" ]] || return 0
@@ -138,7 +125,6 @@ single_host_cidr() {
     printf '%s/32\n' "${ip}"
   fi
 }
-
 ssh_peer_ips() {
   command -v ss >/dev/null 2>&1 || return 0
   ss -Htn state established '( sport = :22 )' 2>/dev/null |
@@ -146,11 +132,9 @@ ssh_peer_ips() {
     sed -E 's/^\[//; s/\](:[0-9]+)?$//; s/:([0-9]+)$//' |
     awk 'NF && $0 !~ /^127\./ {print}'
 }
-
 unique_lines() {
   awk 'NF && !seen[$0]++'
 }
-
 model_env_lines_from_containers() {
   local container
   for container in openclaw-control-plane-scheduler openclaw-internal-api; do
@@ -169,12 +153,10 @@ model_env_lines_from_containers() {
       '
   done | awk -F= '!seen[$1]++'
 }
-
 file_mode_600() {
   local path="$1"
   chmod 600 "${path}"
 }
-
 read_pin_key_or_empty() {
   local path="$1"
   local key="$2"
@@ -194,7 +176,6 @@ read_pin_key_or_empty() {
     }
   ' "${path}"
 }
-
 assert_required_env() {
   local missing=()
   local key
@@ -210,7 +191,6 @@ assert_required_env() {
     exit 1
   fi
 }
-
 recover_env_file() {
   require_command docker
   require_command awk
@@ -373,7 +353,6 @@ recover_env_file() {
   file_mode_600 "${ENV_FILE}"
   log "从容器事实恢复 ${ENV_FILE} 完成（敏感值未输出）"
 }
-
 render_runtime_generated_state() {
   local gateway_conf="${ROOT_DIR}/state/openclaw/gateway/nginx.gateway.conf"
   if [[ -d "${gateway_conf}" ]]; then
@@ -391,7 +370,6 @@ render_runtime_generated_state() {
   bash "${SCRIPT_DIR}/fix_permissions.sh"
   log "运行态派生物渲染与权限收口完成"
 }
-
 restart_containers() {
   require_command docker
 
@@ -415,7 +393,6 @@ restart_containers() {
     fi
   fi
 }
-
 main() {
   if [[ -f "${ENV_FILE}" && "${FORCE_RECOVER_ENV}" -eq 0 ]]; then
     log "检测到 ${ENV_FILE}，跳过 env 恢复"

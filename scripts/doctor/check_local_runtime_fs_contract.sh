@@ -19,7 +19,6 @@ FAILURES=0
 WARNINGS=0
 CURRENT_UID="$(id -u)"
 CURRENT_GID="$(id -g)"
-
 usage() {
   cat <<'USAGE'
 用法：
@@ -40,11 +39,9 @@ usage() {
   -h, --help                   显示帮助
 USAGE
 }
-
 note() { printf '[INFO] %s\n' "$*"; }
 warn() { WARNINGS=1; printf '[WARN] %s\n' "$*"; }
 fail() { FAILURES=1; printf '[FAIL] %s\n' "$*" >&2; }
-
 check_dir_manageable_or_creatable() {
   local path="$1"
   local label="$2"
@@ -53,7 +50,6 @@ check_dir_manageable_or_creatable() {
   fi
   fail "$label 不满足本地读写执行前提：$path"
 }
-
 check_file_manageable_or_creatable() {
   local path="$1"
   local label="$2"
@@ -62,7 +58,6 @@ check_file_manageable_or_creatable() {
   fi
   fail "$label 不满足本地读写前提：$path"
 }
-
 warn_owner_mismatch() {
   local path="$1"
   local label="$2"
@@ -77,7 +72,6 @@ warn_owner_mismatch() {
     warn "$label 当前 owner 为 $owner，当前执行用户为 ${CURRENT_UID}:${CURRENT_GID}；若后续需要直接写入该路径，请先确认宿主机所有权合同。当前脚本不会自动 chown。"
   fi
 }
-
 check_lf_only_file() {
   local path="$1"
   local label="$2"
@@ -86,7 +80,6 @@ check_lf_only_file() {
     fail "$label 包含 CRLF / 回车字符：$path；Linux 部署入口只接受 LF。请在提交或上传前执行 dos2unix，或使用 perl -pi -e 's/\\r$//' <file> 修复。"
   fi
 }
-
 check_line_endings_contract() {
   local path=""
   check_lf_only_file "$ROOT_DIR/.gitattributes" ".gitattributes"
@@ -106,7 +99,6 @@ check_line_endings_contract() {
     check_lf_only_file "$path" "仓库可执行文本"
   done < <(runtime_permissions_collect_repo_exec_candidates "$ROOT_DIR")
 }
-
 check_runtime_identity_contract() {
   [[ -f "$ENV_FILE" ]] || return 0
   local runtime_uid='' runtime_gid=''
@@ -144,7 +136,6 @@ check_runtime_identity_contract() {
     note "runtime UID/GID 真源与当前执行用户一致：${runtime_uid}:${runtime_gid}"
   fi
 }
-
 check_manifest_and_compose_targets() {
   local action=""
   local path=""
@@ -178,7 +169,6 @@ check_manifest_and_compose_targets() {
     esac
   done < <(runtime_permissions_collect_compose_host_bind_targets "$ROOT_DIR")
 }
-
 check_optional_image_pull_state() {
   local image_pull_dir="$ROOT_DIR/state/image_pull"
   local file=""
@@ -200,7 +190,6 @@ check_optional_image_pull_state() {
     warn_owner_mismatch "$file" "镜像拉取状态文件"
   done
 }
-
 check_fixed_paths() {
   local host_state_dir=""
   local host_control_plane_dir=""
@@ -252,7 +241,6 @@ check_fixed_paths() {
   done
   check_optional_image_pull_state
 }
-
 check_repo_exec_bits() {
   local file=""
   local missing=0

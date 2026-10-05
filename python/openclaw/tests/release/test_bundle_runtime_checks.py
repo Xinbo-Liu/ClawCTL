@@ -6,10 +6,36 @@ import unittest
 import zipfile
 from pathlib import Path
 
-from openclaw.release.bundle_runtime_checks import run_artifact_smoke
+from openclaw.release.bundle_runtime_checks import budget_failures, run_artifact_smoke
 
 
 class BundleRuntimeChecksTest(unittest.TestCase):
+    def test_budget_failures_report_zip_headroom_when_below_minimum(self) -> None:
+        size_manifest = {
+            'size': {'zipBytes': 950},
+            'counts': {'files': 3},
+        }
+
+        failures = budget_failures(
+            size_manifest,
+            spec={'budget': {'maxZipBytes': 1000, 'minZipHeadroomBytes': 100}},
+        )
+
+        self.assertEqual(failures, ['zipBytes 余量不足：50 < 100'])
+
+    def test_budget_failures_do_not_duplicate_headroom_when_zip_exceeds_max(self) -> None:
+        size_manifest = {
+            'size': {'zipBytes': 1100},
+            'counts': {'files': 3},
+        }
+
+        failures = budget_failures(
+            size_manifest,
+            spec={'budget': {'maxZipBytes': 1000, 'minZipHeadroomBytes': 100}},
+        )
+
+        self.assertEqual(failures, ['zipBytes 超预算：1100 > 1000'])
+
     @unittest.skipIf(os.name == 'nt', 'POSIX executable mode is not reliable on Windows')
     def test_artifact_smoke_restores_zip_executable_mode(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""CLI helpers for the full-test surface control plane."""
+"""提供OpenClaw lib子系统的生产实现。"""
 from __future__ import annotations
 
 import json

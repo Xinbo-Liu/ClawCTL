@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Shared managed probe extension fixture for tests and doctor regressions."""
+"""提供OpenClaw doctor子系统的生产实现。"""
 from __future__ import annotations
 
 import shutil
@@ -85,6 +85,7 @@ BYTECODE_GUARD_INIT = '\n'.join([
 
 @dataclass(frozen=True)
 class ManagedProbeExtensionFixture:
+    """受管探针扩展 fixture 布局。"""
     repo_root: Path
     base_repo_root: Path
     extension_id: str
@@ -183,7 +184,7 @@ def _managed_probe_snapshot(
 
 def _probe_dispatch_registry_payload() -> dict[str, object]:
     return {
-        'version': 7,
+        'version': 8,
         'defaults': {
             'dedupeWindowHours': 36,
             'maxAttempts': 5,
@@ -218,6 +219,7 @@ def _probe_dispatch_registry_payload() -> dict[str, object]:
                 'boundary': {
                     'dispatchLane': 'integration_validation',
                     'payloadScope': 'validation_digest',
+                    'completionRole': 'advisory',
                     'publishLatestDefault': False,
                     'description': 'Probe validation target for managed extension regressions.',
                 },
@@ -285,6 +287,12 @@ def _probe_dispatch_registry_payload() -> dict[str, object]:
 
 
 def remove_managed_extension(repo_root: Path, extension_id: str) -> None:
+    """移除managed扩展。
+
+    参数：
+        repo_root（Path）：仓库根目录。
+        extension_id（str）：扩展标识。
+    """
     repo_root = Path(repo_root).resolve()
     package_root = repo_root / 'agent' / 'extensions' / extension_id
     if package_root.exists():
@@ -374,7 +382,7 @@ def _materialize_fixture(fixture: ManagedProbeExtensionFixture) -> ManagedProbeE
     _write_json(
         fixture.groups_dir / f'{PROBE_GROUP_REF}.json',
         {
-            'schemaVersion': 1,
+            'schemaVersion': 2,
             'id': PROBE_GROUP_REF,
             'activation': {
                 'enabledExtensionIds': [fixture.extension_id],
@@ -417,11 +425,6 @@ def _materialize_fixture(fixture: ManagedProbeExtensionFixture) -> ManagedProbeE
                     'requireRecentAccess': False,
                     'requireRunLedgerCoverage': True,
                     'freezeOnStatuses': ['failed', 'blocked'],
-                },
-                'acceptanceBinding': {
-                    'deploymentAcceptanceCheckIds': ['control_plane_registry'],
-                    'runtimeEvidenceEntryIds': ['control_plane_run_ledger'],
-                    'requiredRunLedgerJobRefs': [PROBE_JOB_REF],
                 },
                 'rollbackContract': {
                     'strategy': 'replay_from_probe_entry',
@@ -553,7 +556,7 @@ def _materialize_fixture(fixture: ManagedProbeExtensionFixture) -> ManagedProbeE
             'supportedMessageFormats': ['text', 'post'],
             'deliveryContract': {
                 'successStatuses': ['sent', 'noop'],
-                'retryableStatuses': ['retry_pending'],
+                'retryableStatuses': ['retry_pending', 'rate_limited'],
                 'terminalStatuses': ['failed', 'blocked'],
             },
             'supportedAgentRefs': [PROBE_PRIMARY_MODULE_REF],

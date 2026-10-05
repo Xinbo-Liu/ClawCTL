@@ -1,0 +1,85 @@
+{
+  "kind": "openclaw_repo_prod_semantic_docstring_baseline_index",
+  "policy": {
+    "mode": "semantic-baseline-ratchet",
+    "newFilesRequireZeroSemanticIssues": true,
+    "scope": "repo-prod",
+    "trackedItemKinds": [
+      "module",
+      "class",
+      "function"
+    ]
+  },
+  "schemaVersion": 2,
+  "shards": [
+    {
+      "fileCount": 117,
+      "key": "platform_control_plane",
+      "path": "platform_control_plane.json"
+    },
+    {
+      "fileCount": 35,
+      "key": "platform_docs",
+      "path": "platform_docs.json"
+    },
+    {
+      "fileCount": 36,
+      "key": "platform_doctor",
+      "path": "platform_doctor.json"
+    },
+    {
+      "fileCount": 8,
+      "key": "platform_guards",
+      "path": "platform_guards.json"
+    },
+    {
+      "fileCount": 4,
+      "key": "platform_images",
+      "path": "platform_images.json"
+    },
+    {
+      "fileCount": 10,
+      "key": "platform_internal_api",
+      "path": "platform_internal_api.json"
+    },
+    {
+      "fileCount": 79,
+      "key": "platform_lib",
+      "path": "platform_lib.json"
+    },
+    {
+      "fileCount": 5,
+      "key": "platform_release",
+      "path": "platform_release.json"
+    },
+    {
+      "fileCount": 3,
+      "key": "platform_root",
+      "path": "platform_root.json"
+    },
+    {
+      "fileCount": 26,
+      "key": "platform_runtime",
+      "path": "platform_runtime.json"
+    },
+    {
+      "fileCount": 9,
+      "key": "platform_scheduler",
+      "path": "platform_scheduler.json"
+    },
+    {
+      "fileCount": 40,
+      "key": "platform_setup",
+      "path": "platform_setup.json"
+    },
+    {
+      "fileCount": 2,
+      "key": "platform_specs",
+      "path": "platform_specs.json"
+    }
+  ],
+  "summaryMaximums": {
+    "semanticIssueItems": 3093,
+    "semanticIssues": 3187
+  }
+}

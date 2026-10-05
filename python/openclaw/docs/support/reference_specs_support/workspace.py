@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Workspace-user rendering helpers for reference_specs surfaces."""
+"""提供OpenClaw 文档子系统的生产实现。"""
 from __future__ import annotations
 
 import re

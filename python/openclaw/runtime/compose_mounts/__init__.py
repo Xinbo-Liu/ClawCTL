@@ -1,1 +1,1 @@
-"""Canonical helpers for runtime compose mount registry."""
+"""提供OpenClaw 运行态子系统的生产实现。"""

@@ -69,6 +69,7 @@ def parse_flag_args(argv: list[str]) -> dict[str, Any]:
 
 @dataclass(frozen=True)
 class FlagSpec:
+    """命令行参数声明。"""
     kind: str = "str"
     dest: str | None = None
     default: Any = None

@@ -46,11 +46,11 @@
 
 ## 基座视角规则
 
-| 视角        | 典型根目录                       | 说明                                                   |
-|-----------|-----------------------------|------------------------------------------------------|
-| host      | `<current-host-state-root>` | 宿主机脚本、打包、文档与人工排障视角                                   |
+| 视角      | 典型根目录                  | 说明                                                                           |
+|-----------|-----------------------------|--------------------------------------------------------------------------------|
+| host      | `<current-host-state-root>` | 宿主机脚本、打包、文档与人工排障视角                                           |
 | gateway   | `/home/node/.openclaw`      | official Gateway 运行视角，承载 Gateway 自身运行态派生产物与控制面只读展示投影 |
-| scheduler | `/home/openclaw/.openclaw`  | 唯一业务执行视角，承载 scheduler、runner 与内网业务执行能力               |
+| scheduler | `/home/openclaw/.openclaw`  | 唯一业务执行视角，承载 scheduler、runner 与内网业务执行能力                    |
 
 固定规则：
 
@@ -58,6 +58,8 @@
 2. 业务代码、容器脚本与跨视角逻辑不得自行拼接 gateway、scheduler 或 extension 视角绝对路径，统一通过 manifest / resolver 解析。
 3. Gateway 只持有 Gateway 自身运行态路径，以及从当前 active control-plane profile 派生的 agents、workspace 核心文件与 cron 只读展示投影；业务执行固定由 scheduler 承担。
 4. state 根目录固定为正式 host state root，基座不得恢复第二套默认 control-plane 路径真源。
+
+Markdown 导航可使用多层父目录相对链接，本地链接门禁会检查解析后的目标仍在仓库内、文件存在且标题锚点有效。生成正文中的真实 Markdown 导航 literal 与 JSON 中明确声明 `kind=doc_page` 的文档引用按文档语义检查；同一文件内的普通 Python 路径、其他 JSON 路径字段和脚本仍禁止深层父目录拼接。文档实现或配置不会因为位于 `docs` 目录而整体豁免，机器路径仍须通过 manifest / resolver 解析。
 
 ## 核心逻辑对象
 

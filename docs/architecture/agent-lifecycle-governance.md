@@ -1,6 +1,6 @@
 # Agent 生命周期与变更治理
 
-本文档定义 agent 与 group 在持续治理中的项目级生命周期规则。专题治理标准固定在 `agent/governance/lifecycle-governance.md`；本页负责固定项目级变更顺序与同步更新要求。
+本页定义 agent 与 group 的项目级生命周期顺序，以及变更如何连接设计、验收、发布和退役。具体模块、group、job 的真源同步要求以 [生命周期治理](../../agent/governance/lifecycle-governance.md) 为准。
 
 ## 生命周期阶段
 
@@ -19,12 +19,12 @@
 
 agent 变更固定分为以下四类：
 
-| 变更类型 | 示例                               | 必须同步更新                        |
-|------|----------------------------------|-------------------------------|
-| 结构变更 | 新增 agent、新增 group、成员重组、目录迁移      | `agent/` 文档、架构文档、注册表、group 合同 |
-| 行为变更 | 输入输出合同、失败语义、调度依赖变化               | agent 文档、数据合同、验收链路            |
-| 装配变更 | skill、tool、permission、runtime 变化 | 模块 manifest、权限说明、审计要求         |
-| 运维变更 | 启停、灰度、回滚、告警阈值变化                  | operations 文档、运行证据与 runbook   |
+| 变更类型 | 示例                                       | 必须同步更新                                |
+|----------|--------------------------------------------|---------------------------------------------|
+| 结构变更 | 新增 agent、新增 group、成员重组、目录迁移 | `agent/` 文档、架构文档、注册表、group 合同 |
+| 行为变更 | 输入输出合同、失败语义、调度依赖变化       | agent 文档、数据合同、验收链路              |
+| 装配变更 | skill、tool、permission、runtime 变化      | 模块 manifest、权限说明、审计要求           |
+| 运维变更 | 启停、灰度、回滚、告警阈值变化             | operations 文档、运行证据与 runbook         |
 
 ## 文档更新要求
 
@@ -32,10 +32,10 @@ agent 治理变更至少同步以下页面或目录：
 
 - 项目级基准涉及变化时：[`control-plane-baseline.md`](control-plane-baseline.md)
 - agent 总体治理变化：[`agent-governance.md`](agent-governance.md)
-- group 变化：[`agent-group-governance.md`](agent-group-governance.md)
-- 模块边界变化：[`agent-module-governance.md`](agent-module-governance.md)
+- group 变化：[Group 治理](../../agent/governance/group-governance.md)
+- 模块边界变化：[模块治理](../../agent/governance/module-governance.md)
 - 权限状态页：[`agents-and-permissions.md`](agents-and-permissions.md)
-- agent 专题治理体系：`agent/README.md`
+- agent 专题治理体系：[Agent 治理目录](../../agent/README.md)
 
 
 ## 阶段执行要求
@@ -50,14 +50,14 @@ agent plane 变更必须同步清理与正式实现冲突的文件、链接与�
 - 把 group 事实写在脚本里而不是注册表里；
 - 把 skill、tool、permission 的关键限制只写在局部 prompt 或局部说明里；
 - 使用隐藏目录或未登记脚本作为正式运行真源；
-- 一边声明 `agent/` 为统一目录，一边继续扩散第二套治理入口；
+- 在 `agent/` 之外维护与其规则冲突的并列治理入口；
 - 发布、回滚、退役没有证据输出。
 
 ## 关联页面
 
-- agent 统一治理目录：`agent/README.md`
-- 生命周期专题治理：`agent/governance/lifecycle-governance.md`
+- agent 统一治理目录：[Agent 治理目录](../../agent/README.md)
+- 生命周期专题治理：[生命周期治理](../../agent/governance/lifecycle-governance.md)
 - 总体基线：[`agent-governance.md`](agent-governance.md)
-- group 管理：[`agent-group-governance.md`](agent-group-governance.md)
-- 模块治理：[`agent-module-governance.md`](agent-module-governance.md)
-- 真源矩阵：`agent/governance/source-of-truth-matrix.md`
+- group 管理：[Group 治理](../../agent/governance/group-governance.md)
+- 模块治理：[模块治理](../../agent/governance/module-governance.md)
+- 真源矩阵：[真源矩阵](../../agent/governance/source-of-truth-matrix.md)

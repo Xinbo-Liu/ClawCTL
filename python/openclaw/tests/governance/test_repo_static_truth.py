@@ -16,7 +16,7 @@ from openclaw.lib.repo.static_truth import (
     repo_contract_path,
     repo_contract_relpath,
 )
-from openclaw.lib.repo.managed_extensions import managed_explicit_extensions
+from openclaw.doctor.platform.architecture_import_guards import business_name_leak_tokens
 from openclaw.setup.flow import deploy_flow, one_click_deploy, one_click_test
 from openclaw.tests.support.static_text_assertions import assert_static_text_absent
 
@@ -176,7 +176,7 @@ class RepoStaticTruthTest(unittest.TestCase):
         self.assertEqual([], violations)
 
     def test_platform_docs_do_not_name_managed_business_extensions(self) -> None:
-        tokens = tuple(row.id for row in managed_explicit_extensions(ROOT_DIR))
+        tokens = business_name_leak_tokens(ROOT_DIR)
         scanned_roots = (
             ROOT_DIR / 'README.md',
             ROOT_DIR / 'agent' / 'README.md',

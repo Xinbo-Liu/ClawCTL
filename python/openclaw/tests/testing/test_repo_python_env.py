@@ -107,7 +107,9 @@ class RepoPythonEnvScriptTest(unittest.TestCase):
         self.assertIn('PYTHONDONTWRITEBYTECODE=1', result.stdout)
         self.assertIn('PYTHONIOENCODING=UTF-8', result.stdout)
         self.assertIn('PYTHONUTF8=1', result.stdout)
-        self.assertRegex(result.stdout, r'PYTHONPATH=.*clawctl/python')
+        pythonpath_lines = [line for line in result.stdout.splitlines() if line.startswith('PYTHONPATH=')]
+        self.assertEqual(1, len(pythonpath_lines), msg=result.stdout)
+        self.assertTrue(pythonpath_lines[0].endswith(f'/{ROOT_DIR.name}/python'), msg=result.stdout)
 
 
 if __name__ == '__main__':

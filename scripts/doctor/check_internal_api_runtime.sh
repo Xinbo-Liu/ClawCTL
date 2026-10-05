@@ -38,7 +38,10 @@ INTERNAL_API_CHECK_PY="$(cat <<'PY'
 from __future__ import annotations
 import json
 import os
+import socket
 import sys
+import time
+import urllib.error
 import urllib.request
 from openclaw.internal_api.contract import route_surface
 
@@ -55,6 +58,14 @@ try:
     FETCH_TIMEOUT_SECONDS = max(1, int(os.environ.get("OPENCLAW_INTERNAL_API_CHECK_TIMEOUT_SECONDS", "20") or "20"))
 except ValueError:
     FETCH_TIMEOUT_SECONDS = 20
+try:
+    FETCH_ATTEMPTS = max(1, int(os.environ.get("OPENCLAW_INTERNAL_API_CHECK_ATTEMPTS", "3") or "3"))
+except ValueError:
+    FETCH_ATTEMPTS = 3
+try:
+    FETCH_RETRY_DELAY_SECONDS = max(0.0, float(os.environ.get("OPENCLAW_INTERNAL_API_CHECK_RETRY_DELAY_SECONDS", "2") or "2"))
+except ValueError:
+    FETCH_RETRY_DELAY_SECONDS = 2.0
 
 
 def read_limited_json(resp, path: str) -> dict:
@@ -70,8 +81,23 @@ def fetch(path: str, *, auth: bool) -> dict:
         headers["Authorization"] = f"Bearer {token}"
     port = os.environ.get("OPENCLAW_INTERNAL_API_PORT", "18081").strip() or "18081"
     req = urllib.request.Request(f"http://127.0.0.1:{port}{path}", headers=headers)
-    with urllib.request.urlopen(req, timeout=FETCH_TIMEOUT_SECONDS) as resp:
-        return read_limited_json(resp, path)
+    last_error: BaseException | None = None
+    for attempt in range(1, FETCH_ATTEMPTS + 1):
+        try:
+            with urllib.request.urlopen(req, timeout=FETCH_TIMEOUT_SECONDS) as resp:
+                return read_limited_json(resp, path)
+        except (TimeoutError, socket.timeout, urllib.error.URLError, ConnectionError) as exc:
+            last_error = exc
+            if attempt >= FETCH_ATTEMPTS:
+                break
+            print(
+                f"[check_internal_api_runtime][WARN] internal-api {path} 第 {attempt}/{FETCH_ATTEMPTS} 次请求失败：{exc}",
+                file=sys.stderr,
+            )
+            if FETCH_RETRY_DELAY_SECONDS > 0:
+                time.sleep(FETCH_RETRY_DELAY_SECONDS)
+    assert last_error is not None
+    raise last_error
 
 payload = {
     "healthz": fetch(routes["healthz"], auth=False),

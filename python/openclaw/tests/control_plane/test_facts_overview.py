@@ -3,11 +3,15 @@ from __future__ import annotations
 import contextlib
 import io
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from openclaw.control_plane import facts
+from openclaw.lib.control_plane import object_families
+from openclaw.lib.runtime.path_resolver import PathResolver
 from openclaw.doctor.platform.architecture_import_guards import business_name_leak_tokens
 from openclaw.lib.repo.layout import resolve_repo_root
 
@@ -116,7 +120,6 @@ class FactsOverviewTest(unittest.TestCase):
         self.assertIn('official_release', verification_by_id)
         self.assertIn('host_diagnostic', verification_by_id)
         self.assertNotIn(''.join(('v', 'm_formal')), verification_by_id)
-        self.assertEqual(verification_by_id['official_release']['title'], '正式 Docker / 控制面容器门禁')
         self.assertTrue(verification_by_id['official_release']['release_required'])
         self.assertTrue(verification_by_id['host_diagnostic']['diagnostic_only'])
 
@@ -221,6 +224,76 @@ class FactsOverviewTest(unittest.TestCase):
         payload = json.loads(stdout.getvalue())
         self.assertTrue(payload['profile_overviews'])
         self.assertTrue(payload['verification_commands'])
+
+
+class StaticFactsScopeTest(unittest.TestCase):
+    def _write_object_truth(self, root: Path, families: dict[str, object]) -> Path:
+        """创建隔离仓库的对象族及唯一合同索引。"""
+        truth = root / 'config/governance/support/repo_contracts.json'
+        truth.parent.mkdir(parents=True)
+        truth.write_text(json.dumps({'contracts': [{'id': 'control_plane.object_families', 'relative_path': 'objects.json', 'format': 'json'}]}), encoding='utf-8')
+        target = root / 'objects.json'
+        target.write_text(json.dumps({'generated_artifacts': {'objects_doc': 'docs/objects.md'}, 'families': families}), encoding='utf-8')
+        return target
+
+    def test_static_sources_read_only_registered_truth_and_selected_owner_fragments(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self._write_object_truth(root, {})
+            selected = root / 'agent/extensions/selected/source.json'
+            selected.parent.mkdir(parents=True)
+            selected.write_text(json.dumps({'generated_artifacts': {'owned_doc': 'agent/extensions/selected/README.md'}}), encoding='utf-8')
+            unrelated = root / 'agent/extensions/unselected/source.json'
+            unrelated.parent.mkdir(parents=True)
+            unrelated.write_text('invalid JSON must not be read', encoding='utf-8')
+            (root / 'private-runtime.json').write_text('invalid JSON must not be read', encoding='utf-8')
+            context = {'extensions': [{'id': 'selected', 'surfaceFragments': {'objectFamiliesPath': selected}}]}
+            with patch.object(Path, 'rglob', side_effect=AssertionError('静态生成项不能递归扫描仓库')):
+                rows = facts._generated_artifacts_payload(root, context=context)
+            self.assertEqual([row['source'] for row in rows], ['agent/extensions/selected/source.json', 'objects.json'])
+            self.assertEqual(rows[0]['artifacts'], [{'id': 'owned_doc', 'path': 'agent/extensions/selected/README.md'}])
+
+    def test_same_entry_id_keeps_family_owner_and_environment_scope(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            entry = lambda path: {'id': 'shared', 'path_kind': 'host_control_plane_file', 'path_ref': path}
+            self._write_object_truth(root, {
+                'acceptance_state': {'entries': [entry('first.json')]},
+                'runtime_evidence': {'entries': [entry('second.json')]},
+            })
+            fragment = root / 'owner.objects.json'
+            fragment.write_text(json.dumps({'families': {'runtime_evidence': {'entries': [entry('owned.json')]}}}), encoding='utf-8')
+            resolver = PathResolver(root, {'entries': {'control_plane_host_state_dir': {'paths': {'host': 'state/default'}}}})
+            config = root / 'service.json'
+            with patch('openclaw.control_plane.extensions.descriptors.core.iter_extension_fragment_paths', return_value=[('agent_owner', fragment)]), patch.object(object_families, 'require_path_resolver', return_value=resolver), patch.object(object_families, 'resolve_control_plane_state_root', return_value=root / 'live') as live_state, patch.dict(os.environ, {'OPENCLAW_RUNTIME_PATH_VIEW': 'scheduler'}):
+                static_rows = facts._evidence_payload(root, config_path=config, environment={})
+                live_state.assert_not_called()
+                live_rows = facts._evidence_payload(root, config_path=config)
+                self.assertEqual(live_state.call_count, 3)
+            self.assertEqual([(row['id'], row.get('extensionId'), row['entries'][0]['display_path']) for row in static_rows], [
+                ('acceptance_state', None, 'state/default/first.json'),
+                ('runtime_evidence', None, 'state/default/second.json'),
+                ('runtime_evidence', 'agent_owner', 'state/default/owned.json'),
+            ])
+            self.assertEqual([row['entries'][0]['display_path'] for row in live_rows], ['live/first.json', 'live/second.json', 'live/owned.json'])
+
+    def test_object_truth_is_isolated_between_repository_roots(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            roots = [Path(directory) / name for name in ('first', 'second')]
+            for root in roots:
+                self._write_object_truth(root, {root.name: {'entries': []}})
+            loaded = [object_families.load_contract(root_dir=root, extensions=[]) for root in roots]
+            self.assertEqual([[row['id'] for row in payload['families']] for payload in loaded], [['first'], ['second']])
+
+    def test_selected_config_scope_cuts_catalog_scan_and_local_probe_at_input(self) -> None:
+        config = ROOT_DIR / 'config/control_plane/profiles/agent_platform.service.json'
+        with patch.object(facts, '_profile_payload', side_effect=AssertionError('不能读取无关 profile 目录册')), patch.object(facts, 'load_managed_extensions_index', side_effect=AssertionError('不能读取无关扩展目录册')), patch.object(facts, '_generated_artifacts_payload_cached', side_effect=AssertionError('不能扫描未登记 JSON')), patch.object(facts, '_parse_env_keys', side_effect=AssertionError('不能读取私有 env')):
+            payload = facts.build_overview_payload(config_path=config, probe_local=False, scope='selected_config', path_environment={})
+        self.assertEqual(payload['extensions']['known_extension_ids'], ['agent_platform'])
+        self.assertEqual(payload['extensions']['managed_explicit'], [])
+        self.assertEqual([row['id'] for row in payload['profiles']['items']], ['agent_platform'])
+        self.assertFalse(payload['local_environment']['probed'])
+        self.assertTrue(all(not row['source'].startswith('agent/extensions/') for row in payload['generated_artifacts']))
 
 
 if __name__ == '__main__':

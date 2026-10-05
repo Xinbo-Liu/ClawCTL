@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # 用途：快速更新部署镜像 pin（control plane Python / runtime Python / Nginx）。
 # 模式：
-# - candidate：只更新本地 deploy/.env 中允许候选覆盖的运行时镜像；
+# - candidate：仅更新本地 deploy/.env 中允许候选覆盖的运行时镜像；
 # - promote：更新仓库默认 runtime pin 真源；one_click_config.sh 读取新的默认值生成部署配置。
 set -euo pipefail
 
@@ -30,7 +30,7 @@ usage() {
   bash ./scripts/images/update_runtime_pin.sh --mode promote [--control-plane-ref <image:tag@sha256:...>] [--runtime-python-ref <image:tag@sha256:...>] [--nginx-ref <image:tag@sha256:...>]
 
 说明：
-- candidate：只改 deploy/.env 中允许运行面候选覆盖的键，不改仓库默认 pin；
+- candidate：仅更新 deploy/.env 中允许运行面候选覆盖的键，不改仓库默认 pin；
 - promote：直接改 __RUNTIME_PIN__；one_click_config.sh 读取新的默认值生成部署配置；
 - candidate 至少提供 --runtime-python-ref 或 --nginx-ref 之一；
 - promote 至少提供 --control-plane-ref / --runtime-python-ref / --nginx-ref 之一；

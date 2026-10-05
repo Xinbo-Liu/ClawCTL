@@ -86,7 +86,7 @@ class ManagedExtensionMountTest(unittest.TestCase):
                 },
             },
         )
-        self._write_json(dispatch_registry_path, {'version': 7, 'targets': []})
+        self._write_json(dispatch_registry_path, {'version': 8, 'targets': []})
         (package_root / 'python' / f'openclaw_ext_{extension_id.removeprefix("agent_")}' / '__init__.py').parent.mkdir(
             parents=True,
             exist_ok=True,
@@ -105,7 +105,7 @@ class ManagedExtensionMountTest(unittest.TestCase):
         self.assertEqual(row.default_service_config_path, self.fixture.service_path)
         self.assertEqual(managed_extension_python_roots_for_config_path(self.fixture.service_path, start_path=self.fixture.repo_root), row.python_roots)
 
-    def test_managed_extension_python_roots_only_attach_to_default_service_path(self) -> None:
+    def test_managed_extension_python_roots_attach_to_enabled_extension_service_path(self) -> None:
         alias_path = self.fixture.service_path.with_name('alias.service.json')
         self._write_json(alias_path, self._read_json(self.fixture.service_path))
         try:
@@ -113,7 +113,8 @@ class ManagedExtensionMountTest(unittest.TestCase):
         finally:
             alias_path.unlink(missing_ok=True)
 
-        self.assertEqual(roots, ())
+        row = load_managed_extensions_index(self.fixture.repo_root)[0]
+        self.assertEqual(roots, row.python_roots)
 
     def test_managed_probe_package_can_be_loaded_by_explicit_config_path(self) -> None:
         extensions = enabled_extensions_from_config(self.fixture.service_path)

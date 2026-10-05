@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import subprocess
 import sys
 import tempfile
 import zipfile
@@ -60,35 +61,29 @@ class BundleGovernanceError(RuntimeError):
 
 
 def _fail(prefix: str, message: str) -> None:
-    """抛出交付包治理错误。"""
     raise SystemExit(f'[{prefix}][FAIL] {message}')
 
 
 def load_manifest() -> dict[str, Any]:
-    """加载 bundle manifest。"""
     return manifest_load_manifest(error_factory=BundleGovernanceError)
 
 
 def bundle_spec(bundle_id: str, manifest: dict[str, Any] | None = None) -> dict[str, Any]:
-    """返回指定 bundle 的规格定义。"""
     payload = load_manifest() if manifest is None else manifest
     return manifest_bundle_spec(bundle_id, payload, error_factory=BundleGovernanceError)
 
 
 def resolve_bundle_files(bundle_id: str, manifest: dict[str, Any] | None = None) -> list[str]:
-    """解析 bundle 最终纳入的文件列表。"""
     payload = load_manifest() if manifest is None else manifest
     return manifest_resolve_bundle_files(bundle_id, payload, error_factory=BundleGovernanceError)
 
 
 def must_not_ship_hits(bundle_id: str, file_list: list[str], manifest: dict[str, Any] | None = None) -> list[str]:
-    """计算 bundle 命中的 must-not-ship 路径。"""
     payload = load_manifest() if manifest is None else manifest
     return manifest_must_not_ship_hits(bundle_id, file_list, payload, error_factory=BundleGovernanceError)
 
 
 def _normalize_bundle_bytes(rel_path: str, data: bytes) -> bytes:
-    """规范化体积预算配置。"""
     if b'\r\n' not in data:
         return data
     if b'\x00' in data:
@@ -100,37 +95,78 @@ def _normalize_bundle_bytes(rel_path: str, data: bytes) -> bytes:
 
 
 def _bundle_file_bytes(rel_path: str) -> bytes:
-    """统计单个 bundle 文件大小。"""
     return _normalize_bundle_bytes(rel_path, (ROOT_DIR / rel_path).read_bytes())
 
 
+def _git_index_file_modes() -> dict[str, str]:
+    """读取 Git index 中的文件模式。
+
+    返回：
+        返回 dict[str, str]，键为仓库相对路径，值为 Git index mode；当 Git 不可用或当前目录不是工作树时返回空字典。
+
+    副作用：
+        调用 `git ls-files --stage` 读取工作树 index；Git 不可用或命令失败时回退为空映射。
+    """
+    try:
+        proc = subprocess.run(
+            ['git', 'ls-files', '--stage'],
+            cwd=ROOT_DIR,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            check=False,
+        )
+    except OSError:
+        return {}
+    if proc.returncode != 0:
+        return {}
+    modes: dict[str, str] = {}
+    for raw_line in proc.stdout.splitlines():
+        if not raw_line.strip() or '\t' not in raw_line:
+            continue
+        metadata, rel_path = raw_line.split('\t', 1)
+        parts = metadata.split()
+        if not parts:
+            continue
+        modes[rel_path.replace('\\', '/')] = parts[0]
+    return modes
+
+
+def _zip_external_mode(rel_path: str, git_index_modes: dict[str, str]) -> int:
+    git_mode = git_index_modes.get(rel_path)
+    if git_mode == '100755':
+        return 0o100755
+    if git_mode == '100644':
+        return 0o100644
+    return (ROOT_DIR / rel_path).stat().st_mode & 0xFFFF
+
+
 def compute_bom(file_list: list[str]) -> list[dict[str, Any]]:
-    """计算 bundle BOM。"""
     rows: list[dict[str, Any]] = []
+    git_index_modes = _git_index_file_modes()
     for rel in file_list:
-        src = ROOT_DIR / rel
         bundle_bytes = _bundle_file_bytes(rel)
         digest = hashlib.sha256(bundle_bytes).hexdigest()
         rows.append({
             'path': rel,
             'bytes': len(bundle_bytes),
-            'mode': oct(src.stat().st_mode & 0o777),
+            'mode': oct(_zip_external_mode(rel, git_index_modes) & 0o7777),
             'sha256': digest,
         })
     return rows
 
 
 def _write_zip(bundle_id: str, file_list: list[str], output_path: Path) -> dict[str, Any]:
-    """写出 zip 包。"""
     output_path.parent.mkdir(parents=True, exist_ok=True)
     if output_path.exists():
         output_path.unlink()
+    git_index_modes = _git_index_file_modes()
     with zipfile.ZipFile(output_path, 'w', compression=zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
         for rel in file_list:
             src = ROOT_DIR / rel
             info = zipfile.ZipInfo(rel, date_time=FIXED_ZIP_TIMESTAMP)
             info.compress_type = zipfile.ZIP_DEFLATED
-            info.external_attr = (src.stat().st_mode & 0xFFFF) << 16
+            info.external_attr = _zip_external_mode(rel, git_index_modes) << 16
             archive.writestr(
                 info,
                 _bundle_file_bytes(rel),
@@ -154,7 +190,6 @@ def _write_zip(bundle_id: str, file_list: list[str], output_path: Path) -> dict[
 
 
 def validate_bundle(bundle_id: str, manifest: dict[str, Any] | None = None) -> dict[str, Any]:
-    """校验 bundle allowlist、禁止路径、预算与 smoke。"""
     payload = load_manifest() if manifest is None else manifest
     file_list = resolve_bundle_files(bundle_id, payload)
     spec = bundle_spec(bundle_id, payload)
@@ -196,7 +231,6 @@ def validate_bundle(bundle_id: str, manifest: dict[str, Any] | None = None) -> d
 
 
 def default_output_name(bundle_id: str, manifest: dict[str, Any] | None = None) -> str:
-    """生成 bundle 默认输出文件名。"""
     payload = load_manifest() if manifest is None else manifest
     spec = bundle_spec(bundle_id, payload)
     prefix = str(spec.get('outputPrefix') or bundle_id.replace('-', '_')).strip()
@@ -206,13 +240,11 @@ def default_output_name(bundle_id: str, manifest: dict[str, Any] | None = None) 
 
 
 def write_json(path: Path, payload: dict[str, Any] | list[Any]) -> None:
-    """写出 JSON 文件。"""
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + '\n', encoding='utf-8')
 
 
 def cmd_list_bundles(_: argparse.Namespace) -> int:
-    """列出可用 bundle。"""
     payload = load_manifest()
     rows = []
     for bundle_id, spec in (payload.get('bundles') or {}).items():
@@ -224,7 +256,6 @@ def cmd_list_bundles(_: argparse.Namespace) -> int:
 
 
 def cmd_manifest(args: argparse.Namespace) -> int:
-    """输出 bundle manifest。"""
     payload = load_manifest()
     bundle_id = str(args.bundle or '').strip()
     if not bundle_id:
@@ -237,7 +268,6 @@ def cmd_manifest(args: argparse.Namespace) -> int:
 
 
 def cmd_build(args: argparse.Namespace) -> int:
-    """构建 bundle 并输出 zip / BOM / size manifest。"""
     payload = load_manifest()
     bundle_id = str(args.bundle or '').strip()
     if not bundle_id:
@@ -279,7 +309,6 @@ def cmd_build(args: argparse.Namespace) -> int:
 
 
 def cmd_validate(args: argparse.Namespace) -> int:
-    """校验 bundle 治理规则。"""
     payload = load_manifest()
     bundles = [str(item).strip() for item in (args.bundle or []) if str(item).strip()]
     if args.all or not bundles:
@@ -291,7 +320,6 @@ def cmd_validate(args: argparse.Namespace) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    """构建 bundle_governance CLI 解析器。"""
     parser = argparse.ArgumentParser(description='交付包 allowlist/体积治理工具')
     subparsers = parser.add_subparsers(dest='command', required=True)
 
@@ -317,7 +345,6 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
-    """bundle_governance CLI 主入口。"""
     parser = build_parser()
     args = parser.parse_args(argv)
     try:

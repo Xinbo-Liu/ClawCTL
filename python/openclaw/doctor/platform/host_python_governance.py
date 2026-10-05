@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Host Python governance scanner and report renderer."""
+"""提供OpenClaw doctor子系统的生产实现。"""
 from __future__ import annotations
 
 import argparse
@@ -22,6 +22,12 @@ CATEGORIES = (
     'doc_example',
     'generated_doc_example',
     'extension_doc_example',
+)
+DEFAULT_SCAN_EXCLUDE_PREFIXES = (
+    '.git',
+    'logs',
+    'state',
+    '__pycache__',
 )
 
 
@@ -76,13 +82,35 @@ def _matches_prefix(rel_path: str, prefixes: tuple[str, ...]) -> bool:
     return any(rel_path == prefix or rel_path.startswith(f'{prefix}/') for prefix in prefixes)
 
 
+def _scan_exclude_prefixes(payload: dict[str, Any]) -> tuple[str, ...]:
+    """返回 host Python governance 不扫描的运行态与缓存路径前缀。
+
+    参数：
+        payload（dict[str, Any]）：host Python governance 配置内容。
+
+    返回：
+        tuple[str, ...]：仓库相对路径前缀；用于排除运行态、日志和缓存目录。
+
+    副作用：
+        只读取传入的配置对象，不访问文件系统。
+    """
+    raw_items = payload.get('scan_exclude_prefixes')
+    configured = (
+        tuple(str(item).strip().replace('\\', '/').lstrip('./').rstrip('/') for item in raw_items if str(item).strip())
+        if isinstance(raw_items, list)
+        else ()
+    )
+    return tuple(item for item in (*DEFAULT_SCAN_EXCLUDE_PREFIXES, *configured) if item)
+
+
 def collect_shell_targets(repo_root: Path, payload: dict[str, Any]) -> tuple[Path, ...]:
     skip_prefixes = _manifest_prefixes(payload, 'self', 'skip')
+    exclude_prefixes = _scan_exclude_prefixes(payload)
     targets: list[Path] = []
     for path in sorted(repo_root.rglob('*.sh')):
-        if '.git' in path.parts:
-            continue
         rel_path = _normalize_rel_path(path, repo_root)
+        if _matches_prefix(rel_path, exclude_prefixes):
+            continue
         if _matches_prefix(rel_path, skip_prefixes):
             continue
         targets.append(path)
@@ -104,14 +132,6 @@ def _category_prefixes(payload: dict[str, Any], category: str) -> tuple[str, ...
     if not isinstance(raw_items, list):
         return ()
     return tuple(str(item).strip().replace('\\', '/').lstrip('./').rstrip('/') for item in raw_items if str(item).strip())
-
-
-def _doc_allowed_families(payload: dict[str, Any]) -> tuple[str, ...]:
-    policy = payload.get('doc_command_policy')
-    raw_items = policy.get('allowed_families') if isinstance(policy, dict) else None
-    if not isinstance(raw_items, list):
-        return ('repo_host', 'unittest_openclaw')
-    return tuple(str(item).strip() for item in raw_items if str(item).strip())
 
 
 def doc_category_for_path(rel_path: str, payload: dict[str, Any]) -> str:
@@ -181,12 +201,11 @@ def scan_shell_indirect(repo_root: Path, payload: dict[str, Any], seen: set[tupl
 
 def scan_doc_examples(repo_root: Path, payload: dict[str, Any], seen: set[tuple[str, str]]) -> list[dict[str, object]]:
     violations: list[dict[str, object]] = []
-    allowed_families = _doc_allowed_families(payload)
     for path in collect_files(repo_root, _doc_scan_roots(payload)):
         rel_path = _normalize_rel_path(path, repo_root)
         category = doc_category_for_path(rel_path, payload)
         for line_no, line in enumerate(path.read_text(encoding='utf-8').splitlines(), start=1):
-            for command in uncovered_doc_python_commands(line, allowed_families=allowed_families):
+            for command in uncovered_doc_python_commands(line):
                 text = command.text
                 item = {
                     'category': category,

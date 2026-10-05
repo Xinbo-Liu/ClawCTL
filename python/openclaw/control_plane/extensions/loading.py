@@ -313,7 +313,6 @@ def _validate_loaded_manifest_contract(
 
 
 def _read_service_payload(config_path: Path | None = None) -> tuple[Path, dict[str, Any]]:
-    """读取控制面 service 配置并返回配置路径与已合并 payload。"""
     path = resolve_control_plane_service_config_path(Path(__file__)) if config_path is None else Path(config_path).resolve()
     try:
         _, payload = load_control_plane_service_payload(path)
@@ -328,7 +327,6 @@ def _configured_manifest_dirs(
     service_base_dir: Path,
     repo_root: Path,
 ) -> list[Path]:
-    """解析 extensions.manifestsDirs，保留配置顺序并去重。"""
     extensions = service_payload.get('extensions') if isinstance(service_payload.get('extensions'), dict) else {}
     manifests_dirs: list[Path] = []
     raw_dirs = extensions.get('manifestsDirs')
@@ -347,7 +345,6 @@ def _configured_manifest_dirs(
 
 
 def _manifest_paths(service_payload: dict[str, Any], *, service_base_dir: Path, repo_root: Path) -> list[Path]:
-    """列出所有 manifest 文件，跨目录按绝对路径去重。"""
     manifest_paths: list[Path] = []
     for manifests_dir in _configured_manifest_dirs(
         service_payload,
@@ -375,7 +372,6 @@ def _load_manifest_rows(
     duplicate_label: str = 'Duplicate extension id',
     ignore_read_errors: bool = False,
 ) -> dict[str, dict[str, Any]]:
-    """加载并标准化 manifest 行，可按 selected_ids 过滤启用扩展。"""
     manifests_by_id: dict[str, dict[str, Any]] = {}
     repo_root = _service_repo_root(service_base_dir)
     for path in _manifest_paths(service_payload, service_base_dir=service_base_dir, repo_root=repo_root):

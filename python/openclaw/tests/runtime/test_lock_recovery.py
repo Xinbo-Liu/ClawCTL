@@ -72,23 +72,53 @@ class SchedulerLockRecoveryTest(unittest.TestCase):
             )
         self.assertFalse(acquired)
 
-    def test_retry_metadata_materializes_pending_retry_window(self) -> None:
+    def test_retry_metadata_materializes_pending_retry_window_for_declared_failure_class(self) -> None:
         job = {
             'retryPolicy': {
                 'enabled': True,
                 'maxAttempts': 2,
                 'backoffSeconds': [30, 60],
-            }
+            },
+            'failureClassPolicy': {
+                'retryableClasses': ['transient_delivery'],
+            },
         }
         job_state: dict[str, object] = {}
-        engine._retry_metadata(job, job_state, {'reason': 'failed_once', 'return_code': 1})
+        engine._retry_metadata(
+            job,
+            job_state,
+            {
+                'reason': 'failed_once',
+                'return_code': 1,
+                'failure_class': 'transient_delivery',
+            },
+        )
         pending = job_state.get('pendingRetry')
         self.assertEqual(job_state.get('currentStatus'), engine.STATUS_RETRY_PENDING)
         self.assertIsInstance(pending, dict)
         assert isinstance(pending, dict)
         self.assertEqual(pending.get('attempt'), 1)
         self.assertEqual(pending.get('reason'), 'failed_once')
+        self.assertEqual(pending.get('failureClass'), 'transient_delivery')
         self.assertTrue(str(pending.get('nextRunAt') or '').endswith('Z'))
+
+    def test_retry_metadata_without_declared_failure_class_fails_closed(self) -> None:
+        job = {
+            'retryPolicy': {
+                'enabled': True,
+                'maxAttempts': 2,
+                'backoffSeconds': [30, 60],
+            },
+            'failureClassPolicy': {
+                'retryableClasses': ['transient_delivery'],
+            },
+        }
+        job_state: dict[str, object] = {}
+
+        engine._retry_metadata(job, job_state, {'reason': 'unclassified_failure', 'return_code': 1})
+
+        self.assertIsNone(job_state.get('pendingRetry'))
+        self.assertIsNone(job_state.get('currentStatus'))
 
 
 if __name__ == '__main__':

@@ -25,7 +25,7 @@ class HostPythonDocGuardTest(unittest.TestCase):
             ['docs/guide.md:1:python -m openclaw.cli'],
         )
 
-    def test_repo_unittest_module_example_is_allowed(self) -> None:
+    def test_repo_unittest_module_example_is_reported(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             repo_root = Path(tmpdir)
             target = repo_root / 'docs' / 'guide.md'
@@ -37,7 +37,10 @@ class HostPythonDocGuardTest(unittest.TestCase):
 
             hits = scan_file(repo_root, target)
 
-        self.assertEqual(hits, [])
+        self.assertEqual(
+            hits,
+            ['docs/guide.md:1:python -m unittest openclaw.tests.governance.test_package_layout'],
+        )
 
     def test_mixed_supported_and_disallowed_repo_root_examples_on_same_line_are_reported(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -45,7 +48,7 @@ class HostPythonDocGuardTest(unittest.TestCase):
             target = repo_root / 'docs' / 'guide.md'
             target.parent.mkdir(parents=True)
             target.write_text(
-                'python -m openclaw.testing.repo_host suite repo-check -q ; python -m openclaw.cli\n',
+                'python -m openclaw.cli ; python -m openclaw.doctor.platform.architecture_import_guards\n',
                 encoding='utf-8',
             )
 
@@ -53,7 +56,10 @@ class HostPythonDocGuardTest(unittest.TestCase):
 
         self.assertEqual(
             hits,
-            ['docs/guide.md:1:python -m openclaw.cli'],
+            [
+                'docs/guide.md:1:python -m openclaw.cli',
+                'docs/guide.md:1:python -m openclaw.doctor.platform.architecture_import_guards',
+            ],
         )
 
     def test_extension_cli_module_example_is_reported(self) -> None:
@@ -87,27 +93,13 @@ class HostPythonDocGuardTest(unittest.TestCase):
 
         self.assertEqual(hits, [])
 
-    def test_repo_host_python_entry_example_does_not_trigger(self) -> None:
-        with tempfile.TemporaryDirectory() as tmpdir:
-            repo_root = Path(tmpdir)
-            target = repo_root / 'docs' / 'guide.md'
-            target.parent.mkdir(parents=True)
-            target.write_text(
-                'python -m openclaw.testing.repo_host suite repo-check -q\n',
-                encoding='utf-8',
-            )
-
-            hits = scan_file(repo_root, target)
-
-        self.assertEqual(hits, [])
-
     def test_wrong_python_namespace_unittest_example_is_reported(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             repo_root = Path(tmpdir)
             target = repo_root / 'docs' / 'guide.md'
             target.parent.mkdir(parents=True)
             target.write_text(
-                'python -m unittest python.openclaw.tests.governance.test_delivery_cleanliness -q\n',
+                'python -m unittest python.openclaw.tests.doctor.test_release_gate -q\n',
                 encoding='utf-8',
             )
 
@@ -115,7 +107,7 @@ class HostPythonDocGuardTest(unittest.TestCase):
 
         self.assertEqual(
             hits,
-            ['docs/guide.md:1:python -m unittest python.openclaw.tests.governance.test_delivery_cleanliness'],
+            ['docs/guide.md:1:python -m unittest python.openclaw.tests.doctor.test_release_gate'],
         )
 
 

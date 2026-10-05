@@ -25,6 +25,7 @@ PYTHON_MODULE_COMMAND_RE = re.compile(
 
 @dataclass(frozen=True)
 class DocPythonCommand:
+    """文档中的仓库 Python 模块命令命中条目。"""
     module: str
     runner: str
     text: str
@@ -50,18 +51,6 @@ def default_scan_roots() -> list[str]:
     if not isinstance(raw, list):
         return []
     return [str(item).strip() for item in raw if str(item).strip()]
-
-
-def _allowed_doc_command_families() -> tuple[str, ...]:
-    try:
-        payload = json.loads(CONFIG_PATH.read_text(encoding='utf-8'))
-    except Exception:
-        return ('repo_host', 'unittest_openclaw')
-    policy = payload.get('doc_command_policy') if isinstance(payload, dict) else None
-    raw = policy.get('allowed_families') if isinstance(policy, dict) else None
-    if not isinstance(raw, list):
-        return ('repo_host', 'unittest_openclaw')
-    return tuple(str(item).strip() for item in raw if str(item).strip())
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
@@ -119,20 +108,7 @@ def _has_uncovered_doc_pattern_match(line: str) -> bool:
     return bool(uncovered_doc_python_commands(line))
 
 
-def _is_allowed_doc_command(command: DocPythonCommand, allowed_families: tuple[str, ...]) -> bool:
-    module = command.module
-    runner = command.runner
-    if 'repo_host' in allowed_families and not runner and module == 'openclaw.testing.repo_host':
-        return True
-    if 'unittest_openclaw' in allowed_families and runner == 'unittest' and (
-        module == 'openclaw' or module.startswith('openclaw.')
-    ):
-        return True
-    return False
-
-
-def uncovered_doc_python_commands(line: str, allowed_families: tuple[str, ...] | None = None) -> tuple[DocPythonCommand, ...]:
-    active_allowed_families = _allowed_doc_command_families() if allowed_families is None else allowed_families
+def uncovered_doc_python_commands(line: str) -> tuple[DocPythonCommand, ...]:
     return tuple(
         command
         for command in iter_doc_python_commands(line)
@@ -142,7 +118,6 @@ def uncovered_doc_python_commands(line: str, allowed_families: tuple[str, ...] |
             or command.module == 'python.openclaw'
             or command.module.startswith('python.openclaw.')
         )
-        and not _is_allowed_doc_command(command, active_allowed_families)
     )
 
 

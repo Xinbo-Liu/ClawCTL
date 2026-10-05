@@ -13,7 +13,6 @@ source "$DEPLOY_FLOW_SUMMARY_LIB_ROOT/scripts/lib/flow_summary_common_shell.sh"
 # shellcheck source=scripts/lib/repo_contracts.sh
 source "$DEPLOY_FLOW_SUMMARY_LIB_ROOT/scripts/lib/repo_contracts.sh"
 unset DEPLOY_FLOW_SUMMARY_LIB_DIR
-
 deploy_named_array_reset() {
   local target_name="$1"
   case "$target_name" in
@@ -26,7 +25,6 @@ deploy_named_array_reset() {
       ;;
   esac
 }
-
 deploy_named_array_append() {
   local target_name="$1"
   shift
@@ -43,7 +41,6 @@ deploy_named_array_append() {
       ;;
   esac
 }
-
 deploy_build_failure_summary_args() {
   local target_name="$1"
   local include_outputs="$2"
@@ -67,7 +64,6 @@ deploy_build_failure_summary_args() {
   [[ -n "$IMAGE_ARCHIVE_PATH" ]] && deploy_named_array_append "$target_name" --image-archive-path "$IMAGE_ARCHIVE_PATH"
   return 0
 }
-
 deploy_build_success_summary_args() {
   local target_name="$1"
   local status="$2"
@@ -92,7 +88,6 @@ deploy_build_success_summary_args() {
   [[ -n "$IMAGE_ARCHIVE_PATH" ]] && deploy_named_array_append "$target_name" --image-archive-path "$IMAGE_ARCHIVE_PATH"
   return 0
 }
-
 deploy_run_summary_helper_from_array() {
   local helper_prefix_name="$1"
   local command="$2"
@@ -125,7 +120,6 @@ deploy_run_summary_helper_from_array() {
   fi
   return "$status"
 }
-
 deploy_note_summary_unavailable() {
   local output="$1"
   if declare -F log >/dev/null 2>&1 && [[ -n "${LOG_PATH:-}" ]]; then
@@ -136,7 +130,6 @@ deploy_note_summary_unavailable() {
     [[ -n "$output" ]] && printf '%s\n' "$output" >&2
   fi
 }
-
 deploy_write_summary() {
   local status="$1"
   mkdir -p "$LOG_DIR"
@@ -154,7 +147,6 @@ deploy_write_summary() {
   deploy_build_success_summary_args summary_args "$status" 1
   flow_summary_write_from_array DEPLOY_SUCCESS_CMD write-success-summary summary_args
 }
-
 deploy_emit_terminal_summary() {
   local status="$1"
   local -a summary_args=()
@@ -179,7 +171,6 @@ deploy_emit_terminal_summary() {
   deploy_build_success_summary_args summary_args "$status" 0
   flow_summary_emit_from_array log DEPLOY_SUCCESS_CMD success-summary summary_args
 }
-
 deploy_log_run_context() {
   local offline_hint=''
   log "[INFO] 一键部署开始：$TS"
@@ -211,7 +202,6 @@ deploy_log_run_context() {
   fi
   log "[INFO] 前置门禁：latest basic gate proof 已校验；缺失或过期时入口会自动补跑 bash ./$BASIC_GATE_SCRIPT_REL${offline_hint}。"
 }
-
 deploy_on_error() {
   local exit_code="$1"
   if [[ "$LAST_FAILED_CODE" -eq 0 ]]; then

@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""Control-plane service scope classification and boundary validation."""
+"""提供OpenClaw lib子系统的生产实现。"""
 from __future__ import annotations
 
+import json
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -35,7 +36,7 @@ _EXTENSION_ID_PATTERN = re.compile(r'^[a-z0-9_]+$')
 
 @dataclass(frozen=True)
 class ControlPlaneServiceScope:
-    """Resolved role for one control-plane service config path."""
+    """control-plane service 可见范围。"""
 
     kind: str
     profile_id: str
@@ -83,6 +84,46 @@ def _extension_manifest_dir(repo_root: Path, extension_id: str) -> Path:
         / 'control_plane'
         / 'extensions.d'
     ).resolve()
+
+
+def _extension_manifest_path(repo_root: Path, extension_id: str) -> Path:
+    """解析扩展 manifest 的仓库约定路径。"""
+    if extension_id == _PLATFORM_EXTENSION_ID:
+        return (repo_root / 'config' / 'control_plane' / 'extensions.d' / f'{extension_id}.json').resolve()
+    return (_extension_manifest_dir(repo_root, extension_id) / f'{extension_id}.json').resolve()
+
+
+def _read_manifest_dependencies(path: Path) -> list[dict[str, Any]]:
+    """读取 manifest dependencies，无法读取时返回空依赖集合。"""
+    try:
+        payload = json.loads(path.read_text(encoding='utf-8-sig'))
+    except Exception:
+        return []
+    if not isinstance(payload, dict):
+        return []
+    dependencies = payload.get('dependencies') or []
+    return [item for item in dependencies if isinstance(item, dict)] if isinstance(dependencies, list) else []
+
+
+def _required_dependency_ids(repo_root: Path, extension_id: str, *, seen: set[str] | None = None) -> tuple[str, ...]:
+    """返回扩展 required dependency 闭包，顺序为依赖优先。"""
+    if seen is None:
+        seen = set()
+    result: list[str] = []
+    manifest_path = _extension_manifest_path(repo_root, extension_id)
+    for dependency in _read_manifest_dependencies(manifest_path):
+        if bool(dependency.get('optional', False)):
+            continue
+        dependency_id = str(dependency.get('id') or '').strip()
+        if not dependency_id or dependency_id == _PLATFORM_EXTENSION_ID or dependency_id in seen:
+            continue
+        seen.add(dependency_id)
+        for nested_id in _required_dependency_ids(repo_root, dependency_id, seen=seen):
+            if nested_id not in result:
+                result.append(nested_id)
+        if dependency_id not in result:
+            result.append(dependency_id)
+    return tuple(result)
 
 
 def _repo_combination_manifest_dir(repo_root: Path, value: str) -> Path:
@@ -136,7 +177,6 @@ def _extension_scope_from_repo_relative_path(repo_root: Path, path: Path) -> Con
 
 
 def classify_control_plane_service_scope(config_path: str | Path) -> ControlPlaneServiceScope:
-    """Classify a service config as base, platform, extension default, or custom."""
     path = Path(config_path).resolve()
     repo_root = resolve_repo_root(path).resolve()
     if path == _resolved_repo_path(repo_root, CONTROL_PLANE_SERVICE_CONFIG_REL_PATH):
@@ -233,7 +273,6 @@ def _append_expected_manifest_dirs_issue(
 
 
 def validate_control_plane_service_boundary(config_path: str | Path, payload: dict[str, Any]) -> tuple[str, ...]:
-    """Validate service-level module boundaries for contract service paths."""
     path = Path(config_path).resolve()
     repo_root = resolve_repo_root(path).resolve()
     scope = classify_control_plane_service_scope(path)
@@ -299,16 +338,22 @@ def validate_control_plane_service_boundary(config_path: str | Path, payload: di
         )
     elif scope.kind == CONTROL_PLANE_SERVICE_SCOPE_MANAGED_EXTENSION:
         extension_id = scope.extension_id
+        required_dependency_ids = _required_dependency_ids(repo_root, extension_id)
+        expected_enabled_ids = (_PLATFORM_EXTENSION_ID, *required_dependency_ids, extension_id)
         _append_expected_enabled_ids_issue(
             issues,
             label=f'extension service {extension_id}',
             actual=enabled_ids,
-            expected=(_PLATFORM_EXTENSION_ID, extension_id),
+            expected=expected_enabled_ids,
+        )
+        expected_dependency_manifest_dirs = tuple(
+            _extension_manifest_dir(repo_root, dependency_id)
+            for dependency_id in required_dependency_ids
         )
         _append_expected_manifest_dirs_issue(
             issues,
             label=f'extension service {extension_id}',
             actual=manifest_dirs,
-            expected=(platform_manifest_dir, _extension_manifest_dir(repo_root, extension_id)),
+            expected=(platform_manifest_dir, *expected_dependency_manifest_dirs, _extension_manifest_dir(repo_root, extension_id)),
         )
     return tuple(issues)

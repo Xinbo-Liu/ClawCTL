@@ -10,15 +10,12 @@ HOST_INSTALL_DEFAULTS_ROOT="$(openclaw_repo_root_from "$HOST_INSTALL_DEFAULTS_LI
 # shellcheck source=scripts/lib/repo_contracts.sh
 source "$HOST_INSTALL_DEFAULTS_ROOT/scripts/lib/repo_contracts.sh"
 unset HOST_INSTALL_DEFAULTS_LIB_DIR
-
 host_install_defaults_repo_root() {
   printf '%s\n' "$HOST_INSTALL_DEFAULTS_ROOT"
 }
-
 host_install_defaults_truth_file() {
   printf '%s/%s\n' "$(host_install_defaults_repo_root)" "$(repo_contract_relpath governance.install_defaults)"
 }
-
 host_install_defaults_value_default() {
   local key="$1"
   local fallback="$2"
@@ -48,7 +45,6 @@ host_install_defaults_value_default() {
   fi
   printf '%s\n' "$fallback"
 }
-
 host_install_defaults_required_value() {
   local key="$1"
   local value=""
@@ -59,7 +55,6 @@ host_install_defaults_required_value() {
   fi
   printf '%s\n' "$value"
 }
-
 host_install_defaults_state_root_default() {
   host_install_defaults_required_value host_state_root
 }

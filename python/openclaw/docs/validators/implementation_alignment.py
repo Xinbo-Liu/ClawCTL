@@ -7,8 +7,10 @@ import sys
 from openclaw.lib.cli.output import stdout_write, stderr_write
 from typing import Any
 
-from openclaw.docs.support.docs_registry import ROOT_DIR, load_registry, require_pages
+from openclaw.docs.support.docs_registry import ROOT_DIR, require_pages
 from openclaw.docs.support.text_contracts import check_text_contract
+from openclaw.docs.validators.registry_context import load_validator_context
+from openclaw.docs.support.shared_cache import read_text
 from openclaw.docs.validators.object_closure import (
     has_any_token,
     load_documentation_runtime_resolver,
@@ -25,6 +27,7 @@ def usage() -> str:
         "用法：",
         "  bash ./scripts/docs/check_documentation_implementation_alignment.sh",
         "  bash ./scripts/docs/check_documentation_implementation_alignment.sh --stdout",
+        "  bash ./scripts/docs/check_documentation_implementation_alignment.sh --config-path <control-plane-config-path>",
         "",
         "说明：",
         "  校验声明 implementationContract 的页面是否引用实现真源，并保持键、路径与层级表述与现状一致。",
@@ -44,7 +47,7 @@ def check_page(page: dict[str, Any], resolver: PathResolverInstance) -> list[str
     file_path = ROOT_DIR / rel_path
     if not file_path.exists():
         return [f"{rel_path} 不存在"]
-    content = file_path.read_text(encoding="utf-8")
+    content = read_text(file_path)
     errors: list[str] = []
 
     errors.extend(
@@ -87,21 +90,17 @@ def check_page(page: dict[str, Any], resolver: PathResolverInstance) -> list[str
 
 def main(argv: list[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
-    stdout = False
-    for arg in args:
-        if arg == "--stdout":
-            stdout = True
-        elif arg in {"-h", "--help"}:
-            stdout_write(f"{usage()}\n")
-            return 0
-        else:
-            stderr_write(f"[check_documentation_implementation_alignment][FAIL] 未知参数：{arg}\n")
-            stderr_write(f"{usage()}\n")
-            return 2
+    context = load_validator_context(
+        args,
+        usage_text=usage(),
+        error_prefix='[check_documentation_implementation_alignment][FAIL]',
+        root_dir=ROOT_DIR,
+    )
+    if isinstance(context, int):
+        return context
     try:
-        registry = load_registry()
-        pages = [page for page in require_pages(registry) if isinstance(page.get("implementationContract"), dict)]
-        resolver = load_documentation_runtime_resolver()
+        pages = [page for page in require_pages(context.registry) if isinstance(page.get("implementationContract"), dict)]
+        resolver = load_documentation_runtime_resolver(config_path=context.config_path)
     except Exception as exc:
         stderr_write(f"[check_documentation_implementation_alignment][FAIL] {exc}\n")
         return 1
@@ -110,8 +109,8 @@ def main(argv: list[str] | None = None) -> int:
     for page in pages:
         errors.extend(check_page(page, resolver))
 
-    if stdout:
-        stdout_write(f"[check_documentation_implementation_alignment] count={len(pages)}\n")
+    if context.stdout:
+        stdout_write(f"[check_documentation_implementation_alignment] config={context.config_label} count={len(pages)}\n")
         for page in pages:
             stdout_write(f"- {page['path']}\n")
 

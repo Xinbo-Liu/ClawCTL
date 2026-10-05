@@ -8,6 +8,8 @@ source "$DEPLOYMENT_IMAGES_LIB_DIR/repo_root.sh"
 ROOT_DIR="${ROOT_DIR:-$(openclaw_repo_root_from "$DEPLOYMENT_IMAGES_LIB_DIR")}"
 # shellcheck source=scripts/lib/image_env.sh
 source "$ROOT_DIR/scripts/lib/image_env.sh"
+# shellcheck source=scripts/lib/openclaw_runtime_contract.sh
+source "$ROOT_DIR/scripts/lib/openclaw_runtime_contract.sh"
 image_env_load
 
 DEPLOYMENT_IMAGE_ARTIFACT_DIR="${DEPLOYMENT_IMAGE_ARTIFACT_DIR:-$ROOT_DIR/state/image_artifacts}"
@@ -16,6 +18,7 @@ DEPLOYMENT_IMAGE_BUNDLE_CONTRACT='deployment-images.contract.json'
 DEPLOYMENT_IMAGE_BUNDLE_DOCKER_ARCHIVE='deployment-images.docker.tar'
 DEPLOYMENT_IMAGE_BUNDLE_SHA256='deployment-images.sha256'
 DEPLOYMENT_IMAGE_LOCAL_REFS_ENV="${DEPLOYMENT_IMAGE_LOCAL_REFS_ENV:-$DEPLOYMENT_IMAGE_ARTIFACT_DIR/deployment-images.local-refs.env}"
+DEPLOYMENT_IMAGES_GATEWAY_SELECTION_FILE="${DEPLOYMENT_IMAGES_GATEWAY_SELECTION_FILE:-$ROOT_DIR/state/image_pull/gateway_source_selection.json}"
 
 # 输出部署镜像相关的普通提示信息。
 deployment_images_note() {
@@ -35,7 +38,7 @@ deployment_images_fail() {
 
 # 确认当前环境具备 jq。
 deployment_images_require_jq() {
-  command -v jq >/dev/null 2>&1 || deployment_images_fail '缺少 jq；请先执行 sudo bash ./scripts/setup/prepare_docker_host.sh --install-base-tools。'
+  command -v jq >/dev/null 2>&1 || deployment_images_fail '缺少 jq；请先执行 sudo bash ./scripts/setup/prepare_docker_host.sh --os auto --install-base-tools。'
 }
 
 # 确认当前环境具备 tar。
@@ -135,6 +138,114 @@ deployment_images_ref_tag() {
   local ref="$1"
   mapfile -t __deployment_image_parts < <(image_env_split_image_ref "$ref")
   printf '%s\n' "${__deployment_image_parts[1]}"
+}
+
+# 提取 image:tag@digest 中的 repo 部分。
+deployment_images_ref_repo() {
+  local ref="$1"
+  mapfile -t __deployment_image_parts < <(image_env_split_image_ref "$ref")
+  printf '%s\n' "${__deployment_image_parts[0]}"
+}
+
+# 返回 Gateway 来源选择记录文件路径。
+deployment_images_gateway_source_selection_file() {
+  printf '%s\n' "$DEPLOYMENT_IMAGES_GATEWAY_SELECTION_FILE"
+}
+
+# 从 Gateway 来源选择记录中读取指定字段；缺记录或缺 jq 时返回空。
+deployment_images_gateway_source_selection_value() {
+  local key="$1"
+  local selection_file="${2:-$DEPLOYMENT_IMAGES_GATEWAY_SELECTION_FILE}"
+  [[ -f "$selection_file" && -r "$selection_file" ]] || { printf ''; return 0; }
+  command -v jq >/dev/null 2>&1 || { printf ''; return 0; }
+  jq -r --arg key "$key" '.[$key] // empty' "$selection_file" 2>/dev/null || true
+}
+
+# 列出同一个本地镜像中匹配指定 digest 的 RepoDigest 别名。
+deployment_images_repo_digest_alias_lines() {
+  local inspect_ref="$1"
+  local expected_digest="$2"
+  [[ -n "$inspect_ref" && -n "$expected_digest" ]] || return 0
+  docker image inspect "$inspect_ref" --format '{{range .RepoDigests}}{{println .}}{{end}}' 2>/dev/null |
+    awk -v digest="@$expected_digest" 'index($0, digest) > 0 && !seen[$0]++ { print }'
+}
+
+# 记录 Gateway 本地来源别名清理结果。
+deployment_images_record_gateway_source_alias_cleanup() {
+  local log_file="$1"
+  local image="$2"
+  local result="$3"
+  local image_id="${4:-<none>}"
+  [[ -n "$log_file" ]] || return 0
+  mkdir -p "$(dirname "$log_file")"
+  printf '%s | %s | %s | %s | %s\n' \
+    "$(date +"%Y-%m-%dT%H:%M:%S%:z")" \
+    "$result" \
+    "$image" \
+    "$image_id" \
+    "<gateway-source-alias-cleanup>" \
+    >> "$log_file"
+}
+
+# 移除单个未被当前部署选用的 Gateway 来源别名，只有同 IMAGE ID 时才执行。
+deployment_images_remove_gateway_source_alias_ref() {
+  local alias_ref="$1"
+  local selected_image_id="$2"
+  local log_file="${3:-}"
+  local dry_run="${4:-0}"
+  local alias_image_id=''
+  [[ -n "$alias_ref" ]] || return 0
+  if ! alias_image_id="$(docker image inspect "$alias_ref" --format '{{.Id}}' 2>/dev/null)"; then
+    return 0
+  fi
+  [[ "$alias_image_id" == "$selected_image_id" ]] || return 0
+
+  if [[ "$dry_run" == "1" ]]; then
+    echo "[DRY-RUN] 将移除未被当前部署选用的 Gateway 镜像别名：$alias_ref"
+    deployment_images_record_gateway_source_alias_cleanup "$log_file" "$alias_ref" "dry-run-remove-gateway-source-alias" "$alias_image_id"
+    return 0
+  fi
+
+  if docker image rm "$alias_ref" >/dev/null 2>&1; then
+    echo "[OK] 已移除未被当前部署选用的 Gateway 镜像别名：$alias_ref"
+    deployment_images_record_gateway_source_alias_cleanup "$log_file" "$alias_ref" "removed-gateway-source-alias" "$alias_image_id"
+  else
+    echo "[WARN] 无法移除未被当前部署选用的 Gateway 镜像别名：$alias_ref；可能正被容器或本地 tag 保护。" >&2
+    deployment_images_record_gateway_source_alias_cleanup "$log_file" "$alias_ref" "failed-remove-gateway-source-alias" "$alias_image_id"
+    return 1
+  fi
+  return 0
+}
+
+# 清理 Gateway canonical/candidate 之间同 digest、同 IMAGE ID 的未选用本地引用。
+deployment_images_cleanup_gateway_source_aliases() {
+  local selected_ref="${1:?selected_ref is required}"
+  local log_file="${2:-}"
+  local dry_run="${3:-0}"
+  local selected_repo='' selected_tag='' selected_digest='' selected_image_id='' selected_inspect_ref='' repo=''
+  local cleanup_status=0
+  selected_repo="$(deployment_images_ref_repo "$selected_ref")"
+  selected_tag="$(deployment_images_ref_tag "$selected_ref")"
+  selected_digest="$(deployment_images_ref_digest "$selected_ref")"
+  [[ -n "$selected_repo" && -n "$selected_tag" && -n "$selected_digest" ]] || return 0
+
+  selected_inspect_ref="$selected_ref"
+  if ! docker image inspect "$selected_inspect_ref" >/dev/null 2>&1; then
+    selected_inspect_ref="$(deployment_images_resolve_verified_local_ref "$selected_ref" || true)"
+  fi
+  [[ -n "$selected_inspect_ref" ]] || return 0
+  if ! selected_image_id="$(docker image inspect "$selected_inspect_ref" --format '{{.Id}}' 2>/dev/null)"; then
+    return 0
+  fi
+
+  openclaw_runtime_contract_load "$ROOT_DIR" >/dev/null || return $?
+  while IFS= read -r repo; do
+    [[ -n "$repo" ]] || continue
+    [[ "$repo" == "$selected_repo" ]] && continue
+    deployment_images_remove_gateway_source_alias_ref "$repo@$selected_digest" "$selected_image_id" "$log_file" "$dry_run" || cleanup_status=1
+    deployment_images_remove_gateway_source_alias_ref "$repo:$selected_tag" "$selected_image_id" "$log_file" "$dry_run" || cleanup_status=1
+  done < <(openclaw_runtime_contract_gateway_candidate_repos)
+  return "$cleanup_status"
 }
 
 # 为部署镜像角色生成受管本地 tag，便于 docker images 输出可解释且可清理。

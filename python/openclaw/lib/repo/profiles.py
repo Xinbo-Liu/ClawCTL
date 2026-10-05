@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Control-plane profile registry helpers."""
+"""提供OpenClaw lib子系统的生产实现。"""
 from __future__ import annotations
 
 import os
@@ -268,7 +268,6 @@ def control_plane_profile_status_rows(
     *,
     allow_env_override: bool = True,
 ) -> tuple[dict[str, object], ...]:
-    """Return explicit registry profiles plus discovered extension candidates."""
     repo_root = resolve_repo_root(start_path).resolve()
     explicit_rows = dict(_load_control_plane_profile_registry_rows(start_path, allow_env_override=allow_env_override))
     items: list[dict[str, object]] = [

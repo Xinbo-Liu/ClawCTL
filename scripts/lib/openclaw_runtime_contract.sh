@@ -24,11 +24,10 @@ openclaw_runtime_contract_file() {
 # 确认当前环境具备 jq，以便解析合同真源。
 openclaw_runtime_contract_require_jq() {
   command -v jq >/dev/null 2>&1 || {
-    echo '[openclaw_runtime_contract] 缺少 jq；请先执行 sudo bash ./scripts/setup/prepare_docker_host.sh --install-base-tools' >&2
+    echo '[openclaw_runtime_contract] 缺少 jq；请先执行 sudo bash ./scripts/setup/prepare_docker_host.sh --os auto --install-base-tools' >&2
     return 20
   }
 }
-
 openclaw_runtime_contract_trim_cr() {
   local value="${1-}"
   value="${value%$'\r'}"

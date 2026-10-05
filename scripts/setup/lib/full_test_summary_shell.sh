@@ -19,7 +19,6 @@ FULL_TEST_CURRENT_CHECK_STARTED_SECONDS=""
 FULL_TEST_DETAIL_INLINE_LIMIT="${FULL_TEST_DETAIL_INLINE_LIMIT:-8000}"
 repo_contract_assign_path FULL_TEST_SURFACE_PATH governance.full_test_surface
 repo_contract_assign_path FULL_TEST_SUMMARY_OUTPUT_SURFACE_PATH governance.summary_output_surface
-
 full_test_named_array_append() {
   local target_name="$1"
   local value="$2"
@@ -45,17 +44,14 @@ full_test_named_array_append() {
       ;;
   esac
 }
-
 full_test_epoch_seconds() {
   date +%s
 }
-
 full_test_mark_check_started() {
   local check_id="$1"
   FULL_TEST_CURRENT_CHECK_ID="$check_id"
   FULL_TEST_CURRENT_CHECK_STARTED_SECONDS="$(full_test_epoch_seconds 2>/dev/null || true)"
 }
-
 full_test_duration_from_started() {
   local started_at="$1" finished_at="$2"
   if [[ "$started_at" =~ ^[0-9]+$ && "$finished_at" =~ ^[0-9]+$ && "$finished_at" -ge "$started_at" ]]; then
@@ -64,7 +60,6 @@ full_test_duration_from_started() {
     printf ''
   fi
 }
-
 full_test_consume_duration_seconds() {
   local check_id="$1" finished_at='' duration=''
   finished_at="$(full_test_epoch_seconds 2>/dev/null || true)"
@@ -79,7 +74,6 @@ full_test_consume_duration_seconds() {
   SETUP_GATE_LAST_DURATION_SECONDS=""
   printf '%s' "$duration"
 }
-
 full_test_record_result() {
   local bucket_name="$1"
   local lines_name="$2"
@@ -113,23 +107,18 @@ full_test_record_result() {
   full_test_named_array_append "$bucket_name" "$check_id"
   full_test_named_array_append "$lines_name" "$status|$check_id|$detail|$group"
 }
-
 full_test_record_pass() {
   full_test_record_result PASS_IDS RESULT_LINES PASS "$@"
 }
-
 full_test_record_fail() {
   full_test_record_result FAIL_IDS RESULT_LINES FAIL "$@"
 }
-
 full_test_record_warn() {
   full_test_record_result WARN_IDS RESULT_LINES WARN "$@"
 }
-
 full_test_record_skip() {
   full_test_record_result SKIP_IDS RESULT_LINES SKIP "$@"
 }
-
 full_test_check_status_by_id() {
   local target_id="$1"
   local line='' status='' id='' detail='' group=''
@@ -143,7 +132,6 @@ full_test_check_status_by_id() {
   printf 'NOT_RUN\n'
   return 0
 }
-
 full_test_runtime_host_env_path() {
   local resolved=''
   if declare -F full_test_runtime_path_default >/dev/null 2>&1; then
@@ -163,7 +151,6 @@ full_test_runtime_host_env_path() {
     printf '%s' "$ROOT_DIR/$resolved"
   fi
 }
-
 full_test_summary_output_get() {
   local field="$1" fallback="${2:-}" value=''
   if [[ -f "$FULL_TEST_SUMMARY_OUTPUT_SURFACE_PATH" ]]; then
@@ -174,7 +161,6 @@ full_test_summary_output_get() {
   fi
   printf '%s' "$value"
 }
-
 full_test_default_log_dir() {
   local resolved=''
   if declare -F full_test_runtime_path_default >/dev/null 2>&1; then
@@ -194,7 +180,6 @@ full_test_default_log_dir() {
     printf '%s' "$ROOT_DIR/$resolved"
   fi
 }
-
 full_test_default_latest_summary_path() {
   local kind="$1"
   local resolved=''
@@ -223,7 +208,6 @@ full_test_default_latest_summary_path() {
     printf '%s' "$ROOT_DIR/$resolved"
   fi
 }
-
 full_test_default_acceptance_state_path() {
   local resolved=''
   if declare -F full_test_runtime_path_default >/dev/null 2>&1; then
@@ -243,7 +227,6 @@ full_test_default_acceptance_state_path() {
     printf '%s' "$ROOT_DIR/$resolved"
   fi
 }
-
 full_test_failure_scenario_for_stage() {
   case "$1" in
     control_plane_defaults|cli_filter_validation|prereqs|summary_write)
@@ -254,7 +237,6 @@ full_test_failure_scenario_for_stage() {
       ;;
   esac
 }
-
 full_test_apply_next_action_command() {
   local line="$1"
   local selected_group="${GROUP:-all}"
@@ -270,13 +252,11 @@ full_test_apply_next_action_command() {
   fi
   printf '%s\n' "$line"
 }
-
 full_test_surface_config_get() {
   local path_expr="$1"
   local default_value="${2:-}"
   flow_summary_json_get "$FULL_TEST_SURFACE_PATH" "$path_expr" "$default_value"
 }
-
 full_test_preflight_failure_detail() {
   if [[ -n "${FULL_TEST_LAST_ERROR_MESSAGE:-}" ]]; then
     printf '%s' "$FULL_TEST_LAST_ERROR_MESSAGE"
@@ -284,11 +264,9 @@ full_test_preflight_failure_detail() {
   fi
   full_test_surface_config_get preflight_failure_detail 'full test 在正式检查组执行前提前失败；请先修复 Docker / 控制面介质 / latest summary 写出路径或 deploy env prerequisites。'
 }
-
 full_test_append_preflight_actions() {
   setup_gate_collect_scenario_actions NEXT_ACTIONS one_click_test_full preflight_failed full_test_apply_next_action_command
 }
-
 full_test_build_check_json_rows() {
   local first=1 line='' status='' check_id='' detail='' group=''
   printf '['
@@ -311,7 +289,6 @@ full_test_build_check_json_rows() {
   done
   printf ']'
 }
-
 full_test_write_result_artifacts() {
   : > "$RESULT_LINES_FILE"
   : > "$NEXT_ACTIONS_FILE"
@@ -322,7 +299,6 @@ full_test_write_result_artifacts() {
     printf '%s\n' "${NEXT_ACTIONS[@]+"${NEXT_ACTIONS[@]}"}" > "$NEXT_ACTIONS_FILE"
   fi
 }
-
 full_test_write_summary() {
   local helper_output='' helper_status=0
   full_test_write_result_artifacts
@@ -352,7 +328,6 @@ full_test_write_summary() {
   fi
   return "$helper_status"
 }
-
 full_test_after_run() {
   local print_output='' print_status=0 write_status=0
   FULL_TEST_SUMMARY_EMITTED=1
@@ -390,8 +365,6 @@ full_test_after_run() {
     fi
   fi
 }
-
-
 full_test_calculate_exit_code() {
   local strict_flag="$1"
   if ((${#FAIL_IDS[@]} > 0)); then

@@ -1,0 +1,111 @@
+{
+  "fileBaselines": {
+    "python/openclaw/specs/__init__.py": {
+      "itemBaselines": {
+        "module:<module>": {
+          "issues": [],
+          "kind": "module",
+          "qualname": "<module>"
+        }
+      },
+      "moduleHasChineseDocstring": true,
+      "semanticIssueItems": 0,
+      "semanticIssues": 0
+    },
+    "python/openclaw/specs/agent_cli.py": {
+      "itemBaselines": {
+        "function:agent_command_specs": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "agent_command_specs"
+        },
+        "function:extract_command_name": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "extract_command_name"
+        },
+        "function:get_agent_command_spec": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "get_agent_command_spec"
+        },
+        "function:get_usage_entries_by_command_names": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "get_usage_entries_by_command_names"
+        },
+        "function:normalize_spacing": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "normalize_spacing"
+        },
+        "function:render_agent_help": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "render_agent_help"
+        },
+        "function:render_agent_markdown": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "render_agent_markdown"
+        },
+        "function:split_workspace_usage": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "split_workspace_usage"
+        },
+        "function:strip_agent_prefix": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "strip_agent_prefix"
+        },
+        "function:with_registered_agent_runner_prefix": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "with_registered_agent_runner_prefix"
+        },
+        "module:<module>": {
+          "issues": [],
+          "kind": "module",
+          "qualname": "<module>"
+        }
+      },
+      "moduleHasChineseDocstring": true,
+      "semanticIssueItems": 10,
+      "semanticIssues": 10
+    }
+  },
+  "kind": "openclaw_repo_prod_semantic_docstring_baseline_shard",
+  "policy": {
+    "mode": "semantic-baseline-ratchet",
+    "newFilesRequireZeroSemanticIssues": true,
+    "scope": "repo-prod",
+    "trackedItemKinds": [
+      "module",
+      "class",
+      "function"
+    ]
+  },
+  "schemaVersion": 2,
+  "shardKey": "platform_specs"
+}

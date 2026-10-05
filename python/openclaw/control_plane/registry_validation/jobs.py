@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Job-level runtime validation helpers for the control-plane registry."""
+"""提供OpenClaw 控制平面子系统的生产实现。"""
 from __future__ import annotations
 
 from typing import Any
 
 from openclaw.control_plane.jobs.defaults import agent_capabilities
-from openclaw.control_plane.registry.owners import qualified_registry_id, resolve_collection_ref, row_owner_id
+from openclaw.control_plane.registry.owners import qualified_registry_id, row_owner_id
 from openclaw.control_plane.registry.binding_topology import _infer_binding_runner_ref
 from openclaw.control_plane.registry.job_execution_plans import (
     build_bound_job_execution_plan,
@@ -171,7 +171,6 @@ def _resolve_bound_job_context(
     modules_by_id: dict[str, dict[str, Any]],
 ) -> dict[str, Any]:
     job_id = str(job.get('id') or '')
-    job_owner_id = row_owner_id(job)
     derived_agent_ref = str(binding.get('agentRef') or '').strip()
     derived_agent_qualified_ref = str(binding.get('resolvedAgentRef') or '').strip()
     declared_agent_ref = str(job.get('agentRef') or '').strip()
@@ -287,6 +286,7 @@ def _resolve_job_model_profile_ref(
     module: dict[str, Any],
     models_by_id: dict[str, dict[str, Any]],
     resolved_recovery_step: dict[str, Any],
+    retry_ownership: str,
     default_timezone: str,
 ) -> dict[str, Any]:
     _normalize_job_schedule(job, default_timezone=default_timezone)
@@ -295,6 +295,7 @@ def _resolve_job_model_profile_ref(
         agent=agent,
         module=module,
         is_recovery_job=bool(resolved_recovery_step),
+        retry_ownership=retry_ownership,
     )
     model_ref = _resolve_model_ref(job, agent)
     resolved_model_ref = ''
@@ -394,6 +395,7 @@ def _materialize_bound_job_fields(
     resolved_recovery_step: dict[str, Any],
     dependencies: list[dict[str, Any]],
     execution_plan: dict[str, Any],
+    delivery_contract: dict[str, Any] | None,
 ) -> None:
     job.pop('resolvedCommand', None)
     job.pop('resolvedOperationRef', None)
@@ -403,6 +405,10 @@ def _materialize_bound_job_fields(
     job['resolvedInputs'] = dict(resolved_contract.get('inputs') or {})
     job['resolvedOutputs'] = dict(resolved_contract.get('outputs') or {})
     job['resolvedRecoveryStep'] = dict(resolved_recovery_step) if resolved_recovery_step else {}
+    if delivery_contract:
+        job['resolvedDeliveryContract'] = dict(delivery_contract)
+    else:
+        job.pop('resolvedDeliveryContract', None)
     job['resolvedDependsOn'] = dependencies
     job['normalizedDependsOn'] = dependencies
 
@@ -423,7 +429,6 @@ def _validate_bound_job(
     config_path: str = '',
 ) -> None:
     job_id = str(job.get('id') or '')
-    job_key = str(job.get('resolvedRuntimeJobKey') or job_id)
     context = _resolve_bound_job_context(
         job,
         binding,
@@ -436,6 +441,7 @@ def _validate_bound_job(
         agent_ref=context['agentRef'],
         groups_by_id=groups_by_id,
     )
+    retry_ownership = str(json_object(group.get('dependencyPolicy')).get('retryMode') or 'stage_owned') if isinstance(group, dict) else 'stage_owned'
     model_state = _resolve_job_model_profile_ref(
         job,
         job_id=job_id,
@@ -444,6 +450,7 @@ def _validate_bound_job(
         module=context['module'],
         models_by_id=models_by_id,
         resolved_recovery_step=resolved_recovery_step,
+        retry_ownership=retry_ownership,
         default_timezone=default_timezone,
     )
     target_binding_ref = _resolve_job_target_binding(
@@ -454,6 +461,25 @@ def _validate_bound_job(
         capabilities=model_state['capabilities'],
         targets_by_id=targets_by_id,
     )
+    target_row = targets_by_id.get(target_binding_ref) if target_binding_ref else None
+    delivery_contract = json_object(target_row.get('deliveryContract')) if isinstance(target_row, dict) else {}
+    if bool(model_state['capabilities'].get('externalDispatch')) and not delivery_contract:
+        raise CliError(f'job {job_id} targetBindingRef {target_binding_ref} 缺少 deliveryContract', 2)
+    if delivery_contract:
+        success_statuses = set(_ensure_unique_text_list(
+            delivery_contract.get('successStatuses'),
+            label=f'target {target_binding_ref} deliveryContract.successStatuses',
+        ))
+        retryable_statuses = set(_ensure_unique_text_list(
+            delivery_contract.get('retryableStatuses'),
+            label=f'target {target_binding_ref} deliveryContract.retryableStatuses',
+        ))
+        terminal_statuses = set(_ensure_unique_text_list(
+            delivery_contract.get('terminalStatuses'),
+            label=f'target {target_binding_ref} deliveryContract.terminalStatuses',
+        ))
+        if success_statuses != {'sent', 'noop'} or retryable_statuses != {'retry_pending', 'rate_limited'} or terminal_statuses != {'failed', 'blocked'}:
+            raise CliError(f'job {job_id} targetBindingRef {target_binding_ref} deliveryContract 不符合统一投递状态契约', 2)
     dependencies = _resolve_job_dependencies(
         job,
         binding,
@@ -479,4 +505,5 @@ def _validate_bound_job(
             target_binding_ref=target_binding_ref,
             config_path=config_path,
         ),
+        delivery_contract=delivery_contract,
     )

@@ -5,7 +5,6 @@ if [[ -n "${OPENCLAW_REPO_ROOT_SH_LOADED:-}" ]]; then
   return 0 2>/dev/null || exit 0
 fi
 OPENCLAW_REPO_ROOT_SH_LOADED=1
-
 openclaw_repo_root_shell_path() {
   local raw_path="${1-}"
   if command -v cygpath >/dev/null 2>&1 && [[ "$raw_path" =~ ^[A-Za-z]:[\\/].*$ ]]; then
@@ -15,6 +14,25 @@ openclaw_repo_root_shell_path() {
   printf '%s\n' "$raw_path"
 }
 
+# 职责：将仓库相对路径或绝对路径规范化为可比较的绝对路径。
+openclaw_repo_abs_path_for_compare() {
+  local root_dir="${1:?root_dir is required}"
+  local raw_path="${2:?path is required}"
+  local shell_path="" full_path="" dir="" base=""
+  root_dir="$(openclaw_repo_root_shell_path "$root_dir")"
+  shell_path="$(openclaw_repo_root_shell_path "$raw_path")"
+  case "$shell_path" in
+    /*) full_path="$shell_path" ;;
+    *) full_path="$root_dir/$shell_path" ;;
+  esac
+  dir="$(dirname "$full_path")"
+  base="$(basename "$full_path")"
+  if [[ -d "$dir" ]]; then
+    (cd "$dir" 2>/dev/null && printf '%s/%s\n' "$(pwd -P)" "$base")
+  else
+    printf '%s\n' "$full_path"
+  fi
+}
 openclaw_repo_root_has_markers() {
   local candidate="${1:?candidate is required}"
   [[ -d "$candidate/python/openclaw" ]] &&
@@ -23,7 +41,6 @@ openclaw_repo_root_has_markers() {
   [[ -f "$candidate/config/governance/support/repo_contracts.json" ]] &&
     [[ -f "$candidate/scripts/lib/repo_contracts.sh" ]]
 }
-
 openclaw_repo_root_from() {
   local start_path="${1:-${BASH_SOURCE[1]:-${BASH_SOURCE[0]}}}"
   local current_dir='' parent_dir=''

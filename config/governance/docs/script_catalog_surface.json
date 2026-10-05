@@ -25,22 +25,27 @@
         },
         {
           "name": "apply_extension_env_values.sh",
-          "summary": "按 extension id 或 profile 批量初始化和回填 agent/extensions/<id>/deploy/extension.env；支持 --init-from-example、--set、--from-env 与 --set-secret-from-env，固定写出 LF、chmod 600，并在日志中脱敏 secret。",
+          "summary": "按 extension id 或 profile 批量初始化和回填 agent/extensions/<id>/deploy/extension.env；单扩展 profile 直接写入唯一扩展，多扩展 profile 按 key owner 路由到对应扩展并拒绝共享 site env 键，支持 --init-from-example、--set、--from-env 与 --set-secret-from-env，固定写出 LF、chmod 600，并在日志中脱敏 secret。",
           "visibility": "supplemental_entrypoint"
         },
         {
           "name": "apply_target_env_values.sh",
-          "summary": "按 KEY=VALUE 或当前 shell 环境变量批量回填 deploy/targets.d/<target_id>.env；已存在键原位替换，缺失键自动追加，并固定写出 LF 与 owner-only 权限，避免远程多行编辑污染 target env。",
+          "summary": "按 KEY=VALUE 或当前 shell 环境变量批量回填 deploy/targets.d/<target_id>.env；已存在键原位替换，缺失键自动追加；--init-from-example 从 active profile 的 dispatch target registry 生成目标 env 初始内容，deploy/targets.d/*.env.example 是派生参考，写出 LF 与 owner-only 权限。",
+          "visibility": "supplemental_entrypoint"
+        },
+        {
+          "name": "apply_deploy_input_values.sh",
+          "summary": "读取远端或本地 owner-only env 文件，按 active profile 的 schema、组合 sharedDeployEnvFields 与 dispatch target registry 把 key 路由写入 deploy/site.env、扩展 extension.env 或 deploy/targets.d/<target_id>.env；拒绝未知键和错位键，secret 日志脱敏。",
           "visibility": "supplemental_entrypoint"
         },
         {
           "name": "check_extension_env_values.sh",
-          "summary": "按 extension id 或 profile 读取 *.deploy_env_schema.json，检查 extension.env 中 required/manual_required/secret 字段是否闭合；text 输出按 group 分组并给出 apply_extension_env_values.sh 修复命令，json 输出只记录字段存在性不输出值。",
+          "summary": "按 active profile 读取 *.deploy_env_schema.json；组合 profile 中共享 `OLLAMA_*` 检查 deploy/site.env，扩展自有字段检查 extension.env；text 输出按 group 分组并给出 site/extension 对应修复命令，json 输出记录 scope/owner 且不输出值。",
           "visibility": "supplemental_entrypoint"
         },
         {
           "name": "check_client_access_acceptance.sh",
-          "summary": "独立检查访问端闭环：读取 deploy/.env 中 TLS CN、listen IP、证书路径与来源 CIDR，拒绝空项、非法格式、公网、非私网或过宽 client CIDR，输出 DNS/hosts、证书信任和不跳过 TLS 校验的 curl 验证命令，并区分目标机 deployment_acceptance 与访问端 client_access_acceptance。",
+          "summary": "独立检查访问端闭环：读取 deploy/.env 中 TLS CN、listen IP、证书路径与实际观测来源 CIDR，拒绝空项、非法格式、公网网段、非私网且非精确公网主机的来源 CIDR，输出 DNS/hosts、证书信任和不跳过 TLS 校验的 curl 验证命令，并区分目标机 deployment_acceptance 与访问端 client_access_acceptance。",
           "visibility": "supplemental_entrypoint"
         },
         {
@@ -55,7 +60,7 @@
         },
         {
           "name": "cleanup_remote_openclaw.sh",
-          "summary": "远程 OpenClaw 历史痕迹清理计划器；默认 dry-run，只读列出 OpenClaw 容器、网络、卷、项目容器关联镜像、目录、部署用户与 ingress 边界规则；非默认 SSH 端口使用 --ssh-port，其他 SSH 选项继续使用 --ssh-option；显式 --apply 后才删除带项目证据的对象，仓库目录、部署用户和同名用户组都需通过 OpenClaw 证据门禁；不执行全局 Docker 清理命令，不按通用镜像名扫删。",
+          "summary": "远程 OpenClaw 对象清理计划器；默认 dry-run，只读列出 OpenClaw 容器、网络、卷、项目容器关联镜像、目录、部署用户与 ingress 边界规则；非默认 SSH 端口使用 --ssh-port，其他 SSH 选项继续使用 --ssh-option；显式 --apply 后才删除带项目证据的对象，仓库目录、部署用户和同名用户组都需通过 OpenClaw 证据门禁；不执行全局 Docker 清理命令，不按通用镜像名扫删。",
           "visibility": "supplemental_entrypoint"
         },
         {
@@ -130,7 +135,7 @@
         },
         {
           "name": "lib/full_test_group_registry.sh",
-          "summary": "读取 `governance.full_test_group_registry` 合约对应的按 extension 合并检查组真源，统一驱动 one_click_test_full 的脚本检查、入口存在性检查与失败后的下一步动作。",
+          "summary": "读取 `governance.full_test_group_registry` 合约对应的平台检查组真源，统一驱动 one_click_test_full 的脚本检查、入口存在性检查与失败后的下一步动作。",
           "visibility": "internal_support"
         },
         {
@@ -190,7 +195,7 @@
         },
         {
           "name": "prepare_docker_host.sh",
-          "summary": "CentOS 7 存量老系统路径的宿主机准备入口；统一处理部署网络 profile、CentOS vault / Docker Yum repo 国内候选回退、预工具安装、系统时间校验 / 更新、Docker 安装、Compose 的 RPM 优先安装与带 SHA256 校验的二进制回退、daemon 基线、防火墙 80/443 预开放与 firewalld docker zone 合同。host_firewall 的来源限制由 apply_ingress_boundary_rules.sh 物化。",
+          "summary": "Docker 宿主机准备入口；Ubuntu 22.04 为推荐基线，CentOS 7 为 legacy 路径；统一处理部署网络 profile、Ubuntu apt 依赖、CentOS vault / Docker Yum repo 国内候选回退、系统时间校验 / 更新、Docker / Compose 安装、daemon/MTU 基线、防火墙 80/443 预开放与 firewalld docker zone 合同。host_firewall 的来源限制由 apply_ingress_boundary_rules.sh 物化。",
           "visibility": "supplemental_entrypoint"
         },
         {
@@ -205,7 +210,7 @@
         },
         {
           "name": "remote_first_install.sh",
-          "summary": "远程首装向导；默认 dry-run，通过 SSH 执行 preflight、stage-bundle、prepare-repo、configure-base 与 deploy 阶段，--plan-json 只输出阶段计划且不写本地 state 或远端；非默认 SSH/scp 端口使用 --ssh-port，其他 SSH/scp 选项继续使用 --ssh-option；deploy 阶段固定在 basic gate 前执行 fix_permissions，并支持逗号分隔多个 --client-cidr 来源段；固定输出 log、summary、status.env 与 resume 命令；preflight 在无 sudo、Docker/Compose 缺失、80/443 端口占用、repo 已存在或已有 openclaw-* 容器时明确阻断，并拒绝命令行明文 secret。",
+          "summary": "远程首装向导；默认 dry-run，通过 SSH 执行 preflight、stage-bundle、prepare-repo、显式 prepare-host、configure-base、configure-inputs 与 deploy 阶段；只有传入 --prepare-host 才会在远端执行宿主机准备，未传时 Docker/Compose/MTU 缺失只提示修复命令；configure-inputs 只读取远端 owner-only env 文件并按 profile 路由写入 site/extension/target 输入；--plan-json 只输出阶段计划且不写本地 state 或远端；非默认 SSH/scp 端口使用 --ssh-port，其他 SSH/scp 选项继续使用 --ssh-option；deploy 阶段固定在 basic gate 前执行 fix_permissions，并支持逗号分隔多个 --observed-source-cidr 实际观测来源段；固定输出 log、summary、status.env 与 resume 命令；preflight 在无 sudo、Docker/Compose 缺失、MTU 不一致、80/443 端口占用、非 OpenClaw repo 目录冲突或已有 openclaw-* 容器时明确阻断，并拒绝命令行明文 secret。",
           "visibility": "supplemental_entrypoint"
         },
         {
@@ -215,7 +220,7 @@
         },
         {
           "name": "one_click_upgrade.sh",
-          "summary": "服务器部署升级主入口；统一执行源码对齐、备份、scheduler maintenance、执行位修复、effective compose、扩展离线依赖 ensure、服务健康等待、run_all_once/full test/evidence 与升级报告导出；源码同步会写出 source_sync_metadata.json，并用 strict stack verify 校验目标 commit、releaseBundleHash、provenance 内容与 stack lock 一致性；显式 `--refresh-stack-lock` 会先刷新 agent/extensions/lock.json，再同步刷新 provenance 与生产 stack lock。",
+          "summary": "服务器部署升级主入口；统一执行源码对齐、备份、scheduler maintenance、执行位修复、effective compose、扩展离线依赖 ensure、服务健康等待、平台 required run ledger jobs 条件执行、清理可丢弃运行态缓存、full test、evidence 与升级报告导出；源码同步会写出 source_sync_metadata.json，并用 strict stack verify 校验目标 commit、releaseBundleHash、provenance 内容与 stack lock 一致性；显式 `--refresh-stack-lock` 会先刷新 agent/extensions/lock.json，再同步刷新 provenance 与生产 stack lock；显式 `--require-live-verification <extension-id>` 会按该扩展 testing manifest 的 `live_acceptance_checks` 执行真实外部闭环，升级报告同步记录脱敏输出和部署机可访问证据路径。",
           "visibility": "default_entrypoint"
         },
         {
@@ -288,7 +293,7 @@
         },
         {
           "name": "cleanup_image_aliases.sh",
-          "summary": "清理未使用镜像别名与标签残留；执行前会先校验 docker daemon 可访问性，并在真实清理操作前创建 state/image_pull/cleanup_aliases.log 运行时记录。",
+          "summary": "清理未使用镜像别名、标签残留与未被当前部署选用的 Gateway canonical/candidate 来源标签；执行前会先校验 docker daemon 可访问性，并在真实清理操作前创建 state/image_pull/cleanup_aliases.log 运行时记录。",
           "visibility": "supplemental_entrypoint"
         },
         {
@@ -308,12 +313,12 @@
         },
         {
           "name": "pull_images.sh",
-          "summary": "拉取 source_strategy 声明的部署镜像合同角色，并在真实拉取操作前创建 state/image_pull 状态文件与记录文件。",
+          "summary": "拉取 source_strategy 声明的部署镜像合同角色，并在真实拉取操作前创建 state/image_pull 状态文件与记录文件；拉取完成后默认移除未被当前部署选用的 Gateway canonical/candidate 来源标签。",
           "visibility": "supplemental_entrypoint"
         },
         {
           "name": "show_deployment_image_status.sh",
-          "summary": "统一汇总部署镜像合同、compose 运行镜像集合、角色边界、本地镜像可用性与 verified local refs 的 image id 证明状态。",
+          "summary": "统一汇总部署镜像合同、Gateway 来源选择记录、compose 运行镜像集合、角色边界、本地镜像可用性、等值 RepoDigest 来源标签与 verified local refs 的 image id 证明状态。",
           "visibility": "supplemental_entrypoint"
         },
         {
@@ -384,7 +389,7 @@
         },
         {
           "name": "run_runtime_service_action.sh",
-          "summary": "统一执行 runtime 服务的 start/stop/restart/up；`up --force-recreate` 用于刷新 env_file 派生环境。",
+          "summary": "统一执行 runtime 服务的 start/stop/restart/up；`up` 仅接受默认 deploy/.env，会先执行 bootstrap.sh 刷新 runtime.scheduler.app.env 等运行态派生 env，再执行 compose up，`--force-recreate` 用于重建容器加载刷新后的 env_file。",
           "visibility": "supplemental_entrypoint"
         },
         {
@@ -416,6 +421,11 @@
           "name": "show_runtime_container_logs.sh",
           "summary": "统一查看 runtime service registry 已声明的容器日志。",
           "visibility": "supplemental_entrypoint"
+        },
+        {
+          "name": "show_runtime_deployment_status.sh",
+          "summary": "只读汇总 effective compose 路径、Docker MTU、runtime service、控制面 run ledger required jobs 与 runtime acceptance 状态，作为远端部署验收后的统一状态入口；默认任一核心状态面缺失或查询失败即返回非 0，人工排障保留部分输出时显式追加 `--allow-partial`。",
+          "visibility": "default_entrypoint"
         },
         {
           "name": "show_runtime_service_status.sh",
@@ -510,7 +520,7 @@
       "files": [
         {
           "name": "check_control_plane_runtime.sh",
-          "summary": "检查控制平面 registry、scheduler heartbeat、状态文件与 internal-api 控制平面只读接口。",
+          "summary": "检查控制平面 registry、scheduler heartbeat、状态文件与 internal-api 控制平面只读接口；--summary-only 仅拉取控制面摘要，供 runtime evidence 生成轻量证据。",
           "visibility": "supplemental_entrypoint"
         },
         {
@@ -555,7 +565,7 @@
         },
         {
           "name": "check_model_profile_connectivity.sh",
-          "summary": "按当前 active control-plane profile 校验模型运行时后端配置与本机连通性，供 full test 与 runtime doctor 入口复用。",
+          "summary": "按当前 active control-plane profile 校验模型运行时后端配置与本机连通性，供 runtime doctor 与扩展自验收入口复用。",
           "visibility": "supplemental_entrypoint"
         },
         {
@@ -579,11 +589,6 @@
           "visibility": "supplemental_entrypoint"
         },
         {
-          "name": "check_delivery_cleanliness.sh",
-          "summary": "检查仓库说明面、正式入口与命名口径是否保持闭合；`--help` 可离线查看，真正执行属于 Docker 必需的交付说明洁净度检查。",
-          "visibility": "supplemental_entrypoint"
-        },
-        {
           "name": "check_host_python_governance.sh",
           "summary": "聚合检查 shell、正式文档、生成文档与 extension 文档中的宿主机 Python 暴露面，并要求命中为零。",
           "visibility": "supplemental_entrypoint"
@@ -594,13 +599,23 @@
           "visibility": "supplemental_entrypoint"
         },
         {
+          "name": "check_repo_prod_docstring_governance.sh",
+          "summary": "扫描平台 Python 生产代码与受管显式扩展生产 Python 代码的中文语义 docstring；enforce 模式要求模块、类、公共函数、公共方法和高风险私有函数零语义缺口，ratchet 模式读取 repo_prod_semantic_docstring_baseline 分片基线；执行统一走静态 Python runner 与控制面容器，--help 可离线查看。",
+          "visibility": "supplemental_entrypoint"
+        },
+        {
+          "name": "check_docstring_governance.sh",
+          "summary": "一次读取并解析生产 Python 文件，同时输出平台覆盖和仓库生产语义两类递进检查结果。",
+          "visibility": "supplemental_entrypoint"
+        },
+        {
           "name": "check_shell_pythonpath_contract.sh",
           "summary": "检查 shell wrapper 是否直接注入任意 repo-root 变量拼出的 repo-local `PYTHONPATH=.../python`，并要求通过 `repo_python_env.sh` 组装 Python 环境。",
           "visibility": "supplemental_entrypoint"
         },
         {
           "name": "run_repo_release_gate.sh",
-          "summary": "仓库静态发布门禁：覆盖宿主机 Python 零暴露治理、平台 Python 中文注释递进检查、CentOS 7 宿主机入口静态安全检查、冷启动导入零失败、shell repo-local PYTHONPATH 合同、Stack lock 严格发布来源检查、docs_registry 同步、文档入口/边界/导航/任务模板/页面预算/实现对齐/对象闭环、交付说明洁净度、生成文档同步与局部文档身份检查；`--help` 可离线查看，并从 verification_tiers 真源说明正式 Docker / 控制面容器门禁与 Windows 宿主机诊断回归的边界；真正执行属于 Docker 必需的仓库级静态治理入口；默认不挂载 `/var/run/docker.sock`，需要 Docker socket 时必须显式传入 `--with-docker-sock`；所有检查均为 strict；宿主机 Python 不属于支持路径；目标机实机验收链由目标机部署流程执行。",
+          "summary": "仓库发布门禁按 static、integration、exhaustive lane 执行；选择多个 lane 或不指定时并发执行 lane，lane 内保持声明顺序，并为每项输出耗时、退出码和超时状态，总耗时使用真实墙钟时间。平台覆盖与生产语义 docstring 共用一次 AST 扫描，文档 validator 共用注册表、JSON 与 Markdown 缓存；PR 使用批量 import closure，正式 release 在 exhaustive lane 保留所有非测试模块的独立冷启动，测试模块由 repo unittest 加载。默认不挂载 `/var/run/docker.sock`，需要时必须显式传入 `--with-docker-sock`；目标机实机验收仍由部署流程执行。",
           "visibility": "default_entrypoint"
         },
         {
@@ -620,7 +635,7 @@
         },
         {
           "name": "check_cold_start_imports.sh",
-          "summary": "逐个在独立新进程中冷启动导入 `openclaw.*` 模块，检查 import-order 与 package-init 顺序脆弱点。",
+          "summary": "按 `closure` 批量导入闭包或 `isolated` 独立冷启动模式验证非测试 `openclaw.*` 模块；失败批次会自动缩小到单模块。`openclaw.tests` 由 repo unittest 真实加载，不在此处重复启动进程。",
           "visibility": "supplemental_entrypoint"
         },
         {
@@ -652,18 +667,28 @@
           "name": "check_agent_module_prune_drop.sh",
           "summary": "在隔离副本中回归验证 agent-module-prune / drop 的 apply 流程不会破坏 registry。",
           "visibility": "supplemental_entrypoint"
+        },
+        {
+          "name": "check_agent_module_lifecycle_matrix.sh",
+          "summary": "在一个隔离仓库副本中依次验证 scaffold、attach、detach、prune、drop、回滚与 registry 闭合。",
+          "visibility": "supplemental_entrypoint"
+        },
+        {
+          "name": "check_agent_extension_governance.sh",
+          "summary": "在单个静态 Python 进程中复用受管扩展 profile、registry 与仓库文本索引，并保持各治理检查 ID。",
+          "visibility": "supplemental_entrypoint"
         }
       ]
     },
     {
       "id": "testing",
       "title": "testing 本地回归脚本",
-      "purpose": "用于仓库级测试运行器、本地回归与局部实现校验；不属于生产值守或发布门禁默认入口。",
+      "purpose": "用于仓库级 unit、定向回归与发布前机器报告；不承担生产值守或目标机运行验收。",
       "notes": [
         "只在仓库级代码回归、局部实现校验或补单元测试时进入本目录。",
         "推荐顺序固定为 `check_repo_test_readiness.sh` -> `run_repo_unittest.sh` -> `scripts/doctor/run_repo_release_gate.sh`。",
         "`check_repo_test_readiness.sh` 属于无 Docker 也可直接运行的 readiness 入口；`run_repo_unittest.sh` 与 `run_repo_release_gate.sh` 属于 Docker 必需入口；验证层级以 config/governance/support/verification_tiers.json 为准。",
-        "正式静态发布门禁为 scripts/doctor/run_repo_release_gate.sh；宿主机 supported path 验收由目标机部署链路执行。"
+        "完整 repo unittest 是 CI required check；release gate 负责结构契约、隔离集成和 exhaustive 检查，目标机运行验收由部署链路执行。"
       ],
       "files": [
         {
@@ -678,7 +703,7 @@
         },
         {
           "name": "run_repo_unittest.sh",
-          "summary": "在仓库根目录执行唯一正式受支持的仓库级 unittest shell 入口，负责引导容器内 `openclaw.testing.repo_unittest`；`--help` 可离线查看，真正执行属于 Docker 必需入口；支持常见 pytest 选择器写法，并默认关闭第三方 pytest plugin autoload，避免宿主机环境污染测试结果。",
+          "summary": "在仓库根目录执行唯一正式受支持的 repo unittest：父进程按文件清单分桶，worker 加载并执行测试；支持 selector、`--list-tests --json` 与 `--report-json <path>`，worker 和完整 suite 默认分别受 300 秒与 900 秒内层时限约束。",
           "visibility": "default_entrypoint"
         }
       ]
@@ -723,6 +748,11 @@
           "visibility": "supplemental_entrypoint"
         },
         {
+          "name": "check_documentation_validators.sh",
+          "summary": "在一个 Python 进程中共享文档注册表、JSON 与 Markdown 缓存，并保留各文档子检查 ID。",
+          "visibility": "supplemental_entrypoint"
+        },
+        {
           "name": "check_documentation_page_budget.sh",
           "summary": "检查声明页面预算的任务页保持预算内，阻止一级入口与排障页无序膨胀。",
           "visibility": "supplemental_entrypoint"
@@ -741,16 +771,6 @@
           "name": "check_local_document_identity.sh",
           "summary": "检查 workspace / tools 局部文档是否明确声明自己不是项目正式入口。",
           "visibility": "supplemental_entrypoint"
-        },
-        {
-          "name": "lib/static_doc_checks.sh",
-          "summary": "docs 文档静态检查公共库；统一提供 docs_registry / 入口 / 导航三类 shell+jq 校验能力。",
-          "visibility": "internal_support"
-        },
-        {
-          "name": "lib/repo_root_bootstrap.sh",
-          "summary": "docs/lib helper 的仓库根定位引导层；先定位 `scripts/lib/repo_root.sh`，再让被 source 的 docs 库统一取得仓库根。",
-          "visibility": "internal_support"
         }
       ]
     },
@@ -769,12 +789,17 @@
         },
         {
           "name": "cidr_contract.sh",
-          "summary": "统一来源 CIDR 合同的 shell 真源；提供 IPv4/IPv6 私网或 loopback 校验、逗号列表校验和 allowlist 覆盖判断，供远程首装与访问端验收复用。",
+          "summary": "统一来源 CIDR 合同的 shell 真源；提供 ingress 来源合法性、逗号列表校验和 allowlist 覆盖判断，供远程首装与访问端验收复用。",
           "visibility": "internal_support"
         },
         {
           "name": "control_plane_scheduler_exec.sh",
           "summary": "scheduler service exec 的公共 shell 真源；统一承载 `dispatch ops run-target-operation` 与 `control-plane runtime scheduler-run-agent-runtime` 的 host 侧分流与 compose 执行。",
+          "visibility": "internal_support"
+        },
+        {
+          "name": "docs_inventory_env.sh",
+          "summary": "为文档批次、仓库测试与发布门禁统一准备受管 Markdown 清单；显式 BOM 优先于绑定仓库根目录的 Git NUL 快照，向现有静态容器 runner 提供环境与挂载参数。",
           "visibility": "internal_support"
         },
         {
@@ -794,7 +819,12 @@
         },
         {
           "name": "docker_host_support_truth.sh",
-          "summary": "docker host 支持策略真源的 shell 读取层；统一从 `config/governance/support/docker_host.json` 取 supported_centos7 口径，避免宿主机准备与 doctor 脚本各自维护一份。",
+          "summary": "docker host 支持策略真源的 shell 读取层；统一从 `config/governance/support/docker_host.json` 取 Ubuntu 22.04 推荐基线与 CentOS 7 legacy 口径，避免宿主机准备与 doctor 脚本各自维护一份。",
+          "visibility": "internal_support"
+        },
+        {
+          "name": "docker_mtu_contract.sh",
+          "summary": "统一探测宿主默认路由 MTU、Docker daemon MTU 与现有 Docker network MTU，供 host readiness、主机准备脚本和运行态状态聚合复用。",
           "visibility": "internal_support"
         },
         {

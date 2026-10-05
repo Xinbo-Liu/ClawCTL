@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Internal support modules for extension fragment descriptors."""
+"""提供OpenClaw 控制平面子系统的生产实现。"""
 from .core import *  # noqa: F401,F403
 from .governance import *  # noqa: F401,F403
 from .registry import *  # noqa: F401,F403

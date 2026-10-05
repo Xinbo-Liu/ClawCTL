@@ -7,9 +7,9 @@
     "prepare_docker_host": {
       "title": "prepare_docker_host.sh",
       "command": "sudo bash ./scripts/setup/prepare_docker_host.sh [选项]",
-      "purpose": "CentOS 7 存量老系统路径的宿主机准备入口；统一处理 repo 修复、预工具安装、Docker / Compose 安装、daemon 基线、防火墙 80/443 预开放与 firewalld docker zone 合同。",
+      "purpose": "Docker 宿主机准备入口；Ubuntu 22.04 为推荐基线，CentOS 7 为 legacy 路径，统一处理 OS 分发、基础诊断依赖、Docker / Compose 安装、daemon/MTU 基线、防火墙 80/443 预开放与 firewalld docker zone 合同。",
       "when_to_use": [
-        "首次把 CentOS 7 目标机纳入正式部署前。",
+        "首次把 Ubuntu 22.04 或 legacy CentOS 7 目标机纳入正式部署前。",
         "Docker / Compose / daemon / 防火墙或 firewalld docker zone 前提未闭合，需要统一回到唯一宿主机准备入口时。"
       ],
       "boundaries": [
@@ -26,7 +26,7 @@
     "check_docker_host_readiness": {
       "title": "check_docker_host_readiness.sh",
       "command": "bash ./scripts/doctor/check_docker_host_readiness.sh [--offline] [--env-file <path>]",
-      "purpose": "CentOS 7 宿主机支持策略下的宿主机准入入口；统一检查 Docker / Compose、运行来源连通性、daemon / docker.sock / storage driver 与 firewalld docker zone 前提。",
+      "purpose": "Ubuntu 22.04 推荐基线与 CentOS 7 legacy 支持策略下的宿主机准入入口；统一检查 Docker / Compose、运行来源连通性、daemon / docker.sock / storage driver、Docker MTU 与 firewalld docker zone 前提。",
       "when_to_use": [
         "prepare_docker_host.sh 完成后，准备进入 one_click 主链前。",
         "需要拆分定位宿主机层问题，确认当前目标机是否具备继续进入 one_click_config.sh 的资格时。"
@@ -123,7 +123,7 @@
     },
     "one_click_deploy": {
       "title": "one_click_deploy.sh",
-      "command": "bash ./scripts/setup/one_click_deploy.sh [--env-file deploy/.env]",
+      "command": "bash ./scripts/setup/one_click_deploy.sh",
       "purpose": "执行修复权限、bootstrap、证书、镜像准备、compose 渲染与 runtime 启动，并把最近一次部署摘要镜像到固定 latest 路径；默认只承接 latest basic gate proof 已通过且与当前 env/mode 匹配的场景。",
       "when_to_use": [
         "latest basic gate proof 与当前 env/mode 匹配后执行正式部署。",
@@ -131,6 +131,7 @@
       ],
       "boundaries": [
         "默认执行链从 latest basic gate proof 校验通过开始。",
+        "完整部署启动 runtime 服务时必须使用默认 deploy/.env；非默认 --env-file 仅用于 --prepare-only 检查/准备。",
         "不负责补做宿主机准备或 readiness；这两项必须在 one_click 主链外单独完成。",
         "deployment acceptance 默认顺序与证据产物统一查看 runtime-service-reference。"
       ],
@@ -150,7 +151,7 @@
       ],
       "boundaries": [
         "只负责部署后验证，不负责重新部署、宿主机准备或镜像准备。",
-        "external 组失败按 full test 失败处理，不提供降级开关。"
+        "平台 full test 不执行插件外部链路；插件外部链路由扩展冒烟或显式 live 验收入口闭合。"
       ],
       "references": [
         "docs/operations/runtime-service-reference.md",

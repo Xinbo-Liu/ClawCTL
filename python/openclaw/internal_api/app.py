@@ -28,11 +28,9 @@ class InternalApiHandler(BaseHTTPRequestHandler):
 
     # noinspection PyShadowingBuiltins
     def log_message(self, format: str, *args: object) -> None:
-        """屏蔽 BaseHTTPRequestHandler 默认访问日志。"""
         return
 
     def _write_json(self, payload: dict[str, Any], status: HTTPStatus = HTTPStatus.OK) -> None:
-        """输出 JSON 响应。"""
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         self.send_response(status.value)
         self.send_header("Content-Type", "application/json; charset=utf-8")
@@ -41,7 +39,6 @@ class InternalApiHandler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def _require_auth(self, path: str) -> bool:
-        """执行路由鉴权检查。"""
         if not route_requires_auth(path):
             return True
         header_value = self.headers.get("Authorization")
@@ -51,7 +48,6 @@ class InternalApiHandler(BaseHTTPRequestHandler):
         return False
 
     def _handle_get(self) -> None:
-        """处理 GET 请求并分发到只读路由。"""
         parsed = urlparse(self.path)
         path = parsed.path
         query = parse_qs(parsed.query, keep_blank_values=False)
@@ -62,7 +58,6 @@ class InternalApiHandler(BaseHTTPRequestHandler):
 
     # noinspection PyPep8Naming
     def do_GET(self) -> None:  # noqa: N802
-        """包装 GET 请求执行并统一处理未捕获异常。"""
         try:
             self._handle_get()
         except BrokenPipeError:
@@ -79,7 +74,6 @@ class InternalApiHandler(BaseHTTPRequestHandler):
 
 
 def build_parser() -> argparse.ArgumentParser:
-    """构建 internal API 命令行参数解析器。"""
     parser = argparse.ArgumentParser(prog="python -m openclaw.cli control-plane api internal-runtime")
     parser.add_argument("--bind", default=os.environ.get("OPENCLAW_INTERNAL_API_BIND", "127.0.0.1"))
     parser.add_argument("--port", type=int, default=int(os.environ.get("OPENCLAW_INTERNAL_API_PORT", "18081")))
@@ -88,7 +82,6 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
-    """internal API 运行时主入口。"""
     args = build_parser().parse_args(argv)
     server = ThreadingHTTPServer((args.bind, args.port), cast(Any, InternalApiHandler))
     try:

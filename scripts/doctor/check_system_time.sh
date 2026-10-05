@@ -9,7 +9,6 @@ ROOT_DIR="$(openclaw_repo_root_from "$__openclaw_script_dir")"
 unset __openclaw_script_dir
 # shellcheck source=../lib/system_time_guard.sh
 source "$ROOT_DIR/scripts/lib/system_time_guard.sh"
-
 usage() {
   cat <<'USAGE'
 用法：

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Derived section builders for runtime_surface renderer."""
+"""将服务目标和镜像合同转换为运行态参考中的命令、表格行及来源说明。"""
 from __future__ import annotations
 
 from typing import Any

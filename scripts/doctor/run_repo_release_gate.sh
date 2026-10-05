@@ -8,26 +8,25 @@ source "$__openclaw_script_dir/../lib/repo_root.sh"
 ROOT_DIR="$(openclaw_repo_root_from "$__openclaw_script_dir")"
 unset __openclaw_script_dir
 STATIC_PYTHON_RUNNER="$ROOT_DIR/scripts/lib/run_static_python.sh"
-
 usage() {
   cat <<'USAGE'
 用法：
-  bash ./scripts/doctor/run_repo_release_gate.sh [--with-docker-sock] [--quiet] [--json]
+  bash ./scripts/doctor/run_repo_release_gate.sh [--with-docker-sock] [--quiet] [--json] [--lane <static|integration|exhaustive>]...
   bash ./scripts/doctor/run_repo_release_gate.sh --help
 
 说明：
   - `--help` 可离线查看；
   - 真正执行 repo release gate 属于 Docker 必需的仓库级静态治理入口；
   - 默认不把 /var/run/docker.sock 挂入检查容器；只有显式传入 --with-docker-sock 才挂载；
+  - `--lane` 可重复传入；不指定时仍执行全部 lane；
   - 无 Docker 时，先执行 bash ./scripts/testing/check_repo_test_readiness.sh 查看缺失的是 Docker 还是控制面执行介质；
-  - 可独立于完整 release gate 运行的仓库级治理入口保留为 bash ./scripts/testing/check_repo_test_readiness.sh、bash ./scripts/doctor/check_host_python_governance.sh 与 bash ./scripts/doctor/check_platform_docstring_governance.sh --mode report；除 --help 外，静态 Python 检查仍固定要求 Docker 与控制面执行介质。
+  - 可独立于完整 release gate 运行的仓库级治理入口保留为 bash ./scripts/testing/check_repo_test_readiness.sh、bash ./scripts/doctor/check_host_python_governance.sh、bash ./scripts/doctor/check_platform_docstring_governance.sh --mode report 与 bash ./scripts/doctor/check_repo_prod_docstring_governance.sh --scope repo-prod --mode report；除 --help 外，静态 Python 检查仍固定要求 Docker 与控制面执行介质。
 USAGE
 }
 
 WITH_DOCKER_SOCK=0
 ARGS=()
 TOOL_OVERLAY_DIR=""
-
 cleanup() {
   [[ -n "$TOOL_OVERLAY_DIR" ]] || return 0
   case "$TOOL_OVERLAY_DIR" in
@@ -61,7 +60,10 @@ done
 OPENCLAW_STATIC_PYTHON_READINESS_LABEL='repo release gate'
 export OPENCLAW_STATIC_PYTHON_READINESS_LABEL
 STATIC_RUNNER_ARGS=(--workdir "$ROOT_DIR")
-
+# shellcheck source=../lib/docs_inventory_env.sh
+source "$ROOT_DIR/scripts/lib/docs_inventory_env.sh"
+openclaw_docs_inventory_prepare_runner_args "$ROOT_DIR"
+STATIC_RUNNER_ARGS+=("${OPENCLAW_DOCS_INVENTORY_RUNNER_ARGS[@]}")
 ensure_tool_overlay_dir() {
   if [[ -n "$TOOL_OVERLAY_DIR" ]]; then
     return 0
@@ -72,7 +74,6 @@ ensure_tool_overlay_dir() {
   STATIC_RUNNER_ARGS+=(--env "PATH=$TOOL_OVERLAY_DIR/bin:/usr/local/bin:/usr/bin:/bin")
   STATIC_RUNNER_ARGS+=(--env "LD_LIBRARY_PATH=$TOOL_OVERLAY_DIR/lib")
 }
-
 copy_tool_runtime_deps() {
   local host_tool="$1"
   local ldd_output=""
@@ -92,7 +93,6 @@ copy_tool_runtime_deps() {
     cp -L "$lib_path" "$TOOL_OVERLAY_DIR/lib/$(basename "$lib_path")"
   done
 }
-
 add_host_tool_overlay() {
   local tool_name="$1"
   local required="${2:-1}"

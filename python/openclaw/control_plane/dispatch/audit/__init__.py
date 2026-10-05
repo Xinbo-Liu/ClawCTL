@@ -1,1 +1,1 @@
-"""Canonical helpers for dispatch runtime audit surfaces."""
+"""提供OpenClaw 控制平面子系统的生产实现。"""

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 用途：统一执行部署后/服务启动后的全量测试，验证 service/dispatch/dispatch_targets/external/pipeline 是否真正可用。
+# 用途：统一执行部署后/服务启动后的平台 service 验证，并写出 deployment acceptance 摘要。
 # 说明：
 # - 既可由 one_click_deploy.sh 自动调用，也可在服务已启动后独立执行 deployment acceptance；
 # - 默认检查组顺序由 runtime.testing_manifest 真源派生；
@@ -200,18 +200,6 @@ append_default_failure_followups() {
 
   if has_failed_in_group service; then
     scenarios+=(service_failed)
-  fi
-  if has_failed_in_group dispatch; then
-    scenarios+=(dispatch_failed)
-  fi
-  if has_failed_in_group dispatch_targets; then
-    scenarios+=(dispatch_targets_failed)
-  fi
-  if has_failed_in_group external; then
-    scenarios+=(external_failed)
-  fi
-  if has_failed_in_group pipeline; then
-    scenarios+=(pipeline_failed)
   fi
   if [[ "$(check_status_by_id deployment_acceptance_contract)" == 'FAIL' ]]; then
     scenarios+=(acceptance_contract_failed)

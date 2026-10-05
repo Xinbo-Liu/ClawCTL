@@ -8,10 +8,13 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest import mock
 
+from openclaw.control_plane.config_loader import load_control_plane_service_payload
 from openclaw.lib.repo import extension_envs as extension_envs_module
 from openclaw.lib.repo.extension_envs import (
     ACTIVE_MANIFEST_NAME,
     ExtensionEnvError,
+    PreparedExtensionEnv,
+    build_extension_subprocess_env,
     dependency_snapshot,
     extension_env_path,
     extension_env_status,
@@ -257,6 +260,89 @@ class ExtensionEnvsTest(unittest.TestCase):
 
         self.assertIn('没有可安装依赖', str(ctx.exception))
 
+    def test_extension_subprocess_env_preserves_runtime_workspace_contract(self) -> None:
+        with TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            row = _fake_row(base)
+            prepared = PreparedExtensionEnv(
+                row=row,
+                env_path=base / 'venv',
+                python_executable=base / 'venv' / 'bin' / 'python',
+                manifest={'schemaVersion': 2},
+            )
+            base_env = {
+                'OPENCLAW_WORKSPACE_ROOT': str(base / 'workspace'),
+                'OPENCLAW_RUNTIME_WORKSPACE_ROOT': str(base / 'runtime-workspace'),
+                'EXTENSION_WORKSPACE_ROOT': str(base / 'extension-workspace'),
+                'UNDECLARED_BUSINESS_SECRET': 'should-not-cross',
+                'PYTHONHOME': 'old-python-home',
+            }
+
+            with mock.patch.object(
+                extension_envs_module,
+                '_declared_runtime_env_names',
+                return_value=('EXTENSION_WORKSPACE_ROOT',),
+            ), mock.patch.object(extension_envs_module, '_runtime_path_env_names', return_value=()):
+                env = build_extension_subprocess_env(
+                    prepared,
+                    repo_root=ROOT_DIR,
+                    base_env=base_env,
+                    config_path=base / 'service.json',
+                )
+
+        self.assertEqual(env['OPENCLAW_WORKSPACE_ROOT'], str(base / 'workspace'))
+        self.assertEqual(env['OPENCLAW_RUNTIME_WORKSPACE_ROOT'], str(base / 'runtime-workspace'))
+        self.assertEqual(env['EXTENSION_WORKSPACE_ROOT'], str(base / 'extension-workspace'))
+        self.assertNotIn('UNDECLARED_BUSINESS_SECRET', env)
+        self.assertNotIn('PYTHONHOME', env)
+
+    def test_extension_subprocess_env_preserves_scheduler_delivery_contract(self) -> None:
+        with TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            row = _fake_row(base)
+            prepared = PreparedExtensionEnv(
+                row=row,
+                env_path=base / 'venv',
+                python_executable=base / 'venv' / 'bin' / 'python',
+                manifest={'schemaVersion': 2},
+            )
+            control_env = {
+                'OPENCLAW_AGENT_CALL_SOURCE': 'scheduler',
+                'OPENCLAW_AGENT_CALLER': 'control-plane-scheduler',
+                'OPENCLAW_CONTROL_PLANE_BUSINESS_RUN_ID': 'business-run-1',
+                'OPENCLAW_CONTROL_PLANE_GROUP_REF': 'agent_group',
+                'OPENCLAW_CONTROL_PLANE_JOB_ID': 'agent_probe:delivery',
+                'OPENCLAW_CONTROL_PLANE_LOCAL_JOB_ID': 'delivery',
+                'OPENCLAW_CONTROL_PLANE_OPERATOR_ID': 'operator-1',
+                'OPENCLAW_CONTROL_PLANE_OPERATOR_REASON': 'controlled recovery',
+                'OPENCLAW_CONTROL_PLANE_OUTCOME_PATH': str(base / 'outcome.json'),
+                'OPENCLAW_CONTROL_PLANE_RECOVERY_OF_RUN_ID': 'origin-run-1',
+                'OPENCLAW_CONTROL_PLANE_RUN_ID': 'scheduler-run-1',
+                'OPENCLAW_CONTROL_PLANE_SCHEDULER_RUN_ID': 'scheduler-run-1',
+                'OPENCLAW_CONTROL_PLANE_TARGET_BINDING_REF': 'dispatch_primary',
+                'OPENCLAW_CONTROL_PLANE_TRIGGER': 'operator',
+            }
+
+            with mock.patch.object(
+                extension_envs_module,
+                '_declared_runtime_env_names',
+                return_value=(),
+            ), mock.patch.object(extension_envs_module, '_runtime_path_env_names', return_value=()):
+                env = build_extension_subprocess_env(
+                    prepared,
+                    repo_root=ROOT_DIR,
+                    base_env={
+                        **control_env,
+                        'OPENCLAW_UNDECLARED_EXECUTION_VALUE': 'should-not-cross',
+                    },
+                    config_path=base / 'service.json',
+                )
+
+        for name, value in control_env.items():
+            with self.subTest(name=name):
+                self.assertEqual(env[name], value)
+        self.assertNotIn('OPENCLAW_UNDECLARED_EXECUTION_VALUE', env)
+
     def test_repo_wheelhouse_sync_copies_locked_wheels_and_removes_stale_runtime_wheels(self) -> None:
         with TemporaryDirectory() as tmp:
             base = Path(tmp)
@@ -370,8 +456,12 @@ class ExtensionEnvsTest(unittest.TestCase):
             include_enabled=True,
             config_path=extension.default_service_config_path,
         )
+        _, payload = load_control_plane_service_payload(extension.default_service_config_path)
+        managed_ids = {row.id for row in MANAGED_EXTENSIONS}
+        enabled = (payload.get('extensions') or {}).get('enabledExtensionIds') or []
+        expected = [str(extension_id) for extension_id in enabled if str(extension_id) in managed_ids]
 
-        self.assertEqual([row.id for row in rows], [extension.id])
+        self.assertEqual([row.id for row in rows], expected)
 
     def test_env_contract_scanner_includes_env_prefixed_runtime_inputs(self) -> None:
         names: set[str] = set()

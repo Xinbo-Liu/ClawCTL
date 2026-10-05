@@ -12,7 +12,6 @@ source "$OPENCLAW_REPO_PYTHON_ENV_LIB_DIR/repo_root.sh"
 OPENCLAW_REPO_PYTHON_ENV_ROOT_DIR="$(openclaw_repo_root_from "$OPENCLAW_REPO_PYTHON_ENV_LIB_DIR")"
 unset OPENCLAW_REPO_PYTHON_ENV_LIB_DIR
 OPENCLAW_REPO_PYTHON_ENV_TRUTH_REL="config/governance/support/repo_python_bootstrap.env"
-
 openclaw_repo_python_env_truth_value() {
   local root_dir="${1:?root_dir is required}" key="${2:?key is required}"
   local truth_file="$root_dir/$OPENCLAW_REPO_PYTHON_ENV_TRUTH_REL"
@@ -33,7 +32,6 @@ openclaw_repo_python_env_truth_value() {
     }
   ' "$truth_file"
 }
-
 openclaw_repo_python_env_pythonpath() {
   local root_dir="${1:-$OPENCLAW_REPO_PYTHON_ENV_ROOT_DIR}"
   local rels rel item result=""
@@ -53,7 +51,6 @@ openclaw_repo_python_env_pythonpath() {
   [[ -n "$result" ]] || return 0
   printf '%s\n' "$result"
 }
-
 openclaw_repo_python_env_defaults_lines() {
   local root_dir="${1:-$OPENCLAW_REPO_PYTHON_ENV_ROOT_DIR}"
   local env_name="" truth_key="" value=""
@@ -73,7 +70,6 @@ openclaw_repo_python_env_defaults_lines() {
     printf '%s=%s\n' "$env_name" "$value"
   done
 }
-
 openclaw_repo_python_env_surface() {
   local root_dir="${1:-$OPENCLAW_REPO_PYTHON_ENV_ROOT_DIR}"
   shift || true
@@ -88,7 +84,6 @@ openclaw_repo_python_env_surface() {
     --env "OPENCLAW_TOOLS_ROOT=$OPENCLAW_REPO_PYTHON_ENV_ROOT_DIR" \
     -- -m openclaw.lib.repo.bootstrap_surface --root-dir "$root_dir" "$@"
 }
-
 openclaw_repo_python_env_lines() {
   local root_dir="${1:-$OPENCLAW_REPO_PYTHON_ENV_ROOT_DIR}"
   local pythonpath=""
@@ -96,7 +91,6 @@ openclaw_repo_python_env_lines() {
   pythonpath="$(openclaw_repo_python_env_pythonpath "$root_dir")"
   [[ -z "$pythonpath" ]] || printf 'PYTHONPATH=%s\n' "$pythonpath"
 }
-
 openclaw_repo_python_env_args() {
   local root_dir="${1:-$OPENCLAW_REPO_PYTHON_ENV_ROOT_DIR}"
   local line="" lines=""

@@ -32,11 +32,14 @@ usage() {
     5. docs/operations/maintenance-map.md
     6. scripts/README.md
     7. config/workspace_templates/*/USER.md 自动生成段
+    8. docs/operations/runtime-artifacts-reference.md
+    9. agent/extensions/README.md 自动生成索引段
 
 边界：
   - 只检查仓库生成文档是否已与现行规格同步；
-  - runtime-service-reference、getting-started、maintenance-map 与 scripts/README 是 canonical 文档，固定按 agent_platform 检查；
-  - deployment-inputs 按当前 active profile 或显式 --config-path 检查，用于覆盖启用扩展带来的输入项；
+  - runtime-service-reference、getting-started、maintenance-map、runtime-artifacts-reference 与 scripts/README 是 canonical 文档，固定按 agent_platform 检查；
+  - deployment-inputs 默认固定按 canonical agent_platform 检查，避免生产 deploy/site.env 使仓库文档漂移；
+  - 需要校验其他 profile 的部署输入文档时，可显式传入 --config-path；
   - deploy/site.env.example 是平台默认部署输入模板，固定按当前默认 schema 检查；
   - docs_registry、reference layout 与 CentOS 7 实机验收链由各自门禁检查。
 USAGE
@@ -93,16 +96,12 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-if [[ -z "$REQUESTED_CONFIG_PATH" ]]; then
-  openclaw_control_plane_apply_default_selection_from_env_files \
-    REQUESTED_CONFIG_PATH \
-    PROFILE_ID \
-    EXPLICIT_PROFILE \
-    "$ROOT_DIR/deploy/.env|deploy/.env" \
-    "$ROOT_DIR/deploy/site.env|deploy/site.env"
-fi
-RESOLVED_CONFIG_PATH="$(openclaw_control_plane_resolve_config_path "$PROFILE_ID" "$REQUESTED_CONFIG_PATH" "$EXPLICIT_PROFILE")"
 CANONICAL_RESOLVED_CONFIG_PATH="$(openclaw_control_plane_resolve_config_path agent_platform "" 1)"
+if [[ -n "$REQUESTED_CONFIG_PATH" ]]; then
+  RESOLVED_CONFIG_PATH="$(openclaw_control_plane_resolve_config_path "$PROFILE_ID" "$REQUESTED_CONFIG_PATH" "$EXPLICIT_PROFILE")"
+else
+  RESOLVED_CONFIG_PATH="$CANONICAL_RESOLVED_CONFIG_PATH"
+fi
 CONFIG_ARGS=(--config-path "$RESOLVED_CONFIG_PATH")
 CANONICAL_CONFIG_ARGS=(--control-plane-profile agent_platform)
 
@@ -111,6 +110,8 @@ run_check 'deployment_inputs_reference' 'openclaw.setup.deploy_env.control_plane
 run_canonical_check 'site_env_example_reference' 'openclaw.setup.deploy_env.control_plane' docs render-site-env-example --check
 run_canonical_check 'runtime_surface_reference' 'openclaw.docs.renderers.runtime_surface' --check "${CANONICAL_CONFIG_ARGS[@]}"
 run_canonical_check 'maintenance_map_reference' 'openclaw.docs.renderers.maintenance_map' --check "${CANONICAL_CONFIG_ARGS[@]}"
+run_canonical_check 'runtime_artifacts_reference' 'openclaw.docs.renderers.runtime_artifacts' --check
+run_canonical_check 'extension_index_reference' 'openclaw.docs.renderers.extension_index' --check
 run_canonical_check 'script_catalog_reference' 'openclaw.docs.renderers.script_catalog' --check "${CANONICAL_CONFIG_ARGS[@]}"
 run_canonical_check 'workspace_user_sections' 'openclaw.docs.renderers.workspace_user_sections' --check
 

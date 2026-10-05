@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Merge/load helpers for dispatch target registries."""
+"""提供OpenClaw lib子系统的生产实现。"""
 from __future__ import annotations
 
 from pathlib import Path

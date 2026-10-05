@@ -15,7 +15,7 @@ repo_contract_assign_path DEPLOY_STAGE_REGISTRY_PATH governance.deploy_stage_flo
 
 declare -gA DEPLOY_STAGE_SCRIPT_MAP=()
 declare -gA DEPLOY_STAGE_ARG_MODE_MAP=()
-declare -gA DEPLOY_STAGE_CUSTOM_HANDLER_MAP=()
+declare -gA DEPLOY_STAGE_INTERNAL_RUNNER_MAP=()
 DEPLOY_STAGE_REGISTRY_INITIALIZED=0
 
 # 检测当前环境是否提供 jq。
@@ -30,20 +30,19 @@ deploy_stage_registry_init() {
   fi
   DEPLOY_STAGE_SCRIPT_MAP=()
   DEPLOY_STAGE_ARG_MODE_MAP=()
-  DEPLOY_STAGE_CUSTOM_HANDLER_MAP=()
+  DEPLOY_STAGE_INTERNAL_RUNNER_MAP=()
   if ! deploy_stage_registry_jq_available || [[ ! -f "$DEPLOY_STAGE_REGISTRY_PATH" ]]; then
     echo '[deploy_stage_registry] 缺少 jq 或 deploy_stage_flow 真源' >&2
     return 2
   fi
 
-  local spec='' stage='' kind='' script_rel_path='' arg_mode='' handler=''
+  local spec='' stage='' kind='' script_rel_path='' arg_mode=''
   while IFS= read -r spec; do
     [[ -n "$spec" ]] || continue
     stage="$(jq -r '.stage' <<<"$spec")"
     kind="$(jq -r '.kind // ""' <<<"$spec")"
     script_rel_path="$(jq -r '.script_rel_path // ""' <<<"$spec")"
     arg_mode="$(jq -r '.arg_mode // ""' <<<"$spec")"
-    handler="$(jq -r '.handler // ""' <<<"$spec")"
     case "$kind" in
       '')
         continue
@@ -57,12 +56,12 @@ deploy_stage_registry_init() {
         ;;
       arg_mode_only)
         ;;
-      custom_handler)
-        [[ -n "$handler" ]] || {
-          echo "[deploy_stage_registry] 阶段 $stage 缺少 execution.handler" >&2
+      internal_runner)
+        if [[ "$stage" != "check_openclaw_release" ]]; then
+          echo "[deploy_stage_registry] internal_runner 只允许用于 check_openclaw_release，当前阶段：$stage" >&2
           return 2
-        }
-        DEPLOY_STAGE_CUSTOM_HANDLER_MAP["$stage"]="$handler"
+        fi
+        DEPLOY_STAGE_INTERNAL_RUNNER_MAP["$stage"]=1
         ;;
       *)
         echo "[deploy_stage_registry] 阶段 $stage 存在未知 execution.kind：$kind" >&2
@@ -75,8 +74,7 @@ deploy_stage_registry_init() {
       stage: .key,
       kind: (.value.execution.kind // ""),
       script_rel_path: (.value.execution.script_rel_path // ""),
-      arg_mode: (.value.execution.arg_mode // ""),
-      handler: (.value.execution.handler // "")
+      arg_mode: (.value.execution.arg_mode // "")
     }' "$DEPLOY_STAGE_REGISTRY_PATH"
   )
   DEPLOY_STAGE_REGISTRY_INITIALIZED=1
@@ -84,7 +82,7 @@ deploy_stage_registry_init() {
 
 # 确认阶段注册表已经完成初始化。
 deploy_stage_assert_registry_ready() {
-  [[ "${#DEPLOY_STAGE_SCRIPT_MAP[@]}" -gt 0 || "${#DEPLOY_STAGE_CUSTOM_HANDLER_MAP[@]}" -gt 0 ]] || {
+  [[ "${#DEPLOY_STAGE_SCRIPT_MAP[@]}" -gt 0 || "${#DEPLOY_STAGE_ARG_MODE_MAP[@]}" -gt 0 || "${#DEPLOY_STAGE_INTERNAL_RUNNER_MAP[@]}" -gt 0 ]] || {
     echo '[deploy_stage_registry] 阶段真源尚未初始化' >&2
     return 2
   }
@@ -140,11 +138,6 @@ deploy_stage_prepare_command() {
   if [[ -n "$script_path" ]]; then
     DEPLOY_STAGE_COMMAND=(bash "$script_path")
     deploy_stage_append_mode_args "$stage"
-    return 0
-  fi
-  local handler="${DEPLOY_STAGE_CUSTOM_HANDLER_MAP[$stage]:-}"
-  if [[ -n "$handler" ]]; then
-    DEPLOY_STAGE_COMMAND=("$handler")
     return 0
   fi
   if [[ -n "${DEPLOY_STAGE_ARG_MODE_MAP[$stage]:-}" ]]; then

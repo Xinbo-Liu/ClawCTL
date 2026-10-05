@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Extension runtime policy helpers."""
+"""提供OpenClaw 控制平面子系统的生产实现。"""
 from __future__ import annotations
 
 import os

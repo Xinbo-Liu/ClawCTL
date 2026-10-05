@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Governance/docs fragment descriptors."""
+"""声明治理真源的扩展片段合并规则，校验文档页结构与登记来源。"""
 from __future__ import annotations
 
 from copy import deepcopy
@@ -118,11 +118,41 @@ FULL_TEST_GROUP_REGISTRY_DESCRIPTOR = FragmentDescriptor(
 )
 
 
+def _prepare_docs_registry(payload: dict[str, Any], extension_id: str | None) -> dict[str, Any]:
+    """校验文档注册表原始页结构及登记来源，再复制供 owner 注入和合并。
+
+    参数：
+        payload（dict[str, Any]）：基座或扩展的原始 docs registry JSON 对象。
+        extension_id（str | None）：扩展 owner；None 表示基座必须声明 pages 且不能登记扩展 owner，扩展 fragment 可不含 pages。
+
+    返回：
+        dict[str, Any]：保持原内容的独立副本，随后由文档 descriptor 注入 owner 并合并。
+
+    异常：
+        ValueError：pages 不是数组、含非对象行、基座缺少 pages，或基座页手工声明扩展 owner。
+
+    副作用：
+        只检查并复制输入对象，不访问文件或修改原对象。
+    """
+    if 'pages' not in payload and extension_id:
+        return deepcopy(payload)
+    pages = payload.get('pages')
+    if not isinstance(pages, list):
+        raise ValueError('docs_registry.pages 必须为数组')
+    for index, page in enumerate(pages):
+        if not isinstance(page, dict):
+            raise ValueError(f'docs_registry.pages[{index}] 必须为对象')
+        if extension_id is None and str(page.get('extensionId') or '').strip():
+            raise ValueError(f'docs_registry.pages[{index}] 基座页不能声明 extensionId；扩展文档必须由其 docs fragment 登记')
+    return deepcopy(payload)
+
+
 DOCS_REGISTRY_DESCRIPTOR = FragmentDescriptor(
     group='governance',
     key='docsRegistryPath',
     base_path=repo_contract_path('governance.docs_registry'),
     label='docs_registry',
+    prepare_payload=_prepare_docs_registry,
     fields=(
         FragmentFieldDescriptor(
             path=('checker',),

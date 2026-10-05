@@ -1,3 +1,5 @@
+"""生成部署步骤中的命令块、输入说明、执行顺序和失败分流片段。"""
+
 from __future__ import annotations
 
 from typing import Any
@@ -73,11 +75,11 @@ def quickstart_step2_note_lines(schema: dict[str, Any]) -> list[str]:
         fail(f"deploy_env schema 缺少第 2 步所需字段：{', '.join(missing_keys)}")
     notes = [
         '第 2 步只做三类动作：先补必填人工项，再复核第 1 步已回填的地址/主机名，最后只在切换模式时补条件字段。',
-        '`OPENCLAW_INGRESS_ALLOWED_SOURCE_CIDRS` 是第 2 步最关键的人工确认项，它描述“哪些来源可以访问 ingress”，必须按目标机最终看到的源地址网段填写，而不是目标机绑定地址。',
+        '`OPENCLAW_INGRESS_ALLOWED_SOURCE_CIDRS` 是第 2 步最关键的人工确认项，它描述“哪些来源可以访问 ingress”，必须按目标机或上游记录实际观测来源 CIDR 填写，而不是目标机绑定地址。',
         '默认部署会在目标机本机执行 full test，因此来源 CIDR 必须同时包含访问端来源，以及 `OPENCLAW_INGRESS_LISTEN_IP` 对应的本机来源精确主机段。',
         '第 1 步会写入 `OPENCLAW_INGRESS_LISTEN_IP` 与 `OPENCLAW_TLS_CN`；第 2 步默认只复核两者是否分别等于真实对外监听私网 IP 与访问端实际使用的唯一主机名。只有浏览器与目标服务位于同一操作系统实例时，才允许把监听地址填写为 loopback。跨 OS / 跨网络实例访问不属于该例外。',
         '只有切到 `OPENCLAW_TLS_MODE=provided_files` 时，才补 `OPENCLAW_TLS_CERT_SOURCE_PATH` / `OPENCLAW_TLS_KEY_SOURCE_PATH`；只有切到 `OPENCLAW_INGRESS_BOUNDARY_MODE=external_acl` 时，才补 `OPENCLAW_INGRESS_BOUNDARY_EVIDENCE_PATH`。',
-        '跨 OS / 跨网络实例访问时，`OPENCLAW_TLS_CN` 必须解析到目标机 ingress 地址，`OPENCLAW_INGRESS_ALLOWED_SOURCE_CIDRS` 必须填写目标机实际看到的访问端源 IP `/32`、NAT 翻译后地址 `/32`，或确有必要时填写对应链路网段；同时保留目标机本机 full test 来源。',
+        '跨 OS / 跨网络实例访问时，`OPENCLAW_TLS_CN` 必须解析到目标机 ingress 地址，`OPENCLAW_INGRESS_ALLOWED_SOURCE_CIDRS` 必须填写目标机或上游记录实际观测到的访问端源 IP `/32`、TUN/VPN/NAT 翻译后地址 `/32`，或确有必要时填写对应链路网段；同时保留目标机本机 full test 来源。',
     ]
     model_secret_keys = [
         key

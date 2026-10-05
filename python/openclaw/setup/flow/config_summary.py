@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""one_click_config failure summary surface."""
+"""提供OpenClaw setup子系统的生产实现。"""
 from __future__ import annotations
 
 import json

@@ -33,7 +33,8 @@ usage() {
 说明：
   - 统一执行运行服务的 compose 动作；
   - `restart/start/stop` 直接映射 compose 子命令；
-  - `up` 固定执行 `docker compose up -d`；compose 真源已声明 `pull_policy: never`，镜像需由前置镜像阶段准备；
+  - `up` 会先执行 `bootstrap.sh` 刷新 runtime.scheduler.app.env 等运行态派生 env，再执行 `docker compose up -d`；
+  - compose 真源已声明 `pull_policy: never`，镜像需由前置镜像阶段准备；
   - 当前维护的 target 由 runtime service registry 决定；base 默认包含 `gateway / ingress / internal-api / scheduler`，启用扩展后会追加 extension target。
 
 动作：
@@ -43,8 +44,8 @@ usage() {
   --target <alias>               仓库约定 target 别名，可重复传入
   --all                          对全部 runtime target 执行动作
   --compose-file <path>          覆盖 compose 文件路径（默认：当前运行画像 effective compose，缺失时回退 deploy/docker-compose.yml）
-  --env-file <path>              覆盖 env 文件路径（默认：deploy/.env）
-  --force-recreate               仅对 up 生效；强制重建目标容器以刷新 env_file 派生环境
+  --env-file <path>              覆盖 env 文件路径（默认：deploy/.env；up 仅接受默认 env 并刷新运行态派生 env）
+  --force-recreate               仅对 up 生效；强制重建目标容器以加载已刷新的 env_file
   -h, --help                     显示帮助
 USAGE
 }
@@ -52,6 +53,23 @@ USAGE
 fail() {
   echo "[run_runtime_service_action][FAIL] $*" >&2
   exit 2
+}
+
+# `up` 会刷新由默认部署配置派生的 runtime env，禁止对临时 env 文件执行该动作。
+require_default_env_for_runtime_up() {
+  local env_abs="" default_env_abs=""
+  env_abs="$(openclaw_repo_abs_path_for_compare "$ROOT_DIR" "$ENV_FILE")" || fail "无法解析 env 文件路径：$ENV_FILE"
+  default_env_abs="$(openclaw_repo_abs_path_for_compare "$ROOT_DIR" "$ROOT_DIR/deploy/.env")" || fail "无法解析默认 env 文件路径：$ROOT_DIR/deploy/.env"
+  if [[ "$env_abs" != "$default_env_abs" ]]; then
+    fail "up 需要默认 deploy/.env 才能刷新 runtime.scheduler.app.env；当前 --env-file=$ENV_FILE。请将配置写入 deploy/site.env、agent/extensions/<extension-id>/deploy/extension.env 或 deploy/targets.d，执行 one_click_config.sh 后去掉 --env-file 重试。"
+  fi
+}
+
+# 容器启动前重建 runtime app env，确保服务读取的是最新部署配置。
+refresh_runtime_derived_env_for_up() {
+  echo "[run_runtime_service_action] 刷新运行态派生 env：bash ./scripts/setup/bootstrap.sh" >&2
+  bash "$ROOT_DIR/scripts/setup/bootstrap.sh" \
+    || fail "bootstrap.sh 执行失败；请先修复 deploy/.env、运行态权限或控制面执行介质后重试。"
 }
 
 case "$ACTION" in
@@ -96,12 +114,19 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+if [[ "$ACTION" == 'up' ]]; then
+  require_default_env_for_runtime_up
+fi
+[[ -f "$ENV_FILE" ]] || fail "env 文件不存在：$ENV_FILE"
+runtime_compose_require_cli >/dev/null || fail '未检测到 docker'
+if [[ "$ACTION" == 'up' ]]; then
+  refresh_runtime_derived_env_for_up
+fi
 if [[ "$COMPOSE_FILE_EXPLICIT" != '1' ]]; then
   COMPOSE_FILE="$(runtime_compose_default_file "$ROOT_DIR" "$ENV_FILE")"
 fi
 [[ -f "$COMPOSE_FILE" ]] || fail "compose 文件不存在：$COMPOSE_FILE"
-[[ -f "$ENV_FILE" ]] || fail "env 文件不存在：$ENV_FILE"
-runtime_compose_require_cli >/dev/null || fail '未检测到 docker'
+runtime_container_load_target_registry_cache || fail '无法加载 runtime target registry'
 
 if [[ "$USE_ALL" == '1' ]]; then
   mapfile -t TARGETS < <(runtime_known_targets)

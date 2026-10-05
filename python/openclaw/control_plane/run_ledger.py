@@ -49,7 +49,6 @@ def _artifact_runtime_view(env: dict[str, str] | None) -> str:
 
 
 def resolve_artifact_root(entry_id: str, env: dict[str, str] | None = None) -> Path | None:
-    """按 runtime path entry id 解析工件根目录；env 用于选择 host/scheduler 路径视角。"""
     entry = str(entry_id or '').strip()
     if not entry:
         return None
@@ -116,23 +115,31 @@ def _should_descend(depth: int, name: str) -> bool:
     return True
 
 
-def _collect_latest_entries(base: Path, limit: int = _MAX_SNAPSHOT_ENTRIES) -> list[dict[str, Any]]:
-    if limit <= 0 or not base.exists() or not base.is_dir():
+def _collect_latest_entries(
+    base: Path,
+    started_at: datetime | None,
+    limit: int = _MAX_SNAPSHOT_ENTRIES,
+) -> list[dict[str, Any]]:
+    if limit <= 0 or not base.exists() or not base.is_dir() or started_at is None:
         return []
+    threshold = started_at - timedelta(seconds=5)
     items: list[dict[str, Any]] = []
     for path in sorted(base.iterdir(), key=lambda item: item.name):
         if len(items) >= limit:
             break
         if not path.name.startswith('latest'):
             continue
-        items.append(_entry_snapshot(path, base))
+        stat = _stat_optional(path)
+        if stat is None or not _is_recent(stat, threshold):
+            continue
+        items.append(_entry_snapshot(path, base, stat=stat))
     return _finalize_snapshots(items)
 
 
 def _collect_declared_evidence_entries(base: Path, started_at: datetime | None, latest_alias: str, limit: int = _MAX_SNAPSHOT_ENTRIES) -> list[dict[str, Any]]:
     if limit <= 0 or not base.exists() or not base.is_dir() or started_at is None:
         return []
-    threshold = started_at - timedelta(seconds=2)
+    threshold = started_at - timedelta(seconds=5)
     items: list[dict[str, Any]] = []
     seen: set[str] = set()
 
@@ -166,7 +173,7 @@ def _collect_declared_evidence_entries(base: Path, started_at: datetime | None, 
 def _collect_observed_entries(base: Path, started_at: datetime | None, limit: int = _MAX_SNAPSHOT_ENTRIES) -> list[dict[str, Any]]:
     if limit <= 0 or not base.exists() or not base.is_dir() or started_at is None:
         return []
-    threshold = started_at - timedelta(seconds=2)
+    threshold = started_at - timedelta(seconds=5)
     items: list[dict[str, Any]] = []
     seen: set[str] = set()
     stack: list[tuple[Path, int]] = [(base, 0)]
@@ -227,7 +234,7 @@ def _collect_scheduler_evidence_entries(stdout_log_path: Path, started_at: datet
     if started_at is None:
         return []
     stat = _stat_optional(stdout_log_path)
-    if stat is None or not _is_recent(stat, started_at - timedelta(seconds=2)):
+    if stat is None or not _is_recent(stat, started_at - timedelta(seconds=5)):
         return []
     json_line_count = _json_stdout_line_count(stdout_log_path)
     if json_line_count < 1:
@@ -239,7 +246,6 @@ def _collect_scheduler_evidence_entries(stdout_log_path: Path, started_at: datet
 
 
 def build_artifacts_manifest(*, job: dict[str, Any], run_id: str, stdout_log_path: Path, result_status: str, started_at: str, finished_at: str | None = None, env: dict[str, str] | None = None) -> dict[str, Any]:
-    """为单次 job 运行生成 artifacts manifest，返回声明输出、观测证据和验收状态。"""
     job_id = str(job.get('resolvedRuntimeJobKey') or job.get('qualifiedId') or job.get('id') or '')
     local_job_id = str(job.get('id') or '')
     outputs = json_object(job.get('resolvedOutputs'))
@@ -254,7 +260,7 @@ def build_artifacts_manifest(*, job: dict[str, Any], run_id: str, stdout_log_pat
     artifact_root_path = resolve_artifact_root(artifact_root_entry, env=env) if artifact_root_entry else None
     artifact_root_exists = bool(artifact_root_path and artifact_root_path.is_dir())
     started_dt = _parse_iso(started_at)
-    latest_entries = _collect_latest_entries(artifact_root_path) if artifact_root_path is not None else []
+    latest_entries = _collect_latest_entries(artifact_root_path, started_dt) if artifact_root_path is not None else []
     observed_entries: list[dict[str, Any]] = []
     if artifact_root_path is not None and not latest_entries:
         observed_entries = _collect_declared_evidence_entries(artifact_root_path, started_dt, latest_alias)
@@ -326,11 +332,13 @@ def build_artifacts_manifest(*, job: dict[str, Any], run_id: str, stdout_log_pat
 
 
 def build_job_ledger_row(job: dict[str, Any], job_state: dict[str, Any]) -> dict[str, Any]:
-    """把 job registry 行和运行态 state 合并为 run ledger 的单条展示记录。"""
     run_manifest = _read_optional_json(job_state.get('lastRunManifestPath'))
     result_manifest = _read_optional_json(job_state.get('lastResultManifestPath'))
     artifacts_manifest = _read_optional_json(job_state.get('lastArtifactsPath'))
     accepted = None
+    process_accepted = None
+    contract_accepted = None
+    artifact_accepted = None
     execution_accepted = None
     issues: list[str] = []
 
@@ -342,12 +350,22 @@ def build_job_ledger_row(job: dict[str, Any], job_state: dict[str, Any]) -> dict
         issues.append('missing_run_manifest')
 
     if isinstance(result_manifest, dict):
-        accepted = result_manifest.get('acceptedByLedger') is True
-        execution_accepted = result_manifest.get('status') == 'succeeded'
+        accepted_value = result_manifest.get('acceptedByLedger')
+        accepted = accepted_value if isinstance(accepted_value, bool) else None
+        process_accepted = result_manifest.get('processAccepted')
+        contract_accepted = result_manifest.get('contractAccepted')
+        artifact_accepted = result_manifest.get('artifactAccepted')
+        execution_accepted = result_manifest.get('executionAccepted')
+        if process_accepted is None:
+            process_accepted = result_manifest.get('returnCode') == 0
+        if execution_accepted is None:
+            execution_accepted = result_manifest.get('status') == 'succeeded'
         if result_manifest.get('status') != 'succeeded':
             issues.append(f"latest_status={result_manifest.get('status')}")
     if isinstance(artifacts_manifest, dict):
         acceptance = json_object(artifacts_manifest.get('acceptance'))
+        if artifact_accepted is None and acceptance:
+            artifact_accepted = acceptance.get('passed')
         if acceptance and acceptance.get('passed') is False:
             issues.extend([str(item) for item in json_array(acceptance.get('reasons'))])
 
@@ -361,8 +379,13 @@ def build_job_ledger_row(job: dict[str, Any], job_state: dict[str, Any]) -> dict
         'lastFinishedAt': str(job_state.get('lastFinishedAt') or ''),
         'lastRunId': str(job_state.get('lastRunId') or ''),
         'accepted': accepted,
-        'artifactAccepted': accepted,
+        'processAccepted': process_accepted,
+        'contractAccepted': contract_accepted,
+        'artifactAccepted': artifact_accepted,
         'executionAccepted': execution_accepted,
+        'acceptedByLedger': accepted,
+        'deliveryOutcomeRequired': bool(json_object(job.get('resolvedDeliveryContract'))),
+        'originalStatus': str((result_manifest or {}).get('status') or job_state.get('currentStatus') or ''),
         'issues': issues,
         'latestRun': run_manifest,
         'latestResult': result_manifest,
@@ -385,7 +408,6 @@ def _acceptance_counts(rows: list[dict[str, Any]], key: str) -> dict[str, int]:
 
 
 def build_run_ledger_summary(registry: dict[str, Any], state: dict[str, Any]) -> dict[str, Any]:
-    """基于 control plane registry 与 scheduler state 生成 run ledger 汇总。"""
     jobs_state = json_object(state.get('jobs'))
     rows: list[dict[str, Any]] = []
     for job in registry.get('jobs', []):
@@ -397,7 +419,10 @@ def build_run_ledger_summary(registry: dict[str, Any], state: dict[str, Any]) ->
         rows.append(build_job_ledger_row(job, job_state))
 
     artifact_counts = _acceptance_counts(rows, 'artifactAccepted')
+    process_counts = _acceptance_counts(rows, 'processAccepted')
+    contract_counts = _acceptance_counts(rows, 'contractAccepted')
     execution_counts = _acceptance_counts(rows, 'executionAccepted')
+    ledger_counts = _acceptance_counts(rows, 'acceptedByLedger')
 
     return {
         'schemaVersion': 1,
@@ -406,30 +431,29 @@ def build_run_ledger_summary(registry: dict[str, Any], state: dict[str, Any]) ->
         'configPath': str(registry.get('configPath') or ''),
         'counts': dict(artifact_counts),
         'artifactCounts': dict(artifact_counts),
+        'processCounts': dict(process_counts),
+        'contractCounts': dict(contract_counts),
         'executionCounts': dict(execution_counts),
+        'ledgerCounts': dict(ledger_counts),
         'items': rows,
     }
 
 
 def row_artifact_accepted(row: dict[str, Any]) -> Any:
-    """读取单条 ledger 行的工件验收结果；缺失时返回 None。"""
     return row.get('artifactAccepted') if 'artifactAccepted' in row else None
 
 
 def row_execution_accepted(row: dict[str, Any]) -> Any:
-    """读取单条 ledger 行的执行结果验收状态。"""
     return row.get('executionAccepted')
 
 
 def row_effective_execution_accepted(row: dict[str, Any]) -> Any:
-    """读取叠加 overlay 后的执行验收状态，缺失时回退到原始执行结果。"""
     if 'effectiveExecutionAccepted' in row:
         return row.get('effectiveExecutionAccepted')
     return row_execution_accepted(row)
 
 
 def row_effective_artifact_accepted(row: dict[str, Any]) -> Any:
-    """读取叠加 overlay 后的工件验收状态，缺失时回退到原始工件结果。"""
     return row.get('artifactEffectiveAccepted') if 'artifactEffectiveAccepted' in row else row_artifact_accepted(row)
 
 
@@ -578,9 +602,27 @@ def _access_excerpt(row: dict[str, Any]) -> dict[str, Any]:
 
 
 def apply_latest_agent_access_overlay(run_ledger: dict[str, Any], agent_access_log: dict[str, Any] | None) -> dict[str, Any]:
-    """用更新的 agent access 事实补齐调度运行账本的执行口径。"""
     rows = [dict(item) for item in json_array(run_ledger.get('items')) if isinstance(item, dict)]
     access_rows = [dict(item) for item in json_array((agent_access_log or {}).get('items')) if isinstance(item, dict)]
+    explicit_recoveries: dict[tuple[str, str, str], dict[str, Any]] = {}
+    for source_row in rows:
+        latest_result = json_object(source_row.get('latestResult'))
+        if latest_result.get('acceptedByLedger') is not True:
+            continue
+        for recovery in json_array(latest_result.get('recoveries')):
+            if not isinstance(recovery, dict):
+                continue
+            key = (
+                str(recovery.get('ofJobId') or '').strip(),
+                str(recovery.get('ofSchedulerRunId') or '').strip(),
+                str(recovery.get('businessRunId') or '').strip(),
+            )
+            if all(key):
+                explicit_recoveries[key] = {
+                    'jobId': str(source_row.get('runtimeJobKey') or source_row.get('id') or ''),
+                    'schedulerRunId': str(source_row.get('lastRunId') or ''),
+                    'businessRunId': str(latest_result.get('businessRunId') or ''),
+                }
     annotated_rows: list[dict[str, Any]] = []
     for row in rows:
         artifact_accepted = row_artifact_accepted(row)
@@ -590,6 +632,28 @@ def apply_latest_agent_access_overlay(run_ledger: dict[str, Any], agent_access_l
         effective_status = 'accepted' if effective_execution_accepted is True else ('failed' if effective_execution_accepted is False else 'pending')
         effective_source = 'scheduler_run_ledger'
         latest_access: dict[str, Any] | None = None
+        latest_result = json_object(row.get('latestResult'))
+        row_job_refs = {
+            str(row.get('runtimeJobKey') or '').strip(),
+            str(row.get('qualifiedId') or '').strip(),
+            str(row.get('id') or '').strip(),
+        }
+        recovery_match: dict[str, Any] | None = None
+        for job_ref in row_job_refs:
+            key = (
+                job_ref,
+                str(row.get('lastRunId') or '').strip(),
+                str(latest_result.get('businessRunId') or '').strip(),
+            )
+            if all(key) and key in explicit_recoveries:
+                recovery_match = explicit_recoveries[key]
+                break
+        if recovery_match is not None:
+            effective_artifact_accepted = True
+            effective_execution_accepted = True
+            effective_status = 'recovered'
+            effective_source = 'explicit_delivery_recovery'
+            row['recoveredBy'] = recovery_match
         row_time = _row_finished_at(row)
         matches = [
             item
@@ -599,7 +663,7 @@ def apply_latest_agent_access_overlay(run_ledger: dict[str, Any], agent_access_l
             and (row_time is None or _access_time(item) > row_time)
         ]
         matches.sort(key=lambda item: _access_time(item) or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
-        if matches:
+        if matches and not bool(row.get('deliveryOutcomeRequired')) and recovery_match is None:
             latest_access = matches[0]
             latest_status = str(latest_access.get('status') or '').strip().lower()
             effective_source = 'latest_agent_access'

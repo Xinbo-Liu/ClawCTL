@@ -1,6 +1,6 @@
 # 安全边界说明
 
-本页定义 OpenClaw 主仓库正式支持面的安全边界。默认正式支持面由 `base` kernel 与 `agent_platform` 纯平台 profile 构成；受控组合 profile 通过仓内合同 manifest 目录显式启用白名单声明的受管扩展。业务模块、示例链路与私有对象只能通过已登记 profile、有效自动发现 profile 或仓内合同 service 接入。
+本页定义 OpenClaw 主仓库正式支持面的安全边界。默认正式支持面由 `base` kernel 与 `agent_platform` 纯平台 profile 构成；仓内组合 profile 通过仓内合同 manifest 目录显式启用白名单声明的受管扩展。业务模块、示例链路与私有对象只能通过已登记 profile、有效自动发现 profile 或仓内合同 service 接入。
 
 ## 网络拓扑
 
@@ -30,7 +30,7 @@ private HTTPS ingress 的来源限制由三层共同闭合：
 
 配置生成后优先执行 `sudo bash ./scripts/setup/apply_ingress_boundary_rules.sh --env-file deploy/.env`，写出与当前 env 对齐的 root 侧基础 evidence。部署阶段渲染 `nginx.gateway.conf` 后，部署用户会复用该基础 evidence 并对当前 Nginx allowlist 做本地校验；只有基础 evidence 缺失、env 漂移或本地 Nginx 校验失败时，才需要 root 侧补跑 `sudo bash ./scripts/doctor/check_ingress_boundary_evidence.sh --env-file deploy/.env --require-nginx-policy`。该检查同时验证 Nginx allowlist、compose/runtime 端口暴露事实与基础设施边界证据，并把 root 侧 evidence 定向回收给部署用户读取。
 
-公网访问不改变本机 ingress 合同。公网客户端必须先经过上游 ACL、NAT、VPN、堡垒机或反向代理；`OPENCLAW_INGRESS_ALLOWED_SOURCE_CIDRS` 只填写目标机实际看到的私网或 loopback 来源 CIDR。公网客户 IP 白名单由上游策略和 `external_acl` evidence 证明，不写入 OpenClaw 本机 allowlist。
+公网访问不改变最小来源面合同。`OPENCLAW_INGRESS_ALLOWED_SOURCE_CIDRS` 填写目标机实际看到的来源：私网、loopback 或精确公网主机 CIDR。公网来源只允许 `/32` IPv4 或 `/128` IPv6；需要放行公网网段时，应写入上游 ACL 或安全组，并由 `external_acl` evidence 证明，不写入 OpenClaw 本机 allowlist。
 
 ## Ingress 权限与 capability 边界
 
@@ -51,13 +51,14 @@ private HTTPS ingress 的来源限制由三层共同闭合：
 
 - kernel / base：`config/control_plane/service.json`
 - 正式默认运行 profile：`config/control_plane/profiles/agent_platform.service.json`
-- 受控组合 profile 白名单：`config/control_plane/repo_combination_profiles.json`
-- 受控组合 profile service：`config/control_plane/profiles/<combination-profile-id>.service.json`
+- 仓内组合 profile 白名单：`config/control_plane/repo_combination_profiles.json`
+- 仓内组合 profile service：`config/control_plane/profiles/<combination-profile-id>.service.json`
 - 主仓库正式 extension：`config/control_plane/extensions.d/agent_platform.json`
 - 仓内 extension：通过正式 profile、有效自动发现 profile 或仓内合同 service 的显式 `--config-path` 接入
 
 ## 运行边界
 
-- dispatch target registry、provider registry、runtime adapters、runtime paths 与 object families 属于平台正式资产。
+- `agent_platform` 的 runtime adapters、runtime paths、object families、diagnostics、dispatch、recovery 与 router surface 属于平台正式资产。
+- dispatch target registry 属于启用它的业务扩展；通道 provider registry 属于启用它的公共通道扩展，只有当前 profile 已声明并启用的 registry 可见。
 - diagnostics、dispatch、recovery 与 router surface 统一以 `agent_platform` runtime 为准。
 - 平台可以导出通用 dispatch 治理与审计状态，但默认不提供内置 agent / module / job 治理链路。

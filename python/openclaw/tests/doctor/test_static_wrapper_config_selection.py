@@ -500,13 +500,11 @@ class StaticWrapperConfigSelectionTest(unittest.TestCase):
             self.assertIn(f'ARG=OPENCLAW_CONTROL_PLANE_SERVICE_CONFIG_PATH={expected_path}', capture)
             self.assertIn('当前 active profile 未声明需要运行态模型 env 的作业', result.stdout)
 
-    def test_full_test_manifest_merge_reads_profile_only_env_file_selection(self) -> None:
+    def test_full_test_manifest_stays_platform_scoped_with_extension_env_file_selection(self) -> None:
         bash_executable = resolve_bash_executable()
         self.assertTrue(bash_executable)
-        testing_manifest = json.loads(
-            (MANAGED_EXTENSION.manifest_dir / f'{MANAGED_EXTENSION.id}.testing_manifest.json').read_text(encoding='utf-8')
-        )
-        expected_groups = set(testing_manifest['valid_groups'])
+        platform_manifest = json.loads((ROOT_DIR / 'config' / 'runtime' / 'testing_manifest.json').read_text(encoding='utf-8'))
+        expected_groups = set(platform_manifest['valid_groups'])
         with tempfile.TemporaryDirectory() as tmpdir:
             env_file = Path(tmpdir) / 'deploy.env'
             env_file.write_text(f'OPENCLAW_CONTROL_PLANE_PROFILE={MANAGED_EXTENSION_PROFILE_ID}\n', encoding='utf-8')
@@ -542,7 +540,7 @@ class StaticWrapperConfigSelectionTest(unittest.TestCase):
 
             self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
             actual_groups = {line.strip() for line in result.stdout.splitlines() if line.strip()}
-            self.assertFalse(expected_groups - actual_groups)
+            self.assertEqual(expected_groups, actual_groups)
 
     def test_deploy_active_config_helper_reads_profile_only_env_file_selection(self) -> None:
         bash_executable = resolve_bash_executable()
@@ -602,13 +600,13 @@ class StaticWrapperConfigSelectionTest(unittest.TestCase):
                     + 'bash ./scripts/doctor/check_model_profile_connectivity.sh '
                     + f'--env-file {shlex.quote(env_file.as_posix())}'
                 ),
-                'full_test_manifest': (
+                'full_test_active_config': (
                     ambient
                     + 'source ./scripts/setup/lib/test_gate_common.sh; '
                     + 'source ./scripts/setup/lib/full_test_env_shell.sh; '
                     + 'ROOT_DIR="$(pwd -P)"; '
                     + f'ENV_FILE={shlex.quote(env_file.as_posix())}; '
-                    + 'full_test_testing_manifest_json >/dev/null'
+                    + 'full_test_active_config_path_for_manifest >/dev/null'
                 ),
                 'deploy_active_config': (
                     ambient

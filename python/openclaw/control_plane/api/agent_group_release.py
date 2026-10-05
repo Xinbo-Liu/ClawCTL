@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Agent-group release and acceptance helper builders."""
+"""构建 agent group 发布门禁与验收证据状态。"""
 from __future__ import annotations
 
 from pathlib import Path
@@ -23,11 +23,19 @@ _KNOWN_AGENT_GROUP_EVIDENCE = {
     'group_access_log': 'group 成员调用访问日志摘要已导出到 control-plane state release/evidence/control-plane-agent-access-log.json。',
     'run_ledger': 'group 关联 job 的 run ledger 已导出到 control-plane state release/evidence/control-plane-run-ledger.json。',
     'group_contract_docs': 'group 单真源文档已存在且被 registry 校验。',
-    'acceptance_binding': 'group 已建立到 deployment acceptance required checks、runtime evidence 与 required run ledger jobs 的正式映射。',
 }
 
 
 def object_file(family_id: str, entry_id: str) -> Path:
+    """解析 object family 条目的仓库或运行态文件路径。
+
+    参数：
+        family_id（str）：object family 标识，如 `runtime_evidence`。
+        entry_id（str）：family 内的条目标识。
+
+    返回：
+        返回 Path，指向条目声明的绝对路径；相对路径按仓库根目录解析。
+    """
     entry = get_entry(family_id, entry_id, ROOT_DIR)
     resolved = str(entry.get('resolved_path') or '').strip()
     path = Path(resolved)
@@ -35,26 +43,75 @@ def object_file(family_id: str, entry_id: str) -> Path:
 
 
 def read_object_json(family_id: str, entry_id: str, default: Any = None) -> Any:
+    """读取 object family 条目对应的 JSON 文件。
+
+    参数：
+        family_id（str）：object family 标识。
+        entry_id（str）：family 内的条目标识。
+        default（Any）：文件缺失或解析失败时传递给 `read_json` 的缺省值。
+
+    返回：
+        返回 Any，表示 JSON payload；缺失文件按 `default` 返回。
+    """
     return read_json(object_file(family_id, entry_id), default)
 
 
 def object_file_exists(family_id: str, entry_id: str) -> bool:
+    """检查 object family 条目文件是否存在。
+
+    参数：
+        family_id（str）：object family 标识。
+        entry_id（str）：family 内的条目标识。
+
+    返回：
+        返回 bool，`True` 表示声明路径已落盘。
+    """
     return object_file(family_id, entry_id).exists()
 
 
 def evidence_file(entry_id: str) -> Path:
+    """解析 runtime evidence 条目的文件路径。
+
+    参数：
+        entry_id（str）：`runtime_evidence` family 内的条目标识。
+
+    返回：
+        返回 Path，指向对应 evidence JSON 或证据文件。
+    """
     return object_file('runtime_evidence', entry_id)
 
 
 def read_evidence_json(entry_id: str, default: Any = None) -> Any:
+    """读取 runtime evidence JSON。
+
+    参数：
+        entry_id（str）：`runtime_evidence` family 内的条目标识。
+        default（Any）：证据缺失时的缺省 payload。
+
+    返回：
+        返回 Any，表示证据 payload；缺失文件按 `default` 返回。
+    """
     return read_json(evidence_file(entry_id), default)
 
 
 def evidence_file_exists(entry_id: str) -> bool:
+    """检查 runtime evidence 条目是否已落盘。
+
+    参数：
+        entry_id（str）：`runtime_evidence` family 内的条目标识。
+
+    返回：
+        返回 bool，`True` 表示证据文件存在。
+    """
     return evidence_file(entry_id).exists()
 
 
 def deployment_acceptance_required_check_statuses() -> dict[str, str]:
+    """读取 deployment acceptance 中 required checks 的状态表。
+
+    返回：
+        返回 dict[str, str]，键为 check id，值为记录状态；缺失状态写为 `NOT_RECORDED`。
+    """
     payload = read_object_json('acceptance_state', 'deployment_acceptance', None)
     statuses: dict[str, str] = {}
     for item in (payload.get('required_checks') or []) if isinstance(payload, dict) else []:
@@ -67,9 +124,17 @@ def deployment_acceptance_required_check_statuses() -> dict[str, str]:
 
 
 def exported_group_evidence_presence(group_ref: str) -> dict[str, bool]:
+    """判断导出的运行证据是否覆盖指定 agent group。
+
+    参数：
+        group_ref（str）：待检查的 agent group 标识。
+
+    返回：
+        返回 dict[str, bool]，按证据类型标记 group access、access log、run ledger 与 release gates 是否可观测。
+    """
     normalized_group_ref = str(group_ref or '').strip()
     if not normalized_group_ref:
-        return {'groupAccessView': False, 'groupAccessLog': False, 'runLedger': False, 'groupReleaseGates': False, 'acceptanceBindings': False}
+        return {'groupAccessView': False, 'groupAccessLog': False, 'runLedger': False, 'groupReleaseGates': False}
     group_access_payload = read_evidence_json('control_plane_agent_group_access', None)
     group_access_items = list(group_access_payload.get('items') or []) if isinstance(group_access_payload, dict) else []
     group_access_ok = any(str(item.get('groupRef') or '').strip() == normalized_group_ref for item in group_access_items if isinstance(item, dict))
@@ -89,19 +154,34 @@ def exported_group_evidence_presence(group_ref: str) -> dict[str, bool]:
     release_gates_payload = read_evidence_json('control_plane_agent_group_release_gates', None)
     release_gate_items = list(release_gates_payload.get('items') or []) if isinstance(release_gates_payload, dict) else []
     group_release_gates_ok = any(str(item.get('groupRef') or '').strip() == normalized_group_ref for item in release_gate_items if isinstance(item, dict))
-    acceptance_bindings_payload = read_evidence_json('control_plane_agent_group_acceptance_bindings', None)
-    acceptance_binding_items = list(acceptance_bindings_payload.get('items') or []) if isinstance(acceptance_bindings_payload, dict) else []
-    acceptance_bindings_ok = any(str(item.get('groupRef') or '').strip() == normalized_group_ref for item in acceptance_binding_items if isinstance(item, dict))
-    return {'groupAccessView': group_access_ok, 'groupAccessLog': access_log_ok, 'runLedger': run_ledger_ok, 'groupReleaseGates': group_release_gates_ok, 'acceptanceBindings': acceptance_bindings_ok}
+    return {'groupAccessView': group_access_ok, 'groupAccessLog': access_log_ok, 'runLedger': run_ledger_ok, 'groupReleaseGates': group_release_gates_ok}
 
 
 def _effective_status(row: dict[str, Any], accepted: Any) -> str:
+    """把 run ledger 行归一化为门禁展示状态。
+
+    参数：
+        row（dict[str, Any]）：run ledger 中单个 job 的记录行。
+        accepted（Any）：该 job 的有效 accepted 判定。
+
+    返回：
+        返回 str，取值为 `accepted`、`missing`、`failed` 或 `pending`。
+    """
     if row.get('effectiveStatus'):
         return str(row.get('effectiveStatus') or '')
     return 'accepted' if accepted is True else ('missing' if not row else ('failed' if accepted is False else 'pending'))
 
 
 def group_run_ledger_status(job_refs: list[str], run_ledger_summary: dict[str, Any]) -> dict[str, Any]:
+    """汇总 agent group 关联 job 的 run ledger 覆盖与失败状态。
+
+    参数：
+        job_refs（list[str]）：group release policy 要求覆盖的 job id 列表。
+        run_ledger_summary（dict[str, Any]）：control-plane run ledger 摘要 payload。
+
+    返回：
+        返回 dict[str, Any]，包含缺失、失败、待定、artifact 失败和 recovered job 列表，以及整体 accepted 判定。
+    """
     items = list(run_ledger_summary.get('items') or []) if isinstance(run_ledger_summary, dict) else []
     rows = {str(item.get('id') or ''): item for item in items if isinstance(item, dict)}
     missing_job_ids = [job_id for job_id in job_refs if job_id not in rows]
@@ -123,6 +203,15 @@ def group_run_ledger_status(job_refs: list[str], run_ledger_summary: dict[str, A
 
 
 def group_required_run_ledger_job_rows(job_refs: list[str], run_ledger_summary: dict[str, Any]) -> list[dict[str, Any]]:
+    """生成 release gate 展示用的 required job 行。
+
+    参数：
+        job_refs（list[str]）：release gate 要求覆盖的 job id 列表。
+        run_ledger_summary（dict[str, Any]）：control-plane run ledger 摘要 payload。
+
+    返回：
+        返回 list[dict[str, Any]]，逐 job 给出原始 accepted、artifact accepted、有效执行状态和最新访问信息。
+    """
     items = list(run_ledger_summary.get('items') or []) if isinstance(run_ledger_summary, dict) else []
     rows = {str(item.get('id') or ''): item for item in items if isinstance(item, dict)}
     result: list[dict[str, Any]] = []
@@ -155,6 +244,16 @@ def group_required_evidence_rows(
     run_ledger_status: dict[str, Any],
     agent_access_log_summary: dict[str, Any],
 ) -> list[dict[str, Any]]:
+    """生成 release gate 的 requiredEvidence 状态行。
+
+    参数：
+        group_item（dict[str, Any]）：registry 中的 agent group 条目。
+        run_ledger_status（dict[str, Any]）：`group_run_ledger_status` 的判定结果。
+        agent_access_log_summary（dict[str, Any]）：agent access log 摘要 payload。
+
+    返回：
+        返回 list[dict[str, Any]]，逐 required evidence 给出 `available`、`missing` 或 `declared_only` 状态。
+    """
     release_policy = json_object(group_item.get('releasePolicy'))
     required_refs = [str(item).strip() for item in (release_policy.get('requiredEvidence') or []) if str(item).strip()]
     single_source_docs = [str(item).strip() for item in (release_policy.get('singleSourceDocs') or []) if str(item).strip()]
@@ -176,65 +275,23 @@ def group_required_evidence_rows(
     return rows
 
 
-def build_agent_group_acceptance_binding(group_item: dict[str, Any], run_ledger_summary: dict[str, Any]) -> dict[str, Any]:
-    release_policy = json_object(group_item.get('releasePolicy'))
-    binding = json_object(release_policy.get('acceptanceBinding'))
-    deployment_statuses = deployment_acceptance_required_check_statuses()
-    group_ref = str(group_item.get('id') or '').strip()
-    exported_evidence = exported_group_evidence_presence(group_ref)
-    deployment_rows: list[dict[str, Any]] = []
-    missing_check_ids: list[str] = []
-    for check_id in [str(item).strip() for item in (binding.get('deploymentAcceptanceCheckIds') or []) if str(item).strip()]:
-        status = deployment_statuses.get(check_id, 'NOT_RECORDED')
-        passed = status == 'PASS'
-        if not passed:
-            missing_check_ids.append(check_id)
-        deployment_rows.append({'id': check_id, 'status': status, 'passed': passed})
-    runtime_rows: list[dict[str, Any]] = []
-    missing_runtime_evidence: list[str] = []
-    for entry_id in [str(item).strip() for item in (binding.get('runtimeEvidenceEntryIds') or []) if str(item).strip()]:
-        path = evidence_file(entry_id)
-        available = evidence_file_exists(entry_id)
-        if entry_id == 'control_plane_run_ledger':
-            available = available and bool(group_run_ledger_status([str(x).strip() for x in (binding.get('requiredRunLedgerJobRefs') or []) if str(x).strip()], run_ledger_summary).get('accepted'))
-        elif entry_id == 'control_plane_agent_access_log':
-            available = bool(exported_evidence.get('groupAccessLog'))
-        elif entry_id == 'control_plane_agent_group_access':
-            available = bool(exported_evidence.get('groupAccessView'))
-        elif entry_id == 'control_plane_agent_group_release_gates':
-            available = bool(exported_evidence.get('groupReleaseGates'))
-        elif entry_id == 'control_plane_agent_group_acceptance_bindings':
-            available = bool(exported_evidence.get('acceptanceBindings'))
-        if not available:
-            missing_runtime_evidence.append(entry_id)
-        runtime_rows.append({'id': entry_id, 'path': str(path), 'available': bool(available)})
-    required_run_ledger_job_refs = [str(item).strip() for item in (binding.get('requiredRunLedgerJobRefs') or []) if str(item).strip()]
-    run_ledger_rows = group_required_run_ledger_job_rows(required_run_ledger_job_refs, run_ledger_summary)
-    failing_run_ledger_job_refs = [
-        str(item.get('jobRef') or '')
-        for item in run_ledger_rows
-        if item.get('effectiveExecutionAccepted') is not True or item.get('artifactEffectiveAccepted') is not True
-    ]
-    accepted = bool(deployment_rows and runtime_rows and run_ledger_rows and not missing_check_ids and not missing_runtime_evidence and not failing_run_ledger_job_refs)
-    return {
-        'deploymentAcceptanceChecks': deployment_rows,
-        'runtimeEvidence': runtime_rows,
-        'requiredRunLedgerJobs': run_ledger_rows,
-        'missingDeploymentAcceptanceCheckIds': missing_check_ids,
-        'missingRuntimeEvidenceEntryIds': missing_runtime_evidence,
-        'failingRunLedgerJobRefs': failing_run_ledger_job_refs,
-        'accepted': accepted,
-        'notes': [str(item).strip() for item in (binding.get('notes') or []) if str(item).strip()],
-    }
-
-
 def build_agent_group_release_gate(
     group_item: dict[str, Any],
     recent_access: dict[str, Any],
     run_ledger_status: dict[str, Any],
     agent_access_log_summary: dict[str, Any],
-    acceptance_binding: dict[str, Any],
 ) -> dict[str, Any]:
+    """计算单个 agent group 是否满足发布门禁。
+
+    参数：
+        group_item（dict[str, Any]）：registry 中的 agent group 条目。
+        recent_access（dict[str, Any]）：该 group 最近访问统计。
+        run_ledger_status（dict[str, Any]）：关联 job 的 run ledger 判定结果。
+        agent_access_log_summary（dict[str, Any]）：agent access log 摘要 payload。
+
+    返回：
+        返回 dict[str, Any]，包含检查项、缺失证据、冻结状态和推荐 rollback 合同。
+    """
     release_policy = json_object(group_item.get('releasePolicy'))
     release_gate = json_object(release_policy.get('releaseGate'))
     freeze_on_statuses = [str(item).strip() for item in (release_gate.get('freezeOnStatuses') or []) if str(item).strip()]
@@ -264,9 +321,6 @@ def build_agent_group_release_gate(
         elif check_id == 'required_evidence':
             passed = evidence_ok
             detail = '要求声明的 requiredEvidence 均可自动观测并处于 available。'
-        elif check_id == 'acceptance_binding':
-            passed = bool(acceptance_binding.get('accepted'))
-            detail = '要求 group 对 deployment acceptance required checks、runtime evidence 与 required run ledger jobs 的正式映射全部闭合。'
         checks.append({'id': check_id, 'passed': bool(passed), 'detail': detail})
     failed_check_ids = [str(item.get('id') or '') for item in checks if item.get('passed') is not True]
     frozen = bool(health_status and health_status in set(freeze_on_statuses))
@@ -286,7 +340,6 @@ def build_agent_group_release_gate(
         'runLedgerCoverageRequired': bool(release_gate.get('requireRunLedgerCoverage', False)),
         'healthyMembersRequired': bool(release_gate.get('requireHealthyMembers', False)),
         'runLedger': run_ledger_status,
-        'acceptanceBinding': acceptance_binding,
         'rollbackContract': {
             'strategy': str(rollback_contract.get('strategy') or '').strip(),
             'triggerSignals': [str(item).strip() for item in (rollback_contract.get('triggerSignals') or []) if str(item).strip()],

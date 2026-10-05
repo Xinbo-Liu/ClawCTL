@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import io
 import os
 import tempfile
 import unittest
+from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
 
@@ -10,6 +12,7 @@ from openclaw.control_plane import state_paths
 from openclaw.control_plane.api import access
 from openclaw.control_plane.api import agent_group_release
 from openclaw.control_plane import run_ledger
+from openclaw.lib.testing import acceptance_surface
 from openclaw.lib.testing.acceptance import summary as acceptance_summary
 from openclaw.lib.control_plane import object_families
 import openclaw.control_plane.api.summary_builders as summary_builders
@@ -107,9 +110,6 @@ class SummaryBuildersTest(unittest.TestCase):
             'control_plane_agent_group_release_gates': {
                 'items': [{'groupRef': 'alpha'}],
             },
-            'control_plane_agent_group_acceptance_bindings': {
-                'items': [{'groupRef': 'alpha'}],
-            },
         }
 
         with (
@@ -129,7 +129,6 @@ class SummaryBuildersTest(unittest.TestCase):
                 'groupAccessLog': True,
                 'runLedger': True,
                 'groupReleaseGates': True,
-                'acceptanceBindings': True,
             },
         )
 
@@ -349,6 +348,105 @@ class SummaryBuildersTest(unittest.TestCase):
         self.assertEqual(row['latestEffectiveAccess']['source'], 'manual_cli')
         self.assertEqual(annotated['executionEffectiveCounts']['recoveredJobs'], 1)
 
+    def test_delivery_job_cannot_be_recovered_by_later_agent_access(self) -> None:
+        ledger = {
+            'items': [
+                {
+                    'id': 'dispatch_send',
+                    'runtimeJobKey': 'sample_ext:dispatch_send',
+                    'qualifiedId': 'sample_ext:dispatch_send',
+                    'deliveryOutcomeRequired': True,
+                    'accepted': False,
+                    'artifactAccepted': False,
+                    'executionAccepted': False,
+                    'lastRunId': 'dispatch-run-1',
+                    'lastFinishedAt': '2026-07-21T01:08:00Z',
+                    'latestResult': {
+                        'businessRunId': '2026-07-21',
+                        'status': 'blocked',
+                        'acceptedByLedger': False,
+                    },
+                    'latestRun': {
+                        'agentRef': 'sample_dispatcher',
+                        'groupRef': 'sample_pipeline',
+                        'command': ['python', '-m', 'sample_dispatcher', 'send'],
+                    },
+                }
+            ],
+        }
+        access_log = {
+            'items': [
+                {
+                    'agentRef': 'sample_ext:sample_dispatcher',
+                    'agentGroupRefs': ['sample_pipeline'],
+                    'runtimeArgs': ['send'],
+                    'status': 'succeeded',
+                    'finishedAt': '2026-07-21T01:10:00Z',
+                }
+            ],
+        }
+
+        annotated = run_ledger.apply_latest_agent_access_overlay(ledger, access_log)
+        [row] = annotated['items']
+
+        self.assertFalse(row['effectiveExecutionAccepted'])
+        self.assertFalse(row['artifactEffectiveAccepted'])
+        self.assertEqual(row['effectiveStatus'], 'failed')
+        self.assertNotIn('latestEffectiveAccess', row)
+        self.assertNotIn('recoveredBy', row)
+
+    def test_delivery_job_requires_exact_explicit_recovery_relation(self) -> None:
+        ledger = {
+            'items': [
+                {
+                    'id': 'dispatch_send',
+                    'runtimeJobKey': 'sample_ext:dispatch_send',
+                    'qualifiedId': 'sample_ext:dispatch_send',
+                    'deliveryOutcomeRequired': True,
+                    'accepted': False,
+                    'artifactAccepted': False,
+                    'executionAccepted': False,
+                    'lastRunId': 'dispatch-run-1',
+                    'latestResult': {
+                        'businessRunId': '2026-07-21',
+                        'status': 'blocked',
+                        'acceptedByLedger': False,
+                    },
+                },
+                {
+                    'id': 'dispatch_retry',
+                    'runtimeJobKey': 'sample_ext:dispatch_retry',
+                    'qualifiedId': 'sample_ext:dispatch_retry',
+                    'deliveryOutcomeRequired': True,
+                    'accepted': True,
+                    'artifactAccepted': True,
+                    'executionAccepted': True,
+                    'lastRunId': 'retry-run-1',
+                    'latestResult': {
+                        'businessRunId': '2026-07-21',
+                        'status': 'succeeded',
+                        'acceptedByLedger': True,
+                        'recoveries': [
+                            {
+                                'ofJobId': 'sample_ext:dispatch_send',
+                                'ofSchedulerRunId': 'dispatch-run-1',
+                                'businessRunId': '2026-07-21',
+                            }
+                        ],
+                    },
+                },
+            ],
+        }
+
+        annotated = run_ledger.apply_latest_agent_access_overlay(ledger, {'items': []})
+        origin = next(row for row in annotated['items'] if row['id'] == 'dispatch_send')
+
+        self.assertTrue(origin['effectiveExecutionAccepted'])
+        self.assertTrue(origin['artifactEffectiveAccepted'])
+        self.assertEqual(origin['effectiveStatus'], 'recovered')
+        self.assertEqual(origin['recoveredBy']['schedulerRunId'], 'retry-run-1')
+        self.assertEqual(origin['effectiveSource'], 'explicit_delivery_recovery')
+
     def test_run_ledger_newer_matching_failure_overrides_raw_success(self) -> None:
         ledger = {
             'items': [
@@ -501,6 +599,56 @@ class SummaryBuildersTest(unittest.TestCase):
         self.assertEqual(status['failingJobs'], [])
         self.assertEqual(status['artifactFailingJobs'], ['sample_digest_weekday'])
         self.assertEqual(status['recoveredJobs'], ['sample_digest_weekday'])
+
+    def test_acceptance_summary_strict_blocks_missing_nginx_source_cidrs(self) -> None:
+        summary = {
+            'deployment_acceptance': {'exists': True, 'eligible': True, 'accepted': True},
+            'ingress_boundary_evidence': {
+                'exists': True,
+                'accepted': True,
+                'nginx_policy_required': True,
+                'nginx_policy_checked': True,
+                'nginx_policy_ok': True,
+                'nginx_policy_default_deny': True,
+                'nginx_policy_rewrite_phase_default_deny': True,
+                'nginx_policy_access_phase_default_deny': True,
+                'nginx_policy_source_cidr_count': 0,
+            },
+            'runtime_acceptance': {'exists': True, 'eligible': True, 'accepted': True},
+        }
+
+        reasons = acceptance_summary.acceptance_summary_blocking_reasons(summary)
+
+        self.assertIn('ingress_boundary_evidence nginx_policy.source_cidrs 为空', reasons)
+
+    def test_acceptance_summary_cli_strict_returns_nonzero_when_runtime_rejected(self) -> None:
+        summary = {
+            'deployment_acceptance': {'exists': True, 'eligible': True, 'accepted': True},
+            'ingress_boundary_evidence': {
+                'exists': True,
+                'accepted': True,
+                'nginx_policy_required': True,
+                'nginx_policy_checked': True,
+                'nginx_policy_ok': True,
+                'nginx_policy_default_deny': True,
+                'nginx_policy_rewrite_phase_default_deny': True,
+                'nginx_policy_access_phase_default_deny': True,
+                'nginx_policy_source_cidr_count': 1,
+            },
+            'runtime_acceptance': {'exists': True, 'eligible': True, 'accepted': False},
+            'dispatch_runtime_check': {'exists': True},
+            'control_plane_run_ledger': {'exists': True},
+            'official_cli': {'control_plane': {'exists': True}},
+            'control_plane_job_artifact_policies': {'exists': True},
+        }
+
+        with patch.object(acceptance_surface, 'build_acceptance_summary', return_value=summary), redirect_stdout(io.StringIO()) as stdout, redirect_stderr(io.StringIO()):
+            exit_code = acceptance_surface.main(['acceptance-summary', '--format', 'json', '--strict', 'true'])
+
+        self.assertEqual(exit_code, 1)
+        self.assertIn('"accepted": false', stdout.getvalue())
+        self.assertIn('"strict_acceptance"', stdout.getvalue())
+        self.assertIn('"runtime_acceptance accepted 不是 true"', stdout.getvalue())
 
     def test_runtime_acceptance_status_blocks_artifact_gap_for_required_jobs(self) -> None:
         run_ledger_payload = {

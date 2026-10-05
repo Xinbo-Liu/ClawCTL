@@ -1,12 +1,10 @@
 #!/usr/bin/env bash
 # 用途：统一处理主入口脚本的 help/explain/未知参数帮助面切换，避免重复维护 Docker 检测与静态帮助分流。
 set -euo pipefail
-
 flow_entry_has_docker() {
   command -v docker >/dev/null 2>&1 || return 1
   docker info >/dev/null 2>&1
 }
-
 flow_entry_run_static_surface() {
   local mode="$1" help_func="$2" explain_func="$3"
   case "$mode" in
@@ -18,7 +16,6 @@ flow_entry_run_static_surface() {
       ;;
   esac
 }
-
 flow_entry_exec_dynamic_command() {
   local command_path="$1"
   shift
@@ -28,7 +25,6 @@ flow_entry_exec_dynamic_command() {
   fi
   OPENCLAW_PYTHON_TOOL_NO_PULL=1 "$command_path" "$@"
 }
-
 flow_entry_run_dynamic_or_static_surface() {
   local mode="$1" help_func="$2" explain_func="$3"
   shift 3
@@ -40,7 +36,6 @@ flow_entry_run_dynamic_or_static_surface() {
   fi
   flow_entry_run_static_surface "$mode" "$help_func" "$explain_func"
 }
-
 flow_entry_maybe_render_static_surface() {
   local help_only="$1" explain_only="$2" help_func="$3" explain_func="$4"
   if [[ "$help_only" == "1" ]]; then
@@ -53,7 +48,6 @@ flow_entry_maybe_render_static_surface() {
   fi
   return 1
 }
-
 flow_entry_handle_unknown_arg() {
   local prefix="$1" arg="$2" help_func="$3"
   shift 3

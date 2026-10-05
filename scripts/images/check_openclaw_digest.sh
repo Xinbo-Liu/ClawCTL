@@ -62,38 +62,11 @@ CURRENT_REPO="${IMAGE_PARTS[0]}"
 json_field_from_file() {
   local file_path="$1"
   local dotted_path="$2"
-  if command -v jq >/dev/null 2>&1; then
-    jq -r ".$dotted_path // empty" "$file_path"
-    return 0
-  fi
-  local python_bin=''
-  python_bin="$(registry_manifest_probe_python_executable)" || {
-    echo '[check_openclaw_digest] 缺少 jq，且未检测到可用 Python，无法解析 JSON。' >&2
+  command -v jq >/dev/null 2>&1 || {
+    echo '[check_openclaw_digest] 缺少 jq，无法解析 JSON。' >&2
     exit 20
   }
-  "$python_bin" - "$file_path" "$dotted_path" <<'PY'
-from __future__ import annotations
-
-import json
-import pathlib
-import sys
-
-payload = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding='utf-8'))
-value = payload
-for segment in [item for item in sys.argv[2].split('.') if item]:
-    if not isinstance(value, dict):
-        value = ''
-        break
-    value = value.get(segment)
-if value is None:
-    print('')
-elif isinstance(value, bool):
-    print('true' if value else 'false')
-elif isinstance(value, (dict, list)):
-    print(json.dumps(value, ensure_ascii=False))
-else:
-    print(str(value))
-PY
+  jq -r ".$dotted_path // empty" "$file_path"
 }
 
 emit_json() {
@@ -107,64 +80,34 @@ emit_json() {
   else
     supply_chain_json='null'
   fi
-  if command -v jq >/dev/null 2>&1; then
-    jq -n \
-      --arg ok "$ok" \
-      --arg result "$result" \
-      --arg exit_code "$exit_code" \
-      --arg message "$message" \
-      --arg current_ref "$CURRENT_REF" \
-      --arg current_repo "$CURRENT_REPO" \
-      --arg current_tag "$CURRENT_TAG" \
-      --arg current_release "$CURRENT_RELEASE_VERSION" \
-      --arg current_digest "$CURRENT_DIGEST" \
-      --argjson supply_chain "$supply_chain_json" \
-      '{
-        ok: ($ok == "true"),
-        result: $result,
-        exit_code: ($exit_code | tonumber),
-        message: $message,
-        current: {
-          ref: $current_ref,
-          repo: $current_repo,
-          tag: $current_tag,
-          release_version: $current_release,
-          pinned_digest: $current_digest
-        }
-      } + (if $supply_chain == null then {} else {supply_chain: $supply_chain} end)'
-    return 0
-  fi
-  local python_bin=''
-  python_bin="$(registry_manifest_probe_python_executable)" || {
-    echo '[check_openclaw_digest] 缺少 jq，且未检测到可用 Python，无法输出 JSON。' >&2
+  command -v jq >/dev/null 2>&1 || {
+    echo '[check_openclaw_digest] 缺少 jq，无法输出 JSON。' >&2
     exit 20
   }
-  "$python_bin" - \
-    "$ok" "$result" "$exit_code" "$message" "$CURRENT_REF" "$CURRENT_REPO" "$CURRENT_TAG" "$CURRENT_RELEASE_VERSION" "$CURRENT_DIGEST" "${TMP_JSON:-}" <<'PY'
-from __future__ import annotations
-
-import json
-import pathlib
-import sys
-
-payload = {
-    "ok": sys.argv[1] == "true",
-    "result": sys.argv[2],
-    "exit_code": int(sys.argv[3]),
-    "message": sys.argv[4],
-    "current": {
-        "ref": sys.argv[5],
-        "repo": sys.argv[6],
-        "tag": sys.argv[7],
-        "release_version": sys.argv[8],
-        "pinned_digest": sys.argv[9],
-    },
-}
-tmp_json_path = pathlib.Path(sys.argv[10]) if sys.argv[10] else None
-if tmp_json_path and tmp_json_path.exists() and tmp_json_path.stat().st_size > 0:
-    payload["supply_chain"] = json.loads(tmp_json_path.read_text(encoding="utf-8"))
-print(json.dumps(payload, ensure_ascii=False, indent=2))
-PY
+  jq -n \
+    --arg ok "$ok" \
+    --arg result "$result" \
+    --arg exit_code "$exit_code" \
+    --arg message "$message" \
+    --arg current_ref "$CURRENT_REF" \
+    --arg current_repo "$CURRENT_REPO" \
+    --arg current_tag "$CURRENT_TAG" \
+    --arg current_release "$CURRENT_RELEASE_VERSION" \
+    --arg current_digest "$CURRENT_DIGEST" \
+    --argjson supply_chain "$supply_chain_json" \
+    '{
+      ok: ($ok == "true"),
+      result: $result,
+      exit_code: ($exit_code | tonumber),
+      message: $message,
+      current: {
+        ref: $current_ref,
+        repo: $current_repo,
+        tag: $current_tag,
+        release_version: $current_release,
+        pinned_digest: $current_digest
+      }
+    } + (if $supply_chain == null then {} else {supply_chain: $supply_chain} end)'
 }
 
 [[ -n "$CURRENT_REPO" && -n "$CURRENT_TAG" && -n "$CURRENT_DIGEST" ]] || {

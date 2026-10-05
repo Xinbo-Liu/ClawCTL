@@ -78,6 +78,8 @@ ROOT_COMMAND_TREE: CommandNode = {
         'deployment-inputs': 'openclaw.setup.deploy_env.control_plane:docs_entry',
         'render-getting-started': 'openclaw.docs.renderers.getting_started:render_entry',
         'render-maintenance-map': 'openclaw.docs.renderers.maintenance_map:render_entry',
+        'render-runtime-artifacts': 'openclaw.docs.renderers.runtime_artifacts:render_entry',
+        'render-extension-index': 'openclaw.docs.renderers.extension_index:render_entry',
         'render-runtime-surface': 'openclaw.docs.renderers.runtime_surface:render_entry',
     },
     'images': {
@@ -87,7 +89,6 @@ ROOT_COMMAND_TREE: CommandNode = {
     'guards': {
         'host-python-doc': 'openclaw.guards.host_python_doc_guard',
         'host-python-shell': 'openclaw.guards.host_python_shell_guard',
-        'keyword-gate-inventory': 'openclaw.doctor.platform.keyword_gate_inventory',
     },
 }
 

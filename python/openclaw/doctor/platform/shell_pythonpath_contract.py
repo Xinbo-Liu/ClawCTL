@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Reject shell wrappers that hard-code repo-local PYTHONPATH injection."""
+"""提供OpenClaw doctor子系统的生产实现。"""
 from __future__ import annotations
 
 import json

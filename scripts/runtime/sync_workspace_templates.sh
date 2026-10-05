@@ -12,7 +12,6 @@ source "$ROOT_DIR/scripts/lib/repo_python_env.sh"
 # shellcheck source=../lib/control_plane_config_paths.sh
 source "$ROOT_DIR/scripts/lib/control_plane_config_paths.sh"
 RESOLVED_CONFIG_PATH="$(openclaw_control_plane_resolve_config_path agent_platform)"
-
 usage() {
   cat <<'USAGE'
 用法：

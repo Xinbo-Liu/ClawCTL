@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""control-plane runtime extension-env CLI handlers."""
+"""提供OpenClaw 控制平面子系统的生产实现。"""
 from __future__ import annotations
 
 import argparse
@@ -53,7 +53,6 @@ def _status_payload(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def cmd_extension_env_ensure(args: argparse.Namespace) -> int:
-    """同步 wheelhouse、准备扩展 venv，并输出部署主链使用的结构化报告。"""
     repo_root = cli_support._repo_root()
     config_path = _selected_config_path(args)
     allow_online = bool(getattr(args, 'allow_online', False))

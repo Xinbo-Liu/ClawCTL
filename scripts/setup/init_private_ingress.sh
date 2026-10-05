@@ -15,7 +15,6 @@ DEFAULT_LISTEN_IP=''
 LISTEN_IP=''
 TLS_CN="$DEFAULT_TLS_CN"
 PLATFORM='windows'
-
 print_help() {
   cat <<'HELP'
 用法：
@@ -38,12 +37,10 @@ print_help() {
   - 只想覆盖 IP 时可用 `-- <listen_ip>`；主机名仍默认 `openclaw.internal.example`
 HELP
 }
-
 fail() {
   echo "[init_private_ingress][FAIL] $*" >&2
   exit 2
 }
-
 is_private_or_loopback_ipv4() {
   local ip="$1"
   local o1='' o2='' o3='' o4='' extra=''
@@ -60,7 +57,6 @@ is_private_or_loopback_ipv4() {
   if ((o1 == 172 && o2 >= 16 && o2 <= 31)); then return 0; fi
   return 1
 }
-
 is_ula_or_loopback_ipv6() {
   local ip="${1,,}"
   [[ "$ip" == "::1" ]] && return 0
@@ -88,11 +84,9 @@ is_ula_or_loopback_ipv6() {
   fi
   return 0
 }
-
 is_private_or_loopback_ip() {
   is_private_or_loopback_ipv4 "$1" || is_ula_or_loopback_ipv6 "$1"
 }
-
 detect_first_private_ipv4() {
   local value=''
   while IFS= read -r value; do
@@ -104,7 +98,6 @@ detect_first_private_ipv4() {
   done < <(hostname -I 2>/dev/null | tr ' ' '\n')
   return 1
 }
-
 print_linux_commands() {
   cat <<'EOF' | sed \
     -e "s|__LISTEN_IP__|${LISTEN_IP}|g" \
@@ -156,7 +149,6 @@ INNER_EOF
 getent hosts "$OPENCLAW_TLS_CN"
 EOF
 }
-
 print_macos_commands() {
   cat <<'EOF' | sed \
     -e "s|__LISTEN_IP__|${LISTEN_IP}|g" \
@@ -210,7 +202,6 @@ sudo killall -HUP mDNSResponder
 dscacheutil -q host -a name "$OPENCLAW_TLS_CN"
 EOF
 }
-
 print_windows_commands() {
   cat <<'EOF' | sed \
     -e "s|__LISTEN_IP__|${LISTEN_IP}|g" \

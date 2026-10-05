@@ -10,11 +10,9 @@ source "$PYTHON_RUNTIME_GUARD_ROOT_DIR/scripts/lib/repo_contracts.sh"
 PYTHON_RUNTIME_GUARD_SHELL_SCANNER="${PYTHON_RUNTIME_GUARD_SHELL_SCANNER:-$PYTHON_RUNTIME_GUARD_LIB_DIR/host_python_shell_guard.sh}"
 PYTHON_RUNTIME_GUARD_SURFACE_JSON="${PYTHON_RUNTIME_GUARD_SURFACE_JSON:-}"
 repo_contract_default_path PYTHON_RUNTIME_GUARD_SURFACE_JSON governance.host_python_governance
-
 python_runtime_guard_have_rg() {
   command -v rg >/dev/null 2>&1
 }
-
 python_runtime_guard_can_run_container_scanners() {
   command -v docker >/dev/null 2>&1 || return 1
   docker info >/dev/null 2>&1 || return 1
@@ -25,7 +23,6 @@ python_runtime_guard_can_run_container_scanners() {
   [[ -n "$py_image" ]] || return 1
   docker image inspect "$py_image" >/dev/null 2>&1 || return 1
 }
-
 python_runtime_guard_search_extended_in_paths() {
   local pattern="$1"
   shift
@@ -45,7 +42,6 @@ python_runtime_guard_search_extended_in_paths() {
   [[ -z "$results" ]] || printf '%s' "${results%$'
 '}"
 }
-
 python_runtime_guard_search_fixed_in_paths() {
   local needle="$1"
   shift
@@ -65,7 +61,6 @@ python_runtime_guard_search_fixed_in_paths() {
   [[ -z "$results" ]] || printf '%s' "${results%$'
 '}"
 }
-
 python_runtime_guard_capture_shell_host_python_scan() {
   local root_dir="$1"
   local __out_var="$2"
@@ -81,7 +76,6 @@ python_runtime_guard_capture_shell_host_python_scan() {
   printf -v "$__out_var" '%s' "$output"
   printf -v "$__status_var" '%s' "$status"
 }
-
 python_runtime_guard_require_surface_json() {
   [[ -f "$PYTHON_RUNTIME_GUARD_SURFACE_JSON" && -r "$PYTHON_RUNTIME_GUARD_SURFACE_JSON" ]] || {
     echo "[python_runtime_guard][FAIL] runner surface 真源不可读：$PYTHON_RUNTIME_GUARD_SURFACE_JSON" >&2
@@ -92,23 +86,19 @@ python_runtime_guard_require_surface_json() {
     return 97
   }
 }
-
 python_runtime_guard_jq_lines() {
   local filter="$1"
   python_runtime_guard_require_surface_json || return $?
   jq -r "$filter" "$PYTHON_RUNTIME_GUARD_SURFACE_JSON" | tr -d '\r'
 }
-
 python_runtime_guard_iter_shell_scan_manifest() {
   python_runtime_guard_jq_lines '.shell_scan_manifest | to_entries[] as $row | $row.value[] | "\($row.key) \(.)"'
 }
-
 python_runtime_guard_iter_manifest_paths() {
   local wanted_kind="$1"
   python_runtime_guard_require_surface_json || return $?
   jq -r --arg kind "$wanted_kind" '.shell_scan_manifest[$kind][]' "$PYTHON_RUNTIME_GUARD_SURFACE_JSON"
 }
-
 python_runtime_guard_collect_broad_shell_targets() {
   local root_dir="$1"
 
@@ -135,19 +125,15 @@ python_runtime_guard_collect_broad_shell_targets() {
       -type f -name '*.sh' -print0 | sort -z
   )
 }
-
 python_runtime_guard_iter_deleted_stub_ref_scan_roots() {
   python_runtime_guard_jq_lines '.deleted_stub_ref_scan_roots[]'
 }
-
 python_runtime_guard_iter_agent_launcher_manifest() {
   python_runtime_guard_jq_lines '.agent_launcher_manifest[] | "\(.agentRef) \(.relPath)"'
 }
-
 python_runtime_guard_iter_agent_readme_manifest() {
   python_runtime_guard_jq_lines '.agent_readme_manifest[]'
 }
-
 python_runtime_guard_verify_agent_launcher_contract() {
   local root_dir="$1"
   local agent_ref=""
@@ -190,7 +176,6 @@ python_runtime_guard_verify_agent_launcher_contract() {
     return 1
   }
 }
-
 python_runtime_guard_verify_agent_readme_contract() {
   local root_dir="$1"
   local rel_path=""
@@ -209,7 +194,6 @@ python_runtime_guard_verify_agent_readme_contract() {
     fi
   done < <(python_runtime_guard_iter_agent_readme_manifest)
 }
-
 python_runtime_guard_collect_self_shell_targets() {
   local root_dir="$1"
   local rel_path
@@ -219,7 +203,6 @@ python_runtime_guard_collect_self_shell_targets() {
     printf '%s\0' "$root_dir/$rel_path"
   done < <(python_runtime_guard_iter_manifest_paths self)
 }
-
 python_runtime_guard_run_shell_scan_for_targets() {
   local root_dir="$1"
   local __out_var="$2"
@@ -233,7 +216,6 @@ python_runtime_guard_run_shell_scan_for_targets() {
   fi
   python_runtime_guard_capture_shell_host_python_scan "$root_dir" "$__out_var" "$__status_var" "${targets[@]}"
 }
-
 python_runtime_guard_find_host_python_refs_in_file() {
   local target_file="$1"
   local repo_root="${2:-$(dirname "$target_file")}"
@@ -251,7 +233,6 @@ python_runtime_guard_find_host_python_refs_in_file() {
     *) [[ -z "$scan_output" ]] || printf '%s\n' "$scan_output" >&2; return "$scan_status" ;;
   esac
 }
-
 python_runtime_guard_find_host_python_shell_refs() {
   local root_dir="$1"
   local -a targets=()
@@ -269,15 +250,12 @@ python_runtime_guard_find_host_python_shell_refs() {
     *) [[ -z "$scan_output" ]] || printf '%s\n' "$scan_output" >&2; return "$scan_status" ;;
   esac
 }
-
 python_runtime_guard_iter_self_scan_targets() {
   python_runtime_guard_iter_manifest_paths self
 }
-
 python_runtime_guard_iter_runner_binding_manifest() {
   python_runtime_guard_jq_lines '.runner_binding_manifest[] | "\(.rootVar) \(.relPath)"'
 }
-
 python_runtime_guard_verify_runner_binding_contract() {
   local root_dir="$1"
   local root_var=""
@@ -295,14 +273,12 @@ python_runtime_guard_verify_runner_binding_contract() {
     }
   done < <(python_runtime_guard_iter_runner_binding_manifest)
 }
-
 python_runtime_guard_iter_runner_surface_literal_manifest() {
   python_runtime_guard_jq_lines '.runner_surface_literal_manifest[] | "\(.relPath)\t\(.literal)"'
 }
 python_runtime_guard_iter_runner_surface_allowlist() {
   python_runtime_guard_jq_lines '.runner_surface_allowlist[]'
 }
-
 python_runtime_guard_verify_runner_surface_contract() {
   local root_dir="$1"
   local -A covered_paths=()
@@ -349,7 +325,6 @@ python_runtime_guard_verify_runner_surface_contract() {
         done | sort
   )
 }
-
 python_runtime_guard_find_self_host_python_refs() {
   local root_dir="$1"
   local -a targets=()
@@ -367,7 +342,6 @@ python_runtime_guard_find_self_host_python_refs() {
     *) [[ -z "$scan_output" ]] || printf '%s\n' "$scan_output" >&2; return "$scan_status" ;;
   esac
 }
-
 python_runtime_guard_verify_runtime_image_contract() {
   local root_dir="$1"
   # shellcheck source=repo_contracts.sh
@@ -408,11 +382,9 @@ python_runtime_guard_verify_runtime_image_contract() {
   grep -Fq "$python_compose_image_ref" "$root_dir/deploy/docker-compose.yml" || { echo "docker-compose.yml 未通过严格变量引用 OPENCLAW_RUNTIME_PYTHON_IMAGE"; return 1; }
   grep -Fq "$nginx_compose_image_ref" "$root_dir/deploy/docker-compose.yml" || { echo "docker-compose.yml 未通过严格变量引用 NGINX_IMAGE"; return 1; }
 }
-
 python_runtime_guard_iter_doc_scan_roots() {
   python_runtime_guard_jq_lines '.doc_scan_roots[]'
 }
-
 python_runtime_guard_find_doc_host_python_refs() {
   local root_dir="$1"
   local -a scan_roots=()
@@ -425,7 +397,6 @@ python_runtime_guard_find_doc_host_python_refs() {
   (( ${#scan_roots[@]} > 0 )) || return 0
   bash "$root_dir/scripts/runtime/run_openclaw_python_tool.sh" guards host-python-doc --repo-root "$root_dir" "${scan_roots[@]}"
 }
-
 python_runtime_guard_capture_doc_host_python_scan() {
   local root_dir="$1"
   local __out_var="$2"
@@ -439,7 +410,6 @@ python_runtime_guard_capture_doc_host_python_scan() {
   printf -v "$__out_var" '%s' "$output"
   printf -v "$__status_var" '%s' "$status"
 }
-
 python_runtime_guard_doc_line_has_uncovered_match() {
   local pattern="$1"
   local text="${2:-}"
@@ -473,9 +443,6 @@ python_runtime_guard_doc_line_has_uncovered_match() {
       text = ENVIRON["LINE_TEXT"]
       pattern = ENVIRON["SCAN_PATTERN"]
       allow_count = 0
-      append_ranges(text, "(^|[^[:alnum:]_./-])python3?[[:space:]]+-m[[:space:]]+openclaw\\.testing\\.repo_host($|[^[:alnum:]_./-])")
-      append_ranges(text, "(^|[^[:alnum:]_./-])python3?[[:space:]]+-m[[:space:]]+unittest[[:space:]]+openclaw([[:alnum:]_.-]*)($|[^[:alnum:]_./-])")
-
       cursor = 1
       while (cursor <= length(text)) {
         segment = substr(text, cursor)
@@ -493,11 +460,9 @@ python_runtime_guard_doc_line_has_uncovered_match() {
     }
   '
 }
-
 python_runtime_guard_has_docker_cli() {
   command -v docker >/dev/null 2>&1
 }
-
 python_runtime_guard_fallback_shell_scan_for_targets() {
   local root_dir="$1"
   shift
@@ -524,7 +489,6 @@ python_runtime_guard_fallback_shell_scan_for_targets() {
   }
   return 0
 }
-
 python_runtime_guard_fallback_doc_scan() {
   local root_dir="$1"
   local -a scan_roots=()
@@ -540,7 +504,7 @@ python_runtime_guard_fallback_doc_scan() {
     scan_roots+=("$root_dir/$rel_path")
   done < <(python_runtime_guard_iter_doc_scan_roots)
   (( ${#scan_roots[@]} > 0 )) || return 0
-  pattern='(^|[[:space:]>`-])(PYTHONPATH=python[[:space:]]+python3?[[:space:]]+-m[[:space:]]+openclaw\.[^[:space:]]+|python3?[[:space:]]+-m[[:space:]]+openclaw\.[^[:space:]]+|python3?[[:space:]]+-m[[:space:]]+openclaw_ext_[^[:space:]]+)'
+  pattern='(^|[[:space:]>`-])(PYTHONPATH=python[[:space:]]+python3?[[:space:]]+-m[[:space:]]+openclaw\.[^[:space:]]+|python3?[[:space:]]+-m[[:space:]]+unittest[[:space:]]+openclaw[^[:space:]]*|python3?[[:space:]]+-m[[:space:]]+openclaw\.[^[:space:]]+|python3?[[:space:]]+-m[[:space:]]+openclaw_ext_[^[:space:]]+)'
   raw_results="$(python_runtime_guard_search_extended_in_paths "$pattern" "${scan_roots[@]}")"
   while IFS= read -r raw_line; do
     [[ -n "$raw_line" ]] || continue
@@ -557,7 +521,6 @@ python_runtime_guard_fallback_doc_scan() {
   }
   return 0
 }
-
 python_runtime_guard_run_static_host_python_checks() {
   local root_dir="$1"
   local host_py_ref=""

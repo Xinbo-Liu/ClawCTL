@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Internal descriptors for extension-owned fragment loading."""
+"""提供OpenClaw 控制平面子系统的生产实现。"""
 from __future__ import annotations
 
 from .descriptors.core import (

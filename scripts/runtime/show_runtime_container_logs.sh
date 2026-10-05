@@ -83,6 +83,7 @@ if [[ ${#TARGETS[@]} -eq 0 && ${#CONTAINERS[@]} -eq 0 ]]; then
 fi
 
 if [[ ${#TARGETS[@]} -gt 0 ]]; then
+  runtime_container_load_target_registry_cache || fail '无法加载 runtime target registry'
   for target in "${TARGETS[@]}"; do
     CONTAINERS+=("$(runtime_container_name_for_target "$target")") || fail "不支持的 --target：$target"
   done

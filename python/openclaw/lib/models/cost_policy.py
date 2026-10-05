@@ -157,7 +157,6 @@ def _risk_policy(policy: dict[str, Any]) -> dict[str, Any]:
 
 
 def validate_model_cost_policy(profile_or_payload: Any) -> None:
-    """校验模型成本策略语义，补足 JSON Schema 无法表达的跨字段约束。"""
     profile_ref = _profile_ref(profile_or_payload) or "unknown"
     policy = _profile_cost_policy(profile_or_payload)
     if not policy:
@@ -267,7 +266,6 @@ def estimate_requested_model_call_cost(
     system_prompt: str | None,
     max_tokens: int | None,
 ) -> ModelCostEstimate:
-    """按请求上界估算单次调用成本，用于调用前预算闸门。"""
     validate_model_cost_policy(profile_or_payload)
     policy = _profile_cost_policy(profile_or_payload)
     estimate = _estimation(policy)
@@ -315,7 +313,6 @@ def estimate_model_response_cost(
     output_text: str,
     raw_response: dict[str, Any],
 ) -> ModelCostEstimate:
-    """按 provider usage 记录实际成本；缺失 usage 时退回字符估算并在 basis 中标明。"""
     policy = _profile_cost_policy(profile_or_payload)
     input_tokens, output_tokens = _response_usage_tokens(raw_response if isinstance(raw_response, dict) else {})
     if input_tokens or output_tokens:
@@ -342,7 +339,6 @@ def estimate_model_response_cost(
 
 
 def enforce_model_cost_budget(profile_or_payload: Any, estimate: ModelCostEstimate) -> None:
-    """按 profile 成本策略执行调用前预算闸门。"""
     validate_model_cost_policy(profile_or_payload)
     policy = _profile_cost_policy(profile_or_payload)
     budget = _budget(policy)
@@ -379,7 +375,6 @@ def enforce_model_cost_budget(profile_or_payload: Any, estimate: ModelCostEstima
 
 
 def record_model_call_cost(profile_or_payload: Any, actual: ModelCostEstimate, *, status: str) -> None:
-    """把调用成本计入 profile 当日状态文件。"""
     policy = _profile_cost_policy(profile_or_payload)
     budget = _budget(policy)
     if str(budget.get("enforcement") or "").strip() == "off" and actual.total_cost <= 0:

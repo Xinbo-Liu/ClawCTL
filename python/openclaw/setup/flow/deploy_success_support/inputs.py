@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Input loading helpers for deploy_success summary surface."""
+"""提供OpenClaw setup子系统的生产实现。"""
 from __future__ import annotations
 
 import json

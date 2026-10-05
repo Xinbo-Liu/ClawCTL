@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "minimumRegistryVersion": 7,
+  "minimumRegistryVersion": 8,
   "topLevelRequired": [
     "version",
     "defaults",
@@ -42,6 +42,10 @@
     "business_digest",
     "ops_summary",
     "validation_digest"
+  ],
+  "allowedCompletionRoles": [
+    "required",
+    "advisory"
   ],
   "allowedMessageFormats": [
     "text",
@@ -103,6 +107,7 @@
   "requiredBoundaryFields": [
     "dispatchLane",
     "payloadScope",
+    "completionRole",
     "publishLatestDefault",
     "description"
   ],
@@ -118,7 +123,8 @@
       "allowedPayloadScopes": [
         "business_digest"
       ],
-      "publishLatestDefault": true
+      "publishLatestDefault": true,
+      "completionRole": "required"
     },
     "ops": {
       "dispatchLane": "operations_monitoring",
@@ -131,7 +137,8 @@
       "allowedPayloadScopes": [
         "ops_summary"
       ],
-      "publishLatestDefault": false
+      "publishLatestDefault": false,
+      "completionRole": "required"
     },
     "test": {
       "dispatchLane": "integration_validation",
@@ -144,7 +151,8 @@
       "allowedPayloadScopes": [
         "validation_digest"
       ],
-      "publishLatestDefault": false
+      "publishLatestDefault": false,
+      "completionRole": "advisory"
     }
   },
   "requiredOwnerFields": [

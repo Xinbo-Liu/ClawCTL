@@ -19,16 +19,13 @@ source "$OPENCLAW_CONTROL_PLANE_SCHEDULER_EXEC_ROOT/scripts/runtime/runtime_targ
 source "$OPENCLAW_CONTROL_PLANE_SCHEDULER_EXEC_ROOT/scripts/runtime/runtime_compose_lib.sh"
 # shellcheck source=../runtime/runtime_docker_lib.sh
 source "$OPENCLAW_CONTROL_PLANE_SCHEDULER_EXEC_ROOT/scripts/runtime/runtime_docker_lib.sh"
-
 openclaw_scheduler_exec_fail() {
   echo "[$1][FAIL] $2" >&2
   exit "${3:-2}"
 }
-
 openclaw_scheduler_read_env_key() {
   openclaw_control_plane_read_env_key "$@"
 }
-
 openclaw_scheduler_apply_control_plane_selection_from_env_file() {
   local env_file="$1"
   local requested_config_var="$2"
@@ -42,7 +39,6 @@ openclaw_scheduler_apply_control_plane_selection_from_env_file() {
     "$explicit_profile_var" \
     "$env_label" || openclaw_scheduler_exec_fail "scheduler_service_exec" "控制面配置选择无效：$env_label" 2
 }
-
 openclaw_scheduler_resolve_container_control_plane_config_path() {
   local root_dir="$1"
   local control_plane_profile="${2:-agent_platform}"
@@ -57,7 +53,6 @@ openclaw_scheduler_resolve_container_control_plane_config_path() {
       2
   }
 }
-
 openclaw_scheduler_prepare_service_exec() {
   local root_dir="$1"
   local env_file="$2"
@@ -90,7 +85,6 @@ openclaw_scheduler_prepare_service_exec() {
     "scheduler target 未运行；当前模式 strict 不会自动启动：$service_name" \
     11
 }
-
 openclaw_scheduler_run_target_operation() {
   local root_dir="$OPENCLAW_CONTROL_PLANE_SCHEDULER_EXEC_ROOT"
   local compose_file=""
@@ -194,8 +188,8 @@ USAGE
   done
 
   root_dir="$(cd "$root_dir" && pwd)"
-  compose_file="${compose_file:-$root_dir/deploy/docker-compose.yml}"
   env_file="${env_file:-$root_dir/deploy/.env}"
+  compose_file="${compose_file:-$(runtime_compose_default_file "$root_dir" "$env_file")}"
   [[ -n "$operation" ]] || openclaw_scheduler_exec_fail "run_target_operation" '缺少 --operation' 2
   openclaw_scheduler_apply_control_plane_selection_from_env_file \
     "$env_file" \
@@ -232,17 +226,27 @@ USAGE
     cli_args+=(-- "${passthrough_args[@]}")
   fi
 
+  local -a operation_env=(
+    env
+    "OPENCLAW_CONTROL_PLANE_SERVICE_CONFIG_PATH=$container_config_path"
+    "OPENCLAW_RUNTIME_PATH_VIEW=scheduler"
+  )
+  if [[ -n "${OPENCLAW_CONTROL_PLANE_SCHEDULER_RUN_ID:-}" ]]; then
+    operation_env+=("OPENCLAW_CONTROL_PLANE_SCHEDULER_RUN_ID=$OPENCLAW_CONTROL_PLANE_SCHEDULER_RUN_ID")
+  fi
+  if [[ -n "${OPENCLAW_CONTROL_PLANE_RUN_ID:-}" ]]; then
+    operation_env+=("OPENCLAW_CONTROL_PLANE_RUN_ID=$OPENCLAW_CONTROL_PLANE_RUN_ID")
+  fi
+
   runtime_compose_exec_service \
     "$env_file" \
     "$compose_file" \
     "$service_name" \
-    env "OPENCLAW_CONTROL_PLANE_SERVICE_CONFIG_PATH=$container_config_path" \
-    "OPENCLAW_RUNTIME_PATH_VIEW=scheduler" \
+    "${operation_env[@]}" \
     /opt/openclaw-tools/scripts/runtime/container_openclaw_cli \
     "${cli_args[@]}"
   return $?
 }
-
 openclaw_scheduler_run_agent_runtime() {
   local root_dir="$OPENCLAW_CONTROL_PLANE_SCHEDULER_EXEC_ROOT"
   local compose_file=""
@@ -322,8 +326,8 @@ USAGE
   done
 
   root_dir="$(cd "$root_dir" && pwd)"
-  compose_file="${compose_file:-$root_dir/deploy/docker-compose.yml}"
   env_file="${env_file:-$root_dir/deploy/.env}"
+  compose_file="${compose_file:-$(runtime_compose_default_file "$root_dir" "$env_file")}"
   [[ -n "$agent_ref" ]] || openclaw_scheduler_exec_fail "scheduler_run_agent_runtime" '缺少 --agent-ref' 2
   openclaw_scheduler_apply_control_plane_selection_from_env_file \
     "$env_file" \

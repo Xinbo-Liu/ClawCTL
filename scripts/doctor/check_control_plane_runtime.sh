@@ -11,24 +11,33 @@ usage() {
   cat <<'USAGE'
 用法：
   bash ./scripts/doctor/check_control_plane_runtime.sh
+  bash ./scripts/doctor/check_control_plane_runtime.sh --summary-only
 
 说明：
   - 检查控制平面 registry、scheduler heartbeat 与 internal-api 控制平面只读接口是否一致可用；
+  - --summary-only 仅拉取 internal-api 控制面摘要，供 runtime evidence 生成轻量证据；
   - 脚本本体不接受业务参数；如只查看说明，请使用 --help。
 USAGE
 }
 
+SUMMARY_ONLY=0
 if [[ $# -gt 0 ]]; then
-  case "$1" in
-    -h|--help)
-      usage
-      exit 0
-      ;;
-    *)
-      echo "[check_control_plane_runtime][FAIL] 未知参数：$1" >&2
-      exit 2
-      ;;
-  esac
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --summary-only)
+        SUMMARY_ONLY=1
+        shift
+        ;;
+      -h|--help)
+        usage
+        exit 0
+        ;;
+      *)
+        echo "[check_control_plane_runtime][FAIL] 未知参数：$1" >&2
+        exit 2
+        ;;
+    esac
+  done
 fi
 
 PYTHON_TOOL="$ROOT_DIR/scripts/runtime/run_openclaw_python_tool.sh"
@@ -51,7 +60,10 @@ CONTROL_PLANE_API_CHECK_PY="$(cat <<'PY'
 from __future__ import annotations
 import json
 import os
+import socket
 import sys
+import time
+import urllib.error
 import urllib.request
 from openclaw.internal_api.contract import route_surface
 
@@ -64,6 +76,19 @@ try:
     )
 except ValueError:
     MAX_RESPONSE_BYTES = DEFAULT_MAX_RESPONSE_BYTES
+try:
+    FETCH_TIMEOUT_SECONDS = max(1, int(os.environ.get("OPENCLAW_INTERNAL_API_CHECK_TIMEOUT_SECONDS", "20") or "20"))
+except ValueError:
+    FETCH_TIMEOUT_SECONDS = 20
+try:
+    FETCH_ATTEMPTS = max(1, int(os.environ.get("OPENCLAW_INTERNAL_API_CHECK_ATTEMPTS", "3") or "3"))
+except ValueError:
+    FETCH_ATTEMPTS = 3
+try:
+    FETCH_RETRY_DELAY_SECONDS = max(0.0, float(os.environ.get("OPENCLAW_INTERNAL_API_CHECK_RETRY_DELAY_SECONDS", "2") or "2"))
+except ValueError:
+    FETCH_RETRY_DELAY_SECONDS = 2.0
+SUMMARY_ONLY = os.environ.get("OPENCLAW_CONTROL_PLANE_RUNTIME_SUMMARY_ONLY", "0").strip() == "1"
 port = os.environ.get("OPENCLAW_INTERNAL_API_PORT", "18081").strip() or "18081"
 token = os.environ.get("OPENCLAW_INTERNAL_API_TOKEN", "").strip()
 headers = {"Accept": "application/json", "Authorization": f"Bearer {token}"}
@@ -76,23 +101,46 @@ def read_limited_json(resp, path: str) -> dict:
 
 def fetch(path: str) -> dict:
     req = urllib.request.Request(f"http://127.0.0.1:{port}{path}", headers=headers)
-    with urllib.request.urlopen(req, timeout=8) as resp:
-        return read_limited_json(resp, path)
+    last_error: BaseException | None = None
+    for attempt in range(1, FETCH_ATTEMPTS + 1):
+        try:
+            with urllib.request.urlopen(req, timeout=FETCH_TIMEOUT_SECONDS) as resp:
+                return read_limited_json(resp, path)
+        except (TimeoutError, socket.timeout, urllib.error.URLError, ConnectionError) as exc:
+            last_error = exc
+            if attempt >= FETCH_ATTEMPTS:
+                break
+            print(
+                f"[check_control_plane_runtime][WARN] internal-api {path} 第 {attempt}/{FETCH_ATTEMPTS} 次请求失败：{exc}",
+                file=sys.stderr,
+            )
+            if FETCH_RETRY_DELAY_SECONDS > 0:
+                time.sleep(FETCH_RETRY_DELAY_SECONDS)
+    assert last_error is not None
+    raise last_error
 
 summary = fetch(routes["control_plane_summary"])
-jobs = fetch(routes["control_plane_jobs"])
-payload = {"summary": summary, "jobs": jobs}
+jobs = {} if SUMMARY_ONLY else fetch(routes["control_plane_jobs"])
+payload = {"summary": summary}
+if not SUMMARY_ONLY:
+    payload["jobs"] = jobs
 print(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))
 summary_scheduler = summary.get("scheduler") if isinstance(summary.get("scheduler"), dict) else {}
 counts = summary.get("counts") if isinstance(summary.get("counts"), dict) else {}
 items = jobs.get("items") if isinstance(jobs.get("items"), list) else []
 healthy = bool(summary_scheduler.get("healthy"))
-jobs_consistent = int(counts.get("jobs") or 0) == len(items)
+jobs_consistent = SUMMARY_ONLY or int(counts.get("jobs") or 0) == len(items)
 sys.exit(0 if healthy and jobs_consistent else 1)
 PY
 )"
 
-api_json="$(bash "$RUNNER" --target internal-api -- python3 -c "$CONTROL_PLANE_API_CHECK_PY"
+api_json="$(bash "$RUNNER" --target internal-api -- \
+  env \
+    "OPENCLAW_CONTROL_PLANE_RUNTIME_SUMMARY_ONLY=$SUMMARY_ONLY" \
+    "OPENCLAW_INTERNAL_API_CHECK_TIMEOUT_SECONDS=${OPENCLAW_INTERNAL_API_CHECK_TIMEOUT_SECONDS:-20}" \
+    "OPENCLAW_INTERNAL_API_CHECK_ATTEMPTS=${OPENCLAW_INTERNAL_API_CHECK_ATTEMPTS:-3}" \
+    "OPENCLAW_INTERNAL_API_CHECK_RETRY_DELAY_SECONDS=${OPENCLAW_INTERNAL_API_CHECK_RETRY_DELAY_SECONDS:-2}" \
+    python3 -c "$CONTROL_PLANE_API_CHECK_PY"
 )" || {
   echo '[check_control_plane_runtime][FAIL] internal-api 控制平面只读接口异常' >&2
   exit 4

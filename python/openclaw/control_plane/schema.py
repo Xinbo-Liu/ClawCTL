@@ -23,6 +23,7 @@ _VALIDATOR_CACHE: dict[tuple[int, str], Any] = {}
 
 
 class _BuiltinSchemaIssue:
+    """内置 JSON schema 文件问题。"""
     def __init__(self, path: list[Any], message: str) -> None:
         self.path = path
         self.message = message

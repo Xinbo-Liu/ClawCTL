@@ -12,16 +12,18 @@
 
 - deployment acceptance / runtime acceptance：[`runtime-service-reference.md`](runtime-service-reference.md)
 - 维护事实总览：[`maintenance-map.md`](maintenance-map.md)
+- 运行对象、产物策略与路径：[`runtime-artifacts-reference.md`](runtime-artifacts-reference.md)
 - 基座与扩展同步升级：[`stack-upgrade-runbook.md`](stack-upgrade-runbook.md)
 - 故障分流入口：[`troubleshooting.md`](troubleshooting.md)
 - dispatch 运维与 target 治理：[`dispatch-targets.md`](dispatch-targets.md)
+- 外部投递恢复、人工核验与现场验收：[`delivery-recovery.md`](delivery-recovery.md)
 - 安全边界说明：[`security-boundary.md`](security-boundary.md)
 
 ## 常用跳转
 
 - 配置真源、生成文档、运行服务与证据路径：[`maintenance-map.md`](maintenance-map.md)
 - Gateway runtime 合同、运行镜像来源与 acceptance 证据：[`runtime-service-reference.md`](runtime-service-reference.md)
-- 控制平面对象、artifact、调度与 dispatch 运行态路径：`agent/README.md`
+- 控制平面对象、artifact 与运行态路径：[`runtime-artifacts-reference.md`](runtime-artifacts-reference.md)
 - 基座与扩展组合升级、回滚和 stack lock：[`stack-upgrade-runbook.md`](stack-upgrade-runbook.md)
 - 部署阶段顺序与恢复执行语义：[`../getting-started/quickstart.md`](../getting-started/quickstart.md)
 - 宿主机 readiness 与 private ingress 前提：[`../getting-started/environment-setup.md`](../getting-started/environment-setup.md)
@@ -33,8 +35,9 @@
 - 需要判断某段说明应改真源还是生成物：进入 [`maintenance-map.md`](maintenance-map.md)
 - HTTPS 入口异常、Control UI 异常或部署后状态不对：进入 [`troubleshooting.md`](troubleshooting.md)
 - 需要做 dispatch 晨检、恢复、接入或治理 target：进入 [`dispatch-targets.md`](dispatch-targets.md)
+- 需要恢复正式投递、重建状态或处理未知送达：进入 [`delivery-recovery.md`](delivery-recovery.md)，再按业务扩展内部手册核对目标顺序。
 - 需要升级基座或扩展组合：进入 [`stack-upgrade-runbook.md`](stack-upgrade-runbook.md)
-- 需要看对象路径、run ledger、dispatch 观察或调度治理：进入 `agent/README.md`
+- 需要看对象路径、run ledger 或产物策略：进入 [`runtime-artifacts-reference.md`](runtime-artifacts-reference.md)；dispatch 观察进入 [`dispatch-targets.md`](dispatch-targets.md)。
 - 需要回到部署阶段顺序或 `--resume-from`：进入 [`../getting-started/quickstart.md`](../getting-started/quickstart.md)
 
 ## 下一步

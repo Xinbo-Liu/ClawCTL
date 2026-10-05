@@ -5,8 +5,8 @@
     "full_test_doc": "docs/operations/runtime-service-reference.md"
   },
   "intro": [
-    "本文档只负责统一说明 `one_click_test_full.sh` 的摘要产物、最近一次摘要固定路径、默认查看入口，以及 full test 检查组 / 检查项目录。",
-    "full test 检查组、检查项、latest summary 固定路径与 deployment acceptance 派生契约分别由 `config/runtime/testing_manifest.json` 与本文件定义。",
+    "full test 控制面提供 `one_click_test_full.sh` 的检查组 / 检查项查询、执行结果摘要和最近一次摘要的查看入口。",
+    "full test 检查组、检查项与 deployment acceptance 派生契约由 `config/runtime/testing_manifest.json` 定义；本合同声明摘要查看入口、控制面命令和使用示例。",
     "full test 最近一次 latest summary 固定路径统一由 `config/governance/release/summary_manifest.json` 管理；摘要标题与下一步分节统一来自 `config/governance/docs/summary_output_surface.json`。"
   ],
   "fixed_paths": [
@@ -29,7 +29,7 @@
   "usage_boundary": [
     "deployment acceptance required checks 的固定口径见 `docs/operations/runtime-service-reference.md`。",
     "`--group` 只接受 `all` 或可选检查组；`acceptance` 与 `process` 仅用于结果摘要中的派生契约/进程级失败，不支持直接选择。",
-    "`--only/--skip` 的检查项 id 也以本页列出的检查项目录为准。",
+    "`--only/--skip` 接受的检查项 id 通过 `full-test-surface check-ids` 查询。",
     "默认部署顺序以 `docs/getting-started/` 为准。"
   ],
   "control_plane_commands": [
@@ -71,7 +71,7 @@
         "bash ./scripts/setup/one_click_test_full.sh --group service --only compose_ps,gateway_https_root,gateway_healthz"
       ],
       "notes": [
-        "--only / --skip 使用的检查项 id 统一以本页“检查项目录”为准。"
+        "--only / --skip 使用的检查项 id 通过 full-test-surface check-ids 查询。"
       ]
     },
     {

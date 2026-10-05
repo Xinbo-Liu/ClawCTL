@@ -1,27 +1,34 @@
-# 显式扩展包目录
+# 受管扩展目录
 
-`agent/extensions/` 是主仓库内唯一允许托管受管业务扩展包的目录。
+`agent/extensions/` 是平台基座的受管扩展接入目录。扩展可按统一合同承接公共通道或具体业务能力，自行维护模块、对象、Python 实现、依赖与说明；基座提供装配、调度、诊断和验收机制。本页说明接入边界，并导航到仓内实际可用扩展。
 
-固定规则如下：
+## 接入与边界
 
-- 主仓库默认运行面固定为 `base` 与 `agent_platform`。
-- 放在 `agent/extensions/<extension-id>/` 下的扩展包必须保持自包含边界，不得拆回主仓库正式面。
-- [index.json](index.json) 和 `config/control_plane/profile_registry.tsv` 是显式登记真源；未登记目录可以通过严格自动发现进入可选 profile，显式登记优先于发现冲突，不要求所有接入项目同时登记。
-- 受控组合 profile 还必须登记在 `config/control_plane/repo_combination_profiles.json`，由该文件声明组合 service 路径、精确启用的 extension 集合、manifest 目录和允许共享的 deploy env 字段。
-- `profile_registry.tsv` 只能使用合同 profile 路径：`base`、`agent_platform`、受控组合 profile 与 `<extension-id>` 不能互相别名到其他 service。
-- 未登记目录只有在自带 `<extension-id>.service.json`、`<extension-id>.json`、扩展内 Python root，并通过启用集合、manifest 目录与路径边界校验后，才补充为可选 `--control-plane-profile <extension-id>`。
-- 显式登记的默认 service 与自动发现 service 只能启用 `agent_platform` 与自身 `<extension-id>`，只能加载平台 manifest 目录与自身 manifest 目录；扩展贡献的 registry 文件、surfaceFragments 与 governanceSurfaces 必须留在扩展根目录内。
-- 任意启用非平台 extension 的 service 都必须先启用 `agent_platform`；多扩展组合 profile 只接受仓内合同 manifest 目录。当前基座发布面不登记业务组合 profile。
-- extension manifest 必须位于 `agent/extensions/<extension-id>/config/control_plane/extensions.d/<extension-id>.json`；任何可见且带 `id` 的 manifest、`index.json` 与布尔字段都采用严格字段合同，未知字段、非合同别名或字符串布尔值都会使接入无效。
-- 非平台 extension 在 manifest 中暴露的 `jobRunners`、`cliCommands`、`internalApiRoutes`、`readyChecks` 与声明回调必须来自自身 `python/<package>`，不能借用平台或其他扩展包的 Python 模块。
-- 无效目录和显式登记冲突只进入 `control-plane config profiles --format json` 诊断输出，不进入可选 profile 列表。
-- 受管扩展可以通过 `--control-plane-profile` 接入，也可以显式传入仓内合同 service 的 `--config-path`；目录存在本身不等于进入默认运行面。
-- 扩展包共享对象的 `activation.enabledExtensionIds` 必须且只能等于自身 `<extension-id>`，不能把其他扩展 ID 混入自身 owner 对象。
-- 扩展有外部 Python runtime 依赖时，`requirements.lock` 与 `offline_wheelhouse/` 共同作为仓内离线依赖真源；部署时先同步 runtime wheelhouse，再生成扩展 venv。
+- 默认运行面为 `base + agent_platform`。仓内存在扩展不代表默认启用，运行组合由所选 profile 或仓内合同 service 决定。
+- 扩展根固定为 `agent/extensions/<extension-id>/`。扩展贡献的 registry、surface、对象和实现保留在自身 owner 根目录内。
+- 默认扩展 service 启用 `agent_platform`、自身及递归 required dependencies，并加载这些 owner 的合同 manifest 目录；optional dependencies 不进入默认启用集合。
+- 组合 profile 通过 [组合登记](../../config/control_plane/repo_combination_profiles.json) 精确声明启用集合和共享部署输入，不改变各扩展对象的 owner。
+- 模块资产与测试按 [模块治理](../governance/module-governance.md) 维护；扩展最小结构、自动发现、manifest 字段和 callable 边界以 [扩展挂载指南](../../docs/architecture/explicit-extension-packages.md) 为准。
+- 有外部 Python runtime 依赖时，以 `requirements.lock` 和 `offline_wheelhouse/` 提供匹配的离线真源，部署时同步 wheelhouse 并准备 venv。
 
-仓内显式扩展包统一复用：
+## 仓内扩展
 
-- `agent/extensions/<extension-id>/`
-- `agent/extensions/index.json`
+下表依据 [扩展索引](index.json) 的受管登记与有效扩展目录自动发现结果生成。具体价值、配置与验收按各扩展 README 阅读；正式运行入口和组合分别见 [profile registry](../../config/control_plane/profile_registry.tsv) 与 [组合登记](../../config/control_plane/repo_combination_profiles.json)。
 
-不要在 `agent/modules/`、`config/control_plane/profiles/` 或 `python/openclaw/extensions/` 下重新引入业务扩展真源。
+<!-- BEGIN managed-extension-index -->
+
+| 扩展 ID | 名称 | 包内说明 |
+|---------|------|----------|
+
+当前仓库没有可列出的受管扩展。
+
+<!-- END managed-extension-index -->
+
+## 真源与操作
+
+- [index.json](index.json)：显式登记 owner、扩展根、service、manifest 目录和 Python root。
+- [profile registry](../../config/control_plane/profile_registry.tsv)：把正式 profile 映射到唯一 service；有效自动发现结果补充可选 profile。
+- `control-plane config profiles --format json`：查看可选 profile 与无效目录、登记冲突的诊断。
+- `--control-plane-profile <id>` 或仓内合同 service 的 `--config-path`：显式选择运行组合。
+- [Agent 治理目录](../README.md)：治理规则与唯一真源。
+- [Stack 升级手册](../../docs/operations/stack-upgrade-runbook.md)：组合锁定、升级和回滚。

@@ -14,13 +14,26 @@ unset OPENCLAW_CONTROL_PLANE_CONFIG_PATHS_LIB_DIR
 OPENCLAW_CONTROL_PLANE_DEFAULT_PROFILE_ID='agent_platform'
 OPENCLAW_CONTROL_PLANE_CONTAINER_REPO_ROOT='/opt/openclaw-tools'
 
+# 职责：判断当前 shell 是否已经位于运行容器内，避免容器内解析再次绕回宿主 Docker runner。
+openclaw_control_plane_in_runtime_container() {
+  [[ -f /.dockerenv ]] || \
+    [[ "${OPENCLAW_PYTHON_CONTAINER_IN_CONTAINER:-0}" == "1" ]] || \
+    [[ "${OPENCLAW_STATIC_PYTHON_IN_CONTAINER:-0}" == "1" ]]
+}
+
+# 职责：返回运行容器内的 Python 包装器路径；该入口只在容器内可执行。
+openclaw_control_plane_container_python_path() {
+  local container_python="${OPENCLAW_CONTROL_PLANE_CONTAINER_PYTHON:-$OPENCLAW_CONTROL_PLANE_CONTAINER_REPO_ROOT/scripts/runtime/container_python}"
+  [[ -x "$container_python" ]] || return 1
+  printf '%s\n' "$container_python"
+}
 openclaw_control_plane_is_windows_abs_path() {
   local value="$1"
   [[ "$value" =~ ^[A-Za-z]:[\\/].* ]]
 }
-
 openclaw_control_plane_surface() {
   local proxy_python="${OPENCLAW_CONTROL_PLANE_CONFIG_PROXY_PYTHON:-}"
+  local container_python=''
   local registry_override="${OPENCLAW_CONTROL_PLANE_PROFILE_REGISTRY_PATH:-}"
   local public_config_path="${OPENCLAW_CONTROL_PLANE_SERVICE_CONFIG_PATH:-}"
   local public_profile="${OPENCLAW_CONTROL_PLANE_PROFILE:-}"
@@ -46,6 +59,14 @@ openclaw_control_plane_surface() {
     )
     return $?
   fi
+  if openclaw_control_plane_in_runtime_container && container_python="$(openclaw_control_plane_container_python_path)"; then
+    (
+      cd "$OPENCLAW_CONTROL_PLANE_CONFIG_PATHS_ROOT" && \
+      env "${forwarded_env[@]+"${forwarded_env[@]}"}" \
+      "$container_python" -m openclaw.lib.repo.control_plane_config_surface "$@" --repo-root "$OPENCLAW_CONTROL_PLANE_CONFIG_PATHS_ROOT"
+    )
+    return $?
+  fi
   local -a runner=(
     bash "$OPENCLAW_CONTROL_PLANE_CONFIG_PATHS_ROOT/scripts/runtime/run_python_container.sh"
     --workdir "$OPENCLAW_CONTROL_PLANE_CONFIG_PATHS_ROOT" \
@@ -59,7 +80,6 @@ openclaw_control_plane_surface() {
   runner+=(-- -m openclaw.lib.repo.control_plane_config_surface "$@" --repo-root "$OPENCLAW_CONTROL_PLANE_CONFIG_PATHS_ROOT")
   "${runner[@]}"
 }
-
 openclaw_control_plane_selected_host_path() {
   local requested_path="${1:-}"
   if [[ -n "$requested_path" ]]; then
@@ -72,7 +92,6 @@ openclaw_control_plane_selected_host_path() {
   fi
   return 1
 }
-
 openclaw_control_plane_selected_profile_id() {
   if [[ -n "${OPENCLAW_CONTROL_PLANE_PROFILE:-}" ]]; then
     printf '%s\n' "$OPENCLAW_CONTROL_PLANE_PROFILE"
@@ -80,7 +99,6 @@ openclaw_control_plane_selected_profile_id() {
   fi
   return 1
 }
-
 openclaw_control_plane_read_env_key() {
   local env_file="$1"
   local expected_key="$2"
@@ -115,7 +133,6 @@ openclaw_control_plane_read_env_key() {
   done < "$env_file"
   return 1
 }
-
 openclaw_control_plane_validate_env_file_selection() {
   local env_file="$1"
   local env_label="${2:-$env_file}"
@@ -139,7 +156,6 @@ openclaw_control_plane_validate_env_file_selection() {
     fi
   fi
 }
-
 openclaw_control_plane_apply_selection_from_env_file() {
   local env_file="$1"
   local requested_config_var="$2"
@@ -160,7 +176,6 @@ openclaw_control_plane_apply_selection_from_env_file() {
     printf -v "$explicit_profile_var" '%s' 1
   fi
 }
-
 openclaw_control_plane_apply_default_selection_from_env_files() {
   local requested_config_var="$1"
   local profile_var="$2"
@@ -185,7 +200,6 @@ openclaw_control_plane_apply_default_selection_from_env_files() {
     return 0
   done
 }
-
 openclaw_control_plane_apply_env_file_active_selection() {
   # Active 部署入口以 env 文件为准，避免调用者环境中的 ambient profile 抢占
   # deploy/.env。显式 --config-path 仍保留调用者路径，但 env 文件自身必须可解析且自洽。
@@ -213,17 +227,14 @@ openclaw_control_plane_apply_env_file_active_selection() {
     printf -v "$explicit_profile_var" '%s' 1
   fi
 }
-
 openclaw_control_plane_profile_config_path() {
   local profile_id="${1:-$OPENCLAW_CONTROL_PLANE_DEFAULT_PROFILE_ID}"
   openclaw_control_plane_surface host-path --control-plane-profile "$profile_id"
 }
-
 openclaw_control_plane_profile_id_for_path() {
   local requested_path="${1:?requested_path is required}"
   openclaw_control_plane_surface profile-id --config-path "$requested_path"
 }
-
 openclaw_control_plane_assert_public_selection_consistent() {
   local selected_path="${1:-}"
   local selected_profile="${OPENCLAW_CONTROL_PLANE_PROFILE:-}"
@@ -237,12 +248,10 @@ openclaw_control_plane_assert_public_selection_consistent() {
     return 2
   fi
 }
-
 openclaw_control_plane_agent_config_path() {
   local agent_ref="${1:?agent_ref is required}"
   openclaw_control_plane_surface agent-host-path --agent-ref "$agent_ref"
 }
-
 openclaw_control_plane_normalize_host_config_path() {
   local selected_path="${1:?selected_path is required}"
   local selected_dir='' selected_base='' normalized_path=''
@@ -271,7 +280,6 @@ openclaw_control_plane_normalize_host_config_path() {
   esac
   openclaw_control_plane_surface host-path --config-path "$selected_path"
 }
-
 openclaw_control_plane_resolve_config_path() {
   local profile_id="${1:-$OPENCLAW_CONTROL_PLANE_DEFAULT_PROFILE_ID}"
   local requested_path="${2:-}"
@@ -296,7 +304,6 @@ openclaw_control_plane_resolve_config_path() {
   fi
   openclaw_control_plane_surface host-path --control-plane-profile "$profile_id"
 }
-
 openclaw_control_plane_container_profile_config_path() {
   local profile_id="${1:-$OPENCLAW_CONTROL_PLANE_DEFAULT_PROFILE_ID}"
   local selected_path='' selected_profile=''
@@ -315,7 +322,6 @@ openclaw_control_plane_container_profile_config_path() {
   fi
   openclaw_control_plane_surface container-path --control-plane-profile "$profile_id"
 }
-
 openclaw_control_plane_container_config_path() {
   local profile_id="${1:-$OPENCLAW_CONTROL_PLANE_DEFAULT_PROFILE_ID}"
   local requested_path="${2:-}"
@@ -339,7 +345,6 @@ openclaw_control_plane_container_config_path() {
   fi
   openclaw_control_plane_surface container-path --control-plane-profile "$profile_id"
 }
-
 openclaw_control_plane_profile_id() {
   local profile_id="${1:-$OPENCLAW_CONTROL_PLANE_DEFAULT_PROFILE_ID}"
   local requested_path="${2:-}"
@@ -360,7 +365,6 @@ openclaw_control_plane_profile_id() {
   printf '%s\n' "$profile_id"
   return 0
 }
-
 openclaw_control_plane_has_explicit_selection() {
   local arg=''
   for arg in "$@"; do
@@ -372,7 +376,6 @@ openclaw_control_plane_has_explicit_selection() {
   done
   return 1
 }
-
 openclaw_control_plane_wrapper_args() {
   local default_profile="${1:-$OPENCLAW_CONTROL_PLANE_DEFAULT_PROFILE_ID}"
   shift || true

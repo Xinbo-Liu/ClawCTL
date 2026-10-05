@@ -10,7 +10,6 @@ unset __openclaw_script_dir
 TARGET_FILE="$ROOT_DIR/deploy/site.env"
 EXAMPLE_FILE="$ROOT_DIR/deploy/site.env.example"
 INIT_FROM_EXAMPLE=0
-
 print_help() {
   cat <<'HELP'
 用法：
@@ -30,7 +29,7 @@ print_help() {
   bash ./scripts/setup/apply_site_env_values.sh \
     --file deploy/site.env \
     --init-from-example \
-    --set OPENCLAW_INGRESS_ALLOWED_SOURCE_CIDRS=<目标机实际看到的来源网段 CIDR，逗号分隔> \
+    --set OPENCLAW_INGRESS_ALLOWED_SOURCE_CIDRS=<目标机或上游记录实际观测来源 CIDR，逗号分隔> \
     --from-env OPENCLAW_INGRESS_LISTEN_IP \
     --from-env OPENCLAW_TLS_CN \
     --set OPENCLAW_TLS_MODE=self_signed \
@@ -39,24 +38,20 @@ print_help() {
   # 如启用扩展额外要求业务密钥或 provider/API 入口，按对应扩展说明写入 agent/extensions/<extension-id>/deploy/extension.env。
 HELP
 }
-
 fail() {
   echo "[apply_site_env_values][FAIL] $*" >&2
   exit 2
 }
-
 require_value() {
   local flag="$1"
   local value="${2-}"
   [[ -n "$value" ]] || fail "$flag 缺少参数"
 }
-
 validate_key() {
   local key="$1"
   [[ "$key" =~ ^[A-Z0-9_]+$ ]] || fail "非法键名：$key；仅允许大写字母、数字与下划线"
 }
-
-normalize_repo_controlled_path() {
+normalize_repo_managed_path() {
   local raw_path="$1"
   raw_path="${raw_path#./}"
   if [[ "$raw_path" == "$ROOT_DIR/"* ]]; then
@@ -64,12 +59,11 @@ normalize_repo_controlled_path() {
   fi
   printf '%s\n' "$raw_path"
 }
-
 resolve_allowed_path() {
   local flag="$1"
   local raw_path="$2"
   local normalized=''
-  normalized="$(normalize_repo_controlled_path "$raw_path")"
+  normalized="$(normalize_repo_managed_path "$raw_path")"
   case "$flag:$normalized" in
     --file:deploy/site.env)
       printf '%s\n' "$ROOT_DIR/deploy/site.env"

@@ -10,7 +10,7 @@ group 成员归属的正式真源固定为：
 - 成员进入 / 退出条件
 - access log 中的 `agentGroupRefs`
 
-`agent/extensions/<extension-id>/agent/modules/<agent_ref>/module.json` 之外的任何 agent 快照或附属 JSON 都不得再维护 `groupRefs`。
+`agent/extensions/<extension-id>/agent/modules/<agent_ref>/module.json` 与其他 agent 快照或附属 JSON 均不得维护静态 `groupRefs`。
 
 ## 规则
 
@@ -29,6 +29,6 @@ group 成员归属的正式真源固定为：
 
 ## 禁止项
 
-1. 在 `agent/extensions/<extension-id>/agent/modules/<agent_ref>/module.json` 重新新增 `governance.groupRefs`。
-2. 在任何额外 agent 快照中重新新增 `governance.groupRefs`。
+1. 在 `agent/extensions/<extension-id>/agent/modules/<agent_ref>/module.json` 声明静态 `governance.groupRefs`。
+2. 在任何额外 agent 快照中声明静态 `governance.groupRefs`。
 3. 在 job 中回写静态成员归属主定义。

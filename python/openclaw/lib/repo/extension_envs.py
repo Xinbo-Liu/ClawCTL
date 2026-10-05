@@ -67,15 +67,31 @@ _PRESERVED_ENV_KEYS = {
     'WINDIR',
 }
 _CONTROL_ENV_KEYS = {
+    'OPENCLAW_AGENT_CALL_SOURCE',
+    'OPENCLAW_AGENT_CALLER',
     'OPENCLAW_AGENT_MODEL_MODE',
+    'OPENCLAW_CONTROL_PLANE_BUSINESS_RUN_ID',
+    'OPENCLAW_CONTROL_PLANE_GROUP_REF',
+    'OPENCLAW_CONTROL_PLANE_JOB_ID',
+    'OPENCLAW_CONTROL_PLANE_LOCAL_JOB_ID',
     'OPENCLAW_CONTROL_PLANE_MODEL_PROFILE_REF',
+    'OPENCLAW_CONTROL_PLANE_OPERATOR_ID',
+    'OPENCLAW_CONTROL_PLANE_OPERATOR_REASON',
+    'OPENCLAW_CONTROL_PLANE_OUTCOME_PATH',
     'OPENCLAW_CONTROL_PLANE_PROFILE',
+    'OPENCLAW_CONTROL_PLANE_RECOVERY_OF_RUN_ID',
+    'OPENCLAW_CONTROL_PLANE_RUN_ID',
+    'OPENCLAW_CONTROL_PLANE_SCHEDULER_RUN_ID',
     'OPENCLAW_CONTROL_PLANE_SERVICE_CONFIG_PATH',
+    'OPENCLAW_CONTROL_PLANE_TARGET_BINDING_REF',
+    'OPENCLAW_CONTROL_PLANE_TRIGGER',
     'OPENCLAW_INTERNAL_API_TOKEN',
     'OPENCLAW_REPO_ROOT',
     'OPENCLAW_RUNTIME_PATH_VIEW',
+    'OPENCLAW_RUNTIME_WORKSPACE_ROOT',
     'OPENCLAW_STATE_DIR',
     'OPENCLAW_TOOLS_ROOT',
+    'OPENCLAW_WORKSPACE_ROOT',
 }
 _PYTHON_ENV_CLEAN_KEYS = {'PYTHONPATH', 'PYTHONHOME', 'PYTHONUSERBASE', 'VIRTUAL_ENV', 'PIP_REQUIRE_VIRTUALENV'}
 _MANIFEST_RUNTIME_VIEWS = ('host', 'scheduler')
@@ -126,7 +142,6 @@ class RepoWheelRecord:
     size: int
 
     def to_json(self) -> dict[str, Any]:
-        """返回 wheel 文件的可序列化摘要，不暴露本地绝对路径。"""
         return {
             'filename': self.filename,
             'package': self.package,
@@ -153,7 +168,6 @@ class ExtensionEnvStatus:
     manifest: dict[str, Any] | None
 
     def to_json(self) -> dict[str, Any]:
-        """返回扩展 venv 状态 JSON，供 doctor、CLI 和 release evidence 消费。"""
         return {
             'extensionId': self.extension_id,
             'ok': self.ok,
@@ -303,17 +317,14 @@ def _parse_wheel_record(path: Path) -> RepoWheelRecord:
 
 
 def runtime_python_tag() -> str:
-    """返回当前解释器的稳定 Python 标签，参与扩展 venv 目录名计算。"""
     return _slug(str(getattr(sys.implementation, 'cache_tag', '') or f'py{sys.version_info.major}{sys.version_info.minor}'))
 
 
 def runtime_platform_tag() -> str:
-    """返回当前操作系统和架构标签，参与扩展 venv 目录名计算。"""
     return _slug(f'{platform.system()}-{platform.machine()}')
 
 
 def dependency_snapshot(row: ManagedExtensionRow) -> ExtensionDependencySnapshot:
-    """基于扩展 pyproject 与 requirements.lock 生成依赖快照和内容 hash。"""
     pyproject_path = (row.root_dir / 'pyproject.toml').resolve()
     lock_path = (row.root_dir / LOCK_FILE_NAME).resolve()
     pyproject_hash = _file_sha256(pyproject_path)
@@ -520,7 +531,6 @@ def extension_envs_dir(
     config_path: str | Path | None = None,
     env: Mapping[str, str] | None = None,
 ) -> Path:
-    """解析扩展 venv 根目录；repo_root 是仓库根，config_path/env 决定 host 或 scheduler 视角。"""
     return _resolve_extension_state_path('extension_envs_dir', repo_root=repo_root, config_path=config_path, env=env)
 
 
@@ -530,27 +540,22 @@ def extension_wheelhouse_dir(
     config_path: str | Path | None = None,
     env: Mapping[str, str] | None = None,
 ) -> Path:
-    """解析运行态扩展 wheelhouse 根目录，用于部署链同步离线依赖。"""
     return _resolve_extension_state_path('extension_wheelhouse_dir', repo_root=repo_root, config_path=config_path, env=env)
 
 
 def extension_repo_wheelhouse_dir(row: ManagedExtensionRow) -> Path:
-    """返回扩展仓库内随代码提交的 offline_wheelhouse 目录。"""
     return (row.root_dir / REPO_WHEELHOUSE_DIR_NAME).resolve()
 
 
 def extension_active_manifest_path(row: ManagedExtensionRow, *, envs_dir: Path) -> Path:
-    """返回指定扩展当前 active manifest 路径。"""
     return (envs_dir / row.id / ACTIVE_MANIFEST_NAME).resolve()
 
 
 def extension_env_path(row: ManagedExtensionRow, snapshot: ExtensionDependencySnapshot, *, envs_dir: Path) -> Path:
-    """按依赖快照派生指定扩展的不可变 venv 路径。"""
     return (envs_dir / row.id / snapshot.env_dir_name).resolve()
 
 
 def extension_python_executable(env_path: Path) -> Path:
-    """返回扩展 venv 内 Python 可执行文件路径，兼容 Windows 与 POSIX 布局。"""
     if os.name == 'nt':
         return (env_path / 'Scripts' / 'python.exe').resolve()
     return (env_path / 'bin' / 'python').resolve()
@@ -564,7 +569,6 @@ def _manifest_runtime_path_views(
     config_path: str | Path | None,
     env: Mapping[str, str] | None,
 ) -> dict[str, dict[str, str]]:
-    """生成 active manifest 的多运行视角路径，避免 host/scheduler 互相覆盖。"""
     result: dict[str, dict[str, str]] = {}
     for view in _MANIFEST_RUNTIME_VIEWS:
         view_env = _env_for_runtime_view(env, view)
@@ -735,7 +739,6 @@ def extension_env_status(
     config_path: str | Path | None = None,
     env: Mapping[str, str] | None = None,
 ) -> ExtensionEnvStatus:
-    """检查扩展 venv 是否存在、manifest 是否匹配当前依赖快照、Python 是否可执行。"""
     runtime_view = _runtime_view(env)
     envs_dir = extension_envs_dir(repo_root=repo_root, config_path=config_path, env=env)
     wheelhouse_dir = extension_wheelhouse_dir(repo_root=repo_root, config_path=config_path, env=env)
@@ -856,7 +859,6 @@ def _repo_wheelhouse_manifest_issues(
 
 
 def validate_extension_repo_wheelhouse(row: ManagedExtensionRow) -> dict[str, Any]:
-    """校验扩展仓库内离线 wheelhouse 与 requirements.lock 的包名、版本和 hash 一致。"""
     snapshot = dependency_snapshot(row)
     if not snapshot.lock_present:
         raise ExtensionEnvError(f'{row.id} 缺少 {LOCK_FILE_NAME}：{snapshot.lock_path}')
@@ -933,7 +935,6 @@ def sync_extension_wheelhouse(
     env: Mapping[str, str] | None = None,
     clean: bool = True,
 ) -> dict[str, Any]:
-    """把扩展仓库 offline_wheelhouse 同步到运行态目录，并按 clean 参数清理失效文件。"""
     validation = validate_extension_repo_wheelhouse(row)
     source_dir = extension_repo_wheelhouse_dir(row)
     runtime_root = extension_wheelhouse_dir(repo_root=repo_root, config_path=config_path, env=env)
@@ -994,7 +995,6 @@ def ensure_extension_env(
     allow_online: bool = False,
     clean_wheelhouse: bool = True,
 ) -> dict[str, Any]:
-    """同步扩展离线 wheelhouse、准备 venv，并返回最终校验结果。"""
     sync_result = sync_extension_wheelhouse(
         row,
         repo_root=repo_root,
@@ -1069,7 +1069,6 @@ def prepare_extension_env(
     offline: bool = True,
     allow_online: bool = False,
 ) -> dict[str, Any]:
-    """创建或复用扩展 venv；offline 为真时只允许从运行态 wheelhouse 安装依赖。"""
     if offline and allow_online:
         raise ExtensionEnvError('--offline 与 --allow-online 不能同时使用')
     install_offline = not allow_online
@@ -1160,7 +1159,6 @@ def prune_extension_envs(
     env: Mapping[str, str] | None = None,
     keep: int = 2,
 ) -> dict[str, Any]:
-    """清理扩展历史 venv，只保留 active manifest 引用和最近 keep 个候选目录。"""
     envs_dir = extension_envs_dir(repo_root=repo_root, config_path=config_path, env=env)
     extension_root = (envs_dir / row.id).resolve()
     active_paths: set[Path] = set()
@@ -1201,7 +1199,6 @@ def select_extension_rows(
     include_enabled: bool = False,
     config_path: str | Path | None = None,
 ) -> tuple[ManagedExtensionRow, ...]:
-    """按 extension_id、include_all、include_enabled 或默认 profile 推断要处理的受管扩展。"""
     normalized_id = str(extension_id or '').strip()
     selected_count = sum(1 for selected in (bool(normalized_id), bool(include_all), bool(include_enabled)) if selected)
     if selected_count > 1:
@@ -1234,7 +1231,6 @@ def select_extension_rows(
 
 
 def managed_extension_for_runtime_agent_ref(agent_ref: str, *, repo_root: Path) -> ManagedExtensionRow | None:
-    """根据 agent ref 推断其所属受管扩展；base 或未知引用返回 None。"""
     normalized = str(agent_ref or '').strip()
     if not normalized:
         return None
@@ -1257,7 +1253,6 @@ def extension_env_for_agent_runtime(
     config_path: str | Path | None = None,
     env: Mapping[str, str] | None = None,
 ) -> PreparedExtensionEnv | None:
-    """为 agent runtime 查找已准备好的扩展 venv；未就绪时给出唯一 ensure 命令。"""
     row = managed_extension_for_runtime_agent_ref(agent_ref, repo_root=repo_root)
     if row is None:
         return None
@@ -1287,13 +1282,12 @@ def build_extension_subprocess_env(
     base_env: Mapping[str, str] | None = None,
     config_path: str | Path | None = None,
 ) -> dict[str, str]:
-    """构造扩展子进程环境，清理宿主机 Python 变量并注入扩展 venv、PYTHONPATH 与控制面变量。"""
     source_env = dict(os.environ if base_env is None else base_env)
     env = _extension_subprocess_source_env(source_env, repo_root=repo_root, config_path=config_path)
     for key in _PYTHON_ENV_CLEAN_KEYS:
         _remove_env_key_casefold(env, key)
     env.update(bootstrap_env_defaults(repo_root))
-    path_entries = [*prepared.row.python_roots, *bootstrap_path_entries(repo_root, config_path=None)]
+    path_entries = [*prepared.row.python_roots, *bootstrap_path_entries(repo_root, config_path=config_path)]
     seen: set[str] = set()
     normalized: list[str] = []
     for entry in path_entries:

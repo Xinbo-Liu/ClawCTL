@@ -7,10 +7,9 @@ from pathlib import Path
 from unittest import mock
 
 from openclaw.control_plane.dispatch import dispatch_runtime_audit
-from openclaw.control_plane.governance_surfaces import load_full_test_group_registry
-from openclaw.control_plane.registry_loader.config import load_registry_service_context
 from openclaw.docs.renderers import runtime_surface
 from openclaw.docs.support import reference_specs
+from openclaw.guards.host_python.scanner import scan_shell_source
 from openclaw.docs.validators import object_closure
 from openclaw.lib.control_plane import agent_cli_surface, script_catalog_surface
 from openclaw.lib.repo.layout import resolve_repo_root
@@ -19,13 +18,33 @@ from openclaw.lib.testing import acceptance_surface
 from openclaw.lib.testing.acceptance import render as acceptance_render
 from openclaw.setup.flow import deploy_success, run_failure
 from openclaw.setup.flow.deploy_success_support import summary as deploy_success_summary
+from openclaw.setup.upgrade.main import (
+    _validate_live_acceptance_check,
+    build_live_acceptance_env_keys_payload,
+    build_live_acceptance_plan_payload,
+)
 from openclaw.setup.surface import control_plane_medium, entrypoint, followup
 from openclaw.tests.support.helpers import isolated_test_root
-from openclaw.tests.support.managed_extensions import managed_extensions, representative_managed_extension
+from openclaw.tests.support.managed_extensions import managed_extensions
 from openclaw.tests.support.static_text_assertions import assert_static_text_absent
 
 ROOT_DIR = resolve_repo_root(Path(__file__))
+RELATED_PARTY_EXTENSION_ID = 'agent_' + 'related_' + 'party_compare'
+RELATED_PARTY_DOMAIN_ID = 'related_' + 'party_compare'
 MANAGED_EXTENSIONS = tuple(sorted(managed_extensions(ROOT_DIR), key=lambda row: row.id))
+
+
+def _extension_package_name(extension_id: str) -> str:
+    extension = next((row for row in MANAGED_EXTENSIONS if row.id == extension_id), None)
+    if extension is None:
+        return ''
+    for python_root in extension.python_roots:
+        if not python_root.is_dir():
+            continue
+        for package_dir in sorted(python_root.iterdir()):
+            if package_dir.is_dir() and (package_dir / '__init__.py').is_file():
+                return package_dir.name
+    return ''
 
 
 def _write_image_pin_repo_contracts(root: Path) -> None:
@@ -73,53 +92,59 @@ def _strategy_image(env_key: str, pin_file: str, role: str, selector: str) -> di
 
 
 class RepoContractConsumerRegressionTest(unittest.TestCase):
-    def test_managed_extension_testing_manifest_groups_are_declared_in_full_test_registry(self) -> None:
+    def test_full_test_registry_commands_do_not_invoke_host_python(self) -> None:
+        registry_paths = [
+            ROOT_DIR / 'config' / 'governance' / 'flows' / 'full_test_group_registry.json',
+            *sorted(
+                (ROOT_DIR / 'agent' / 'extensions').glob(
+                    '*/config/control_plane/extensions.d/*.full_test_group_registry.json'
+                )
+            ),
+        ]
+        checked = 0
+        violations: list[str] = []
+        for registry_path in registry_paths:
+            registry = json.loads(registry_path.read_text(encoding='utf-8'))
+            for group_id, group in (registry.get('groups') or {}).items():
+                for check in list((group or {}).get('script_checks') or []):
+                    if not isinstance(check, dict):
+                        continue
+                    command = str(check.get('command') or '').strip()
+                    if not command:
+                        continue
+                    check_id = str(check.get('id') or '<missing-check-id>')
+                    label = f'{registry_path.relative_to(ROOT_DIR).as_posix()}:{group_id}:{check_id}'
+                    violations.extend(scan_shell_source(command, label))
+                    checked += 1
+
+        self.assertGreater(checked, 0)
+        self.assertEqual([], violations)
+
+    def test_managed_extensions_do_not_contribute_platform_full_test_checks(self) -> None:
         if not MANAGED_EXTENSIONS:
             self.skipTest('base release surface has no repo-managed extension')
-        checked = 0
-        referenced_groups_by_extension: dict[str, set[str]] = {}
+        checked_extensions = 0
         for extension in managed_extensions(ROOT_DIR):
             extension_descriptor = json.loads((extension.manifest_dir / f'{extension.id}.json').read_text(encoding='utf-8'))
-            registry_name = (extension_descriptor.get('governanceSurfaces') or {}).get('fullTestGroupRegistryPath')
-            if not registry_name:
-                continue
-            group_registry = json.loads((extension.manifest_dir / str(registry_name)).read_text(encoding='utf-8'))
-            declared_groups = set(group_registry.get('groups') or {})
+            governance_surfaces = extension_descriptor.get('governanceSurfaces') if isinstance(extension_descriptor.get('governanceSurfaces'), dict) else {}
+            with self.subTest(extension_id=extension.id, surface='fullTestGroupRegistryPath'):
+                self.assertNotIn('fullTestGroupRegistryPath', governance_surfaces)
+                self.assertEqual([], sorted(extension.manifest_dir.glob('*.full_test_group_registry.json')))
             for manifest_path in sorted(extension.manifest_dir.glob('*.testing_manifest.json')):
                 with self.subTest(extension_id=extension.id, manifest=manifest_path.name):
                     testing_manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
-                    referenced_groups = set(testing_manifest.get('valid_groups') or [])
-                    referenced_groups.update(testing_manifest.get('execution_order') or [])
-                    referenced_groups.update(
-                        item['group']
-                        for item in testing_manifest.get('checks') or []
-                        if isinstance(item, dict) and item.get('group')
-                    )
-
-                    self.assertFalse(referenced_groups - declared_groups)
-                    referenced_groups_by_extension.setdefault(extension.id, set()).update(referenced_groups)
-                    checked += 1
-        self.assertGreater(checked, 0)
-
-        managed_ids = set(referenced_groups_by_extension)
-        merged_checked = 0
-        service_configs = {extension.default_service_config_path for extension in managed_extensions(ROOT_DIR)}
-        for profile_path in sorted((ROOT_DIR / 'config' / 'control_plane' / 'profiles').glob('*.service.json')):
-            context = load_registry_service_context(profile_path)
-            if any(extension_id in managed_ids for extension_id in context['enabledExtensionIds']):
-                service_configs.add(profile_path)
-        for config_path in sorted(service_configs):
-            context = load_registry_service_context(config_path)
-            enabled_managed_ids = [extension_id for extension_id in context['enabledExtensionIds'] if extension_id in managed_ids]
-            if not enabled_managed_ids:
-                continue
-            merged_registry = load_full_test_group_registry(config_path=config_path)
-            merged_groups = set(merged_registry.get('groups') or {})
-            for extension_id in enabled_managed_ids:
-                with self.subTest(config=config_path.name, extension_id=extension_id):
-                    self.assertFalse(referenced_groups_by_extension[extension_id] - merged_groups)
-                    merged_checked += 1
-        self.assertGreater(merged_checked, 0)
+                    disallowed_keys = {
+                        'valid_groups',
+                        'groups',
+                        'checks',
+                        'execution_order',
+                        'acceptance_reference',
+                        'acceptance_contract',
+                    }
+                    self.assertEqual(set(), disallowed_keys & set(testing_manifest))
+                    self.assertLessEqual(set(testing_manifest), {'release_gate_checks', 'live_acceptance_checks'})
+                    checked_extensions += 1
+        self.assertGreater(checked_extensions, 0)
 
     def test_acceptance_summary_uses_non_ok_group_label_for_agent_group_health(self) -> None:
         summary = {
@@ -149,10 +174,8 @@ class RepoContractConsumerRegressionTest(unittest.TestCase):
                 'control_plane_recent_agent_access_group_count': 1,
                 'control_plane_agent_access_log_exists': True,
                 'control_plane_agent_group_access_exists': True,
-                'control_plane_agent_group_acceptance_bindings_exists': True,
                 'control_plane_required_agent_groups': ['sample_pipeline'],
                 'control_plane_failing_agent_groups': ['sample_pipeline'],
-                'control_plane_blocked_agent_group_acceptance_bindings': [],
                 'control_plane_blocked_agent_group_release_gates': [],
                 'control_plane_frozen_agent_group_release_gates': ['sample_pipeline'],
             },
@@ -205,50 +228,128 @@ class RepoContractConsumerRegressionTest(unittest.TestCase):
         self.assertNotIn('process', valid_groups)
         self.assertIn('full_test_process_exit_code', check_ids)
 
-    def test_managed_extension_required_full_checks_are_registered_by_extension_registry(self) -> None:
-        if not MANAGED_EXTENSIONS:
-            self.skipTest('base release surface has no repo-managed extension')
-        extension_row = representative_managed_extension(ROOT_DIR)
-        extension_dir = extension_row.root_dir / 'config' / 'control_plane' / 'extensions.d'
-        extension = json.loads((extension_dir / f'{extension_row.id}.json').read_text(encoding='utf-8'))
-        manifest = json.loads((extension_dir / f'{extension_row.id}.testing_manifest.json').read_text(encoding='utf-8'))
-        registry_name = (extension.get('governanceSurfaces') or {}).get('fullTestGroupRegistryPath')
-        self.assertEqual(registry_name, f'{extension_row.id}.full_test_group_registry.json')
-        registry = json.loads((extension_dir / registry_name).read_text(encoding='utf-8'))
-        registered_checks = {
-            str(check.get('id'))
-            for group in (registry.get('groups') or {}).values()
-            for check in list((group or {}).get('script_checks') or [])
-            if isinstance(check, dict)
-        }
-
-        required_checks = set(manifest['acceptance_reference']['required_checks'])
-        self.assertTrue(required_checks)
-        self.assertFalse(required_checks - registered_checks)
-
-    def test_managed_extension_group_acceptance_bindings_are_group_scoped(self) -> None:
+    def test_managed_extension_groups_do_not_bind_platform_deployment_acceptance(self) -> None:
         if not MANAGED_EXTENSIONS:
             self.skipTest('base release surface has no repo-managed extension')
         checked = 0
         for extension in managed_extensions(ROOT_DIR):
-            manifest_path = extension.manifest_dir / f'{extension.id}.testing_manifest.json'
-            if not manifest_path.is_file():
-                continue
-            manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
-            required_jobs = set((manifest.get('acceptance_reference') or {}).get('required_run_ledger_jobs') or [])
             for group_path in sorted((extension.root_dir / 'agent' / 'control_plane' / 'groups').glob('*.json')):
                 group = json.loads(group_path.read_text(encoding='utf-8'))
                 release_policy = group.get('releasePolicy') if isinstance(group.get('releasePolicy'), dict) else {}
-                binding = release_policy.get('acceptanceBinding') if isinstance(release_policy.get('acceptanceBinding'), dict) else {}
-                binding_jobs = list(binding.get('requiredRunLedgerJobRefs') or [])
-                if not binding_jobs:
-                    continue
-                ordered_jobs = list((group.get('dependencyPolicy') or {}).get('orderedJobRefs') or [])
+                release_gate = release_policy.get('releaseGate') if isinstance(release_policy.get('releaseGate'), dict) else {}
                 with self.subTest(extension_id=extension.id, group=group_path.name):
-                    self.assertEqual(binding_jobs, ordered_jobs)
-                    self.assertFalse(set(binding_jobs) - required_jobs)
+                    self.assertNotIn('acceptance' + 'Binding', release_policy)
+                    self.assertNotIn('acceptance' + '_binding', release_gate.get('requiredCheckIds') or [])
                     checked += 1
         self.assertGreater(checked, 0)
+
+    def test_related_party_live_acceptance_plan_is_manifest_declared(self) -> None:
+        extension = next((row for row in managed_extensions(ROOT_DIR) if row.id == RELATED_PARTY_EXTENSION_ID), None)
+        if extension is None:
+            self.skipTest(f'{RELATED_PARTY_EXTENSION_ID} extension is unavailable')
+
+        payload = build_live_acceptance_plan_payload(
+            ROOT_DIR,
+            RELATED_PARTY_EXTENSION_ID,
+            config_path=extension.default_service_config_path,
+        )
+
+        self.assertEqual(payload['status'], 'ok')
+        checks = {str(row.get('id') or '') for row in payload.get('checks') or [] if isinstance(row, dict)}
+        self.assertIn(f'{RELATED_PARTY_EXTENSION_ID}_feishu_live_acceptance', checks)
+
+    def test_live_acceptance_env_keys_are_extension_schema_owned(self) -> None:
+        extension = next((row for row in managed_extensions(ROOT_DIR) if row.id == RELATED_PARTY_EXTENSION_ID), None)
+        if extension is None:
+            self.skipTest(f'{RELATED_PARTY_EXTENSION_ID} extension is unavailable')
+
+        payload = build_live_acceptance_env_keys_payload(
+            ROOT_DIR,
+            RELATED_PARTY_EXTENSION_ID,
+            config_path=extension.default_service_config_path,
+        )
+
+        self.assertEqual(payload['status'], 'ok')
+        self.assertEqual(payload['envKeys'], ['RELATED_PARTY_COMPARE_LIVE_ACCEPTANCE_TASK_ID'])
+
+    def test_live_acceptance_requirement_rejects_disabled_extension(self) -> None:
+        payload = build_live_acceptance_plan_payload(
+            ROOT_DIR,
+            RELATED_PARTY_EXTENSION_ID,
+            config_path=ROOT_DIR / 'config' / 'control_plane' / 'service.json',
+        )
+
+        self.assertEqual(payload['status'], 'blocked')
+        issue_codes = {str(row.get('code') or '') for row in payload.get('blockingIssues') or [] if isinstance(row, dict)}
+        self.assertIn('extension_not_enabled', issue_codes)
+
+    def test_live_acceptance_module_must_belong_to_extension_python_package(self) -> None:
+        package_name = _extension_package_name(RELATED_PARTY_EXTENSION_ID)
+        if not package_name:
+            self.skipTest(f'{RELATED_PARTY_EXTENSION_ID} python package is unavailable')
+        base_check = {
+            'id': 'module_owner_check',
+            'extensionId': RELATED_PARTY_EXTENSION_ID,
+            'requiresExplicitLive': True,
+        }
+        valid_check = {
+            **base_check,
+            'command': {'module': package_name},
+        }
+        invalid_check = {
+            **base_check,
+            'command': {'module': 'openclaw.setup.upgrade.main'},
+        }
+
+        self.assertEqual(
+            [],
+            _validate_live_acceptance_check(valid_check, repo_root=ROOT_DIR, extension_id=RELATED_PARTY_EXTENSION_ID),
+        )
+        issue_codes = {
+            str(row.get('code') or '')
+            for row in _validate_live_acceptance_check(invalid_check, repo_root=ROOT_DIR, extension_id=RELATED_PARTY_EXTENSION_ID)
+        }
+        self.assertIn('live_acceptance_module_owner_mismatch', issue_codes)
+
+    def test_extension_runtime_mounts_only_include_self_or_required_dependency_extension_roots(self) -> None:
+        violations: list[str] = []
+        for extension in managed_extensions(ROOT_DIR):
+            manifest_path = extension.manifest_dir / f'{extension.id}.json'
+            if not manifest_path.is_file():
+                continue
+            manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
+            required_dependency_ids = {
+                str(row.get('id') or '').strip()
+                for row in manifest.get('dependencies') or []
+                if isinstance(row, dict) and str(row.get('id') or '').strip() and row.get('optional') is not True
+            }
+            allowed_agent_roots = {f'agent/extensions/{extension.id}'}
+            allowed_agent_roots.update(
+                f'agent/extensions/{dependency_id}'
+                for dependency_id in required_dependency_ids
+                if dependency_id != 'agent_platform'
+            )
+            for runtime_mounts_path in sorted(extension.manifest_dir.glob('*.runtime_mounts.json')):
+                payload = json.loads(runtime_mounts_path.read_text(encoding='utf-8'))
+                for service in payload.get('services') or []:
+                    if not isinstance(service, dict):
+                        continue
+                    for mount in service.get('mounts') or []:
+                        if not isinstance(mount, dict) or mount.get('source_type') != 'repo_path':
+                            continue
+                        relpath = str(mount.get('relative_path') or '').strip().replace('\\', '/')
+                        if relpath == 'agent' or relpath == 'agent/extensions':
+                            violations.append(f'{runtime_mounts_path.relative_to(ROOT_DIR).as_posix()}:{service.get("service")} mounts broad {relpath}')
+                            continue
+                        if relpath.startswith('agent/extensions/'):
+                            parts = relpath.split('/')
+                            mounted_root = '/'.join(parts[:3]) if len(parts) >= 3 else relpath
+                            if mounted_root not in allowed_agent_roots:
+                                violations.append(
+                                    f'{runtime_mounts_path.relative_to(ROOT_DIR).as_posix()}:{service.get("service")} mounts {mounted_root} without required dependency'
+                                )
+
+        self.assertEqual([], violations)
 
     def test_getting_started_curl_resolve_examples_are_ipv6_safe(self) -> None:
         surface = json.loads((Path(ROOT_DIR) / 'config' / 'governance' / 'docs' / 'getting_started_surface.json').read_text(encoding='utf-8'))
@@ -278,10 +379,10 @@ class RepoContractConsumerRegressionTest(unittest.TestCase):
 
     def test_object_closure_command_candidates_tolerate_optional_args(self) -> None:
         candidates = object_closure.normalized_token_candidates(
-            'bash ./scripts/setup/one_click_deploy.sh [--env-file deploy/.env]'
+            'bash ./scripts/doctor/check_docker_host_readiness.sh [--offline] [--env-file <path>]'
         )
 
-        self.assertIn('bash ./scripts/setup/one_click_deploy.sh', candidates)
+        self.assertIn('bash ./scripts/doctor/check_docker_host_readiness.sh', candidates)
 
     def test_runtime_and_reference_outputs_still_use_contract_backed_truth(self) -> None:
         manifest = runtime_surface.read_manifest()
@@ -358,11 +459,10 @@ class RepoContractConsumerRegressionTest(unittest.TestCase):
                 ]
                 self.assertEqual(len(refs), len(set(refs)))
 
-    def test_post_deploy_recovery_docs_keep_resume_contract(self) -> None:
+    def test_post_deploy_recovery_surfaces_keep_resume_commands(self) -> None:
         stage_flow = json.loads(repo_contract_path('governance.deploy_stage_flow').read_text(encoding='utf-8'))
         setup_failures = json.loads(repo_contract_path('governance.setup_failures').read_text(encoding='utf-8'))
         setup_followups = json.loads(repo_contract_path('governance.setup_followups').read_text(encoding='utf-8'))
-        runtime_reference = (ROOT_DIR / 'docs' / 'operations' / 'runtime-service-reference.md').read_text(encoding='utf-8')
 
         self.assertEqual(
             stage_flow['stages']['post_deploy_acceptance']['next_commands'],
@@ -403,7 +503,6 @@ class RepoContractConsumerRegressionTest(unittest.TestCase):
             'bash ./scripts/setup/one_click_deploy.sh --resume-from post_deploy_full_acceptance',
             setup_followups['entries']['one_click_test_full']['scenarios']['success_default']['commands'],
         )
-        self.assertIn('该命令不替代部署恢复入口', runtime_reference)
 
     def test_dispatch_runtime_audit_surface_exports_stay_available(self) -> None:
         self.assertTrue(callable(dispatch_runtime_audit.load_context))

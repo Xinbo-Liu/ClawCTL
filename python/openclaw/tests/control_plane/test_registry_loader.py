@@ -26,7 +26,11 @@ from openclaw.lib.repo.layout import resolve_repo_root
 from openclaw.doctor.agent_modules.managed_probe_fixture import PROBE_PRIMARY_MODULE_REF, PROBE_SUPPORT_MODULE_REF, PROBE_TARGET_REF
 from openclaw.doctor.agent_modules.managed_probe_fixture import PROBE_GROUP_REF
 from openclaw.tests.support.managed_probe import managed_probe_repo
-from openclaw.tests.support.managed_extensions import managed_extensions, representative_managed_extension
+from openclaw.tests.support.managed_extensions import (
+    managed_extensions,
+    representative_managed_extension,
+    representative_managed_extension_with_registry_path,
+)
 
 
 ROOT_DIR = resolve_repo_root(Path(__file__))
@@ -49,6 +53,13 @@ COMBO_PROFILE_ID, COMBO_CONFIG_PATH, COMBO_EXTENSION_IDS = _repo_combination_pro
 def _write_json(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+
+
+def _extension_row_by_id(payload: dict[str, Any], extension_id: str) -> dict[str, Any]:
+    for row in payload.get('extensions') or []:
+        if isinstance(row, dict) and str(row.get('id') or '') == extension_id:
+            return row
+    raise AssertionError(f'extension metadata not materialized for {extension_id}')
 
 
 class RegistryLoaderCollectionsTest(unittest.TestCase):
@@ -94,7 +105,10 @@ class RegistryLoaderCollectionsTest(unittest.TestCase):
     def test_representative_managed_profile_owns_dispatch_target_registry(self) -> None:
         if not MANAGED_EXTENSIONS:
             self.skipTest('base release surface has no repo-managed extension')
-        extension = representative_managed_extension(ROOT_DIR)
+        extension = representative_managed_extension_with_registry_path(
+            ROOT_DIR,
+            registry_key='dispatchTargetRegistryPaths',
+        )
         payload = load_registry_from_path(extension.default_service_config_path)
         registry_paths = payload['registryPaths']
 
@@ -105,10 +119,10 @@ class RegistryLoaderCollectionsTest(unittest.TestCase):
         registry_path = Path(registry_paths['dispatchTargetRegistryPaths'][0]).resolve()
         registry_path.relative_to(extension.root_dir)
         self.assertFalse((ROOT_DIR / 'agent' / 'control_plane' / 'registries' / 'dispatch_targets.json').exists())
-        self.assertEqual(
-            [Path(item).name for item in registry_paths['dispatchProviderRegistryPaths']],
-            ['dispatch_provider_adapters.json'],
-        )
+        provider_paths = [Path(item).resolve() for item in registry_paths['dispatchProviderRegistryPaths']]
+        self.assertEqual(len(provider_paths), 2)
+        self.assertIn((ROOT_DIR / 'agent' / 'control_plane' / 'registries' / 'dispatch_provider_adapters.json').resolve(), provider_paths)
+        self.assertTrue(any((ROOT_DIR / 'agent' / 'extensions').resolve() in path.parents for path in provider_paths))
 
     def test_service_scope_classifies_base_platform_and_extension_services(self) -> None:
         base_context = load_registry_service_context(ROOT_DIR / 'config' / 'control_plane' / 'service.json')
@@ -143,10 +157,40 @@ class RegistryLoaderCollectionsTest(unittest.TestCase):
             context['enabledExtensionIds'],
             ['agent_platform', *COMBO_EXTENSION_IDS],
         )
+        collection_indexes = {
+            'jobsDirs': 'jobsByQualifiedId',
+            'agentGroupsDirs': 'agentGroupsByQualifiedId',
+            'agentModulesDirs': 'agentModulesByQualifiedId',
+            'modelsDirs': 'modelsByQualifiedId',
+            'targetsDirs': 'targetsByQualifiedId',
+        }
+        path_indexes = {
+            'runtimeAdapterRegistryPaths': 'runtimeAdapters',
+            'dispatchTargetRegistryPaths': 'dispatchTargetRegistryPaths',
+            'dispatchProviderRegistryPaths': 'dispatchProviderRegistryPaths',
+        }
         for extension_id in COMBO_EXTENSION_IDS:
             with self.subTest(extension_id=extension_id):
-                self.assertTrue(any(key.startswith(f'{extension_id}:') for key in payload['modelsByQualifiedId']))
-                self.assertTrue(any(key.startswith(f'{extension_id}:') for key in payload['jobsByQualifiedId']))
+                extension_row = _extension_row_by_id(payload, extension_id)
+                registry_payload = extension_row['registry']
+                contribution_count = 0
+                for registry_key, index_key in collection_indexes.items():
+                    if registry_payload.get(registry_key):
+                        contribution_count += 1
+                        self.assertTrue(
+                            any(key.startswith(f'{extension_id}:') for key in payload[index_key]),
+                            msg=f'{extension_id} declares {registry_key} but no {index_key} rows were materialized',
+                        )
+                for registry_key, payload_key in path_indexes.items():
+                    declared_paths = {str(Path(item).resolve()) for item in registry_payload.get(registry_key) or []}
+                    if declared_paths:
+                        contribution_count += 1
+                        loaded_paths = {str(Path(item).resolve()) for item in payload['registryPaths'][payload_key]}
+                        self.assertTrue(
+                            declared_paths <= loaded_paths,
+                            msg=f'{extension_id} declares {registry_key} paths not loaded by combo profile',
+                        )
+                self.assertGreater(contribution_count, 0)
         self.assertEqual(
             [Path(item).name for item in payload['registryPaths']['dispatchTargetRegistryPaths']],
             ['dispatch_targets.json'],

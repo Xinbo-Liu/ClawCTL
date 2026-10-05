@@ -52,23 +52,29 @@ flow_run_logged_step() {
   local failed_stage_var="$3"
   local failed_code_var="$4"
   local stage_name="$5"
+  local started_at=0
+  local finished_at=0
+  local duration_seconds=0
   shift 5
 
   flow_set_var "$current_stage_var" "$stage_name"
   flow_log_line "$log_path" "[STEP] $stage_name"
+  started_at="$(date +%s)"
 
   set +e
   "$@" 2>&1 | flow_redact_sensitive_stream | tee -a "$log_path"
   local exit_code=${PIPESTATUS[0]}
   set -e
+  finished_at="$(date +%s)"
+  duration_seconds=$((finished_at - started_at))
 
   if [[ "$exit_code" -eq 0 ]]; then
-    flow_log_line "$log_path" "[OK] $stage_name"
+    flow_log_line "$log_path" "[OK] $stage_name (duration_seconds=$duration_seconds)"
     return 0
   fi
 
   flow_set_var "$failed_stage_var" "$stage_name"
   flow_set_var "$failed_code_var" "$exit_code"
-  flow_log_line "$log_path" "[FAIL] $stage_name (exit=$exit_code)"
+  flow_log_line "$log_path" "[FAIL] $stage_name (exit=$exit_code duration_seconds=$duration_seconds)"
   return "$exit_code"
 }

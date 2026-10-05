@@ -29,8 +29,7 @@
     "toolsetsRoute": "/v1/control-plane/toolsets",
     "agentAccessLogRoute": "/v1/control-plane/agent-access-log",
     "agentGroupAccessRoute": "/v1/control-plane/agent-group-access",
-    "agentGroupReleaseGatesRoute": "/v1/control-plane/agent-group-release-gates",
-    "agentGroupAcceptanceBindingsRoute": "/v1/control-plane/agent-group-acceptance-bindings"
+    "agentGroupReleaseGatesRoute": "/v1/control-plane/agent-group-release-gates"
   },
   "routes": {
     "healthzRoute": "/healthz",

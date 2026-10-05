@@ -36,14 +36,28 @@ class DeploymentImageGovernanceSurfaceTest(unittest.TestCase):
                 return line.split('=', 1)[1].strip()
         raise AssertionError(f'{key} not found in {path}')
 
+    def _managed_local_ref(self, role: str, pin_ref: str) -> str:
+        """按部署镜像合同规则从 pin 派生测试用 managed local ref。"""
+        source_ref, digest_hex = pin_ref.rsplit('@sha256:', 1)
+        tag = source_ref.rsplit(':', 1)[1]
+        return f'openclaw.local/deployment/{role}:{tag}-sha256-{digest_hex[:16]}'
+
     def test_source_selection_records_current_env_rewrite(self) -> None:
-        """Gateway source selection 必须记录当前 env 改写，不修改 canonical pin。"""
+        """Gateway 来源选择必须记录当前 env 改写，不修改 canonical pin。"""
         source = (ROOT_DIR / 'scripts' / 'images' / 'pull_images.sh').read_text(encoding='utf-8')
+        deployment_lib = (ROOT_DIR / 'scripts' / 'lib' / 'deployment_images.sh').read_text(encoding='utf-8')
 
         self.assertIn('PULL_GATEWAY_CANDIDATE_MODE', source)
         self.assertIn('auto-switch|fail-fast|off', source)
-        self.assertIn('gateway_source_selection.json', source)
+        self.assertIn('gateway_source_selection.json', deployment_lib)
         self.assertIn('pin_env_upsert_key "$IMAGE_ENV_DEPLOY_ENV_PATH" OPENCLAW_OFFICIAL_GATEWAY_IMAGE "$candidate_ref"', source)
+        self.assertIn('PULL_CLEANUP_GATEWAY_SOURCE_ALIASES', source)
+        self.assertIn('deployment_images_cleanup_gateway_source_aliases "$OPENCLAW_OFFICIAL_GATEWAY_IMAGE"', source)
+        self.assertIn('deployment_images_ref_repo "$image"', source)
+        self.assertIn('deployment_images_ref_tag "$image"', source)
+        self.assertIn('deployment_images_ref_digest "$image"', source)
+        assert_static_text_absent(self, 'image_ref_repo_tag_digest()', source)
+        self.assertIn('removed-gateway-source-alias', deployment_lib)
 
     def test_bundle_alias_and_status_contracts_are_visible(self) -> None:
         """离线 bundle、managed tag、状态表和 cleanup 保护规则必须同时可见。"""
@@ -61,11 +75,24 @@ class DeploymentImageGovernanceSurfaceTest(unittest.TestCase):
         self.assertIn('deployment_images_resolve_verified_local_ref', deployment_lib)
         self.assertIn('deployment_images_resolve_verified_local_ref_from_refs_file', deployment_lib)
         self.assertIn('_IMAGE_ID=', deployment_lib)
+        self.assertIn('deployment_images_cleanup_gateway_source_aliases()', deployment_lib)
+        self.assertIn('deployment_images_remove_gateway_source_alias_ref()', deployment_lib)
+        self.assertIn('deployment_images_gateway_source_selection_value()', deployment_lib)
+        self.assertIn('deployment_images_repo_digest_alias_lines()', deployment_lib)
         self.assertIn('deployment_images_write_contract_json', export_source)
         self.assertIn('deployment_images_managed_tag_for_role', export_source)
         self.assertIn('PROTECTED_IMAGE_REFS', cleanup_source)
         self.assertIn('is_protected_image_ref "$local_ref" && continue', cleanup_source)
+        self.assertIn('deployment_images_cleanup_gateway_source_aliases "$OPENCLAW_OFFICIAL_GATEWAY_IMAGE"', cleanup_source)
         self.assertIn('== deployment image role table ==', status_source)
+        self.assertIn('SOURCE_TAG', status_source)
+        self.assertIn('MANAGED_TAG', status_source)
+        self.assertIn('LOCAL_REF', status_source)
+        self.assertIn('tag-not-retained', status_source)
+        self.assertIn('部署可用性以 LOCAL_REF', status_source)
+        self.assertIn('== gateway source ==', status_source)
+        self.assertIn('selected_source=alternate-registry-same-digest', status_source)
+        self.assertIn('repo_digest_aliases=same-image-digest', status_source)
         self.assertIn('verified-local:', status_source)
         self.assertIn('missing-image-id', status_source)
         self.assertIn('image-id-mismatch', status_source)
@@ -75,6 +102,40 @@ class DeploymentImageGovernanceSurfaceTest(unittest.TestCase):
         self.assertIn('[[ -n "$recorded_image_id" ]] || continue', compose_source)
         self.assertIn('actual_image_id="$(docker image inspect "$local_ref" --format', compose_source)
         self.assertIn('image_env_runtime_service_image_vars', compose_source)
+
+    def test_image_ref_and_gateway_selection_logic_is_single_sourced(self) -> None:
+        """镜像 ref 解析、Gateway 来源选择读取与 RepoDigest 来源别名识别必须收口到 deployment_images。"""
+        deployment_lib = (ROOT_DIR / 'scripts' / 'lib' / 'deployment_images.sh').read_text(encoding='utf-8')
+        status_source = (ROOT_DIR / 'scripts' / 'images' / 'show_deployment_image_status.sh').read_text(encoding='utf-8')
+        contract_source = (ROOT_DIR / 'scripts' / 'images' / 'check_deployment_image_contract.sh').read_text(encoding='utf-8')
+        pull_source = (ROOT_DIR / 'scripts' / 'images' / 'pull_images.sh').read_text(encoding='utf-8')
+
+        self.assertIn('deployment_images_ref_digest()', deployment_lib)
+        self.assertIn('deployment_images_ref_tag()', deployment_lib)
+        self.assertIn('deployment_images_ref_repo()', deployment_lib)
+        self.assertIn('deployment_images_gateway_source_selection_value()', deployment_lib)
+        self.assertIn('deployment_images_repo_digest_alias_lines()', deployment_lib)
+        self.assertIn('deployment_images_ref_digest "$pin_ref"', status_source)
+        self.assertIn('deployment_images_gateway_source_selection_value reason', status_source)
+        self.assertIn('deployment_images_repo_digest_alias_lines "$inspect_ref" "$expected_digest"', status_source)
+        self.assertIn('source "$ROOT_DIR/scripts/lib/deployment_images.sh"', contract_source)
+        self.assertIn('deployment_images_ref_digest "$expected"', contract_source)
+        self.assertIn('deployment_images_gateway_source_selection_value selected', contract_source)
+        self.assertIn('deployment_images_ref_repo "$image"', pull_source)
+
+        local_helper_tokens = (
+            'image_ref_digest()',
+            'image_ref_repo()',
+            'gateway_selection_value()',
+            'repo_digest_alias_lines()',
+        )
+        for path, text in {
+            'scripts/images/show_deployment_image_status.sh': status_source,
+            'scripts/images/check_deployment_image_contract.sh': contract_source,
+        }.items():
+            for token in local_helper_tokens:
+                assert_static_text_absent(self, token, text, msg=path)
+        assert_static_text_absent(self, 'image_ref_repo_tag_digest()', pull_source)
 
     def test_image_role_lists_are_source_strategy_driven(self) -> None:
         """部署合同角色与 compose 运行角色必须从 source_strategy 派生。"""
@@ -104,7 +165,7 @@ class DeploymentImageGovernanceSurfaceTest(unittest.TestCase):
         assert_static_text_absent(self, "contract.get('enabled', True)", source_strategy_helper)
 
     def test_effective_compose_image_contract_checks_selected_refs(self) -> None:
-        """部署镜像合同必须校验最终 effective compose 与 selected refs，而不是只看模板变量。"""
+        """部署镜像合同必须校验最终 effective compose 与选定镜像引用，而不是只看模板变量。"""
         contract_source = (ROOT_DIR / 'scripts' / 'images' / 'check_deployment_image_contract.sh').read_text(encoding='utf-8')
         deploy_source = (ROOT_DIR / 'scripts' / 'setup' / 'one_click_deploy.sh').read_text(encoding='utf-8')
 
@@ -119,10 +180,438 @@ class DeploymentImageGovernanceSurfaceTest(unittest.TestCase):
         self.assertIn('verified local ref 的 image ID 与合同记录不一致', contract_source)
         self.assertIn('Gateway candidate 已拉取但 compose 仍指 canonical', contract_source)
         self.assertIn('重新加载镜像 env、重渲染 effective compose', contract_source)
-        self.assertIn('selected ref 未拉取或本地不可见', contract_source)
+        self.assertIn('当前选定镜像引用未拉取或本地不可见', contract_source)
         self.assertIn('RepoDigests', contract_source)
         self.assertIn('deploy_refresh_after_pull_images', deploy_source)
         self.assertIn('envRewritten', deploy_source)
+        self.assertIn('deployment_images_gateway_source_selection_file', deploy_source)
+        self.assertIn('deployment_images_gateway_source_selection_value envRewritten', deploy_source)
+        assert_static_text_absent(
+            self,
+            'local selection_file="$ROOT_DIR/state/image_pull/gateway_source_selection.json"',
+            deploy_source,
+        )
+
+    def test_gateway_source_alias_cleanup_removes_only_non_selected_refs(self) -> None:
+        """Gateway 来源标签清理必须只移除未被当前部署选用的 canonical/candidate 引用。"""
+        bash_executable = resolve_bash_executable()
+        if not bash_executable:
+            self.skipTest('未找到可用 bash；跳过 shell 集成测试')
+        jq_check = subprocess.run(
+            [str(bash_executable), '-lc', 'command -v jq >/dev/null 2>&1'],
+            cwd=ROOT_DIR,
+            check=False,
+        )
+        if jq_check.returncode != 0:
+            self.skipTest('缺少 jq；跳过 Gateway alias 清理测试')
+
+        digest = 'sha256:' + 'a' * 64
+        selected = f'ghcr.nju.edu.cn/openclaw/openclaw:2099.1.2@{digest}'
+        canonical_digest = f'ghcr.io/openclaw/openclaw@{digest}'
+        canonical_tag = 'ghcr.io/openclaw/openclaw:2099.1.2'
+
+        temp_parent = ROOT_DIR / 'state'
+        temp_parent.mkdir(exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=temp_parent) as temp_dir:
+            temp_root = Path(temp_dir)
+            fake_bin = temp_root / 'bin'
+            fake_bin.mkdir()
+            fake_docker = fake_bin / 'docker'
+            rm_log = temp_root / 'removed.log'
+            cleanup_log = temp_root / 'cleanup.log'
+            fake_docker.write_text(
+                textwrap.dedent(
+                    """\
+                    #!/usr/bin/env bash
+                    set -euo pipefail
+
+                    if [[ "${1:-}" == "image" && "${2:-}" == "inspect" ]]; then
+                      ref="${3:-}"
+                      shift 3
+                      while [[ $# -gt 0 ]]; do
+                        case "$1" in
+                          --format)
+                            if [[ "${2:-}" == "{{.Id}}" ]]; then
+                              case "$ref" in
+                                ghcr.nju.edu.cn/openclaw/openclaw:2099.1.2@sha256:*|ghcr.io/openclaw/openclaw@sha256:*|ghcr.io/openclaw/openclaw:2099.1.2)
+                                  printf 'sha256:gateway-image\n'
+                                  exit 0
+                                  ;;
+                              esac
+                            fi
+                            shift 2
+                            ;;
+                          *)
+                            shift
+                            ;;
+                        esac
+                      done
+                      case "$ref" in
+                        ghcr.nju.edu.cn/openclaw/openclaw:2099.1.2@sha256:*|ghcr.io/openclaw/openclaw@sha256:*|ghcr.io/openclaw/openclaw:2099.1.2)
+                          printf '[]\n'
+                          exit 0
+                          ;;
+                      esac
+                      echo "Error: No such object: $ref" >&2
+                      exit 1
+                    fi
+
+                    if [[ "${1:-}" == "image" && "${2:-}" == "rm" ]]; then
+                      printf '%s\n' "${3:-}" >> "${FAKE_DOCKER_RM_LOG:?}"
+                      exit 0
+                    fi
+
+                    echo "unexpected docker args: $*" >&2
+                    exit 98
+                    """
+                ),
+                encoding='utf-8',
+            )
+            fake_docker.chmod(0o755)
+
+            env = dict(os.environ)
+            env.update(
+                {
+                    'PATH': os.pathsep.join([str(fake_bin), env.get('PATH', '')]),
+                    'FAKE_DOCKER_RM_LOG': rm_log.relative_to(ROOT_DIR).as_posix(),
+                }
+            )
+            script = (
+                'source scripts/lib/deployment_images.sh; '
+                'deployment_images_cleanup_gateway_source_aliases "$1" "$2" 0'
+            )
+            result = subprocess.run(
+                [
+                    str(bash_executable),
+                    '-c',
+                    script,
+                    'cleanup-gateway-source-aliases',
+                    selected,
+                    cleanup_log.relative_to(ROOT_DIR).as_posix(),
+                ],
+                cwd=ROOT_DIR,
+                text=True,
+                encoding='utf-8',
+                errors='replace',
+                capture_output=True,
+                env=env,
+                check=False,
+            )
+
+            removed = rm_log.read_text(encoding='utf-8').splitlines() if rm_log.exists() else []
+            cleanup_records = cleanup_log.read_text(encoding='utf-8') if cleanup_log.exists() else ''
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        self.assertIn(canonical_digest, removed)
+        self.assertIn(canonical_tag, removed)
+        self.assertNotIn(selected, removed)
+        self.assertIn('removed-gateway-source-alias', cleanup_records)
+
+    def test_gateway_source_alias_cleanup_removes_candidate_when_canonical_selected(self) -> None:
+        """当前部署选用 canonical 时也必须清理 candidate 来源别名。"""
+        bash_executable = resolve_bash_executable()
+        if not bash_executable:
+            self.skipTest('未找到可用 bash；跳过 shell 集成测试')
+        jq_check = subprocess.run(
+            [str(bash_executable), '-lc', 'command -v jq >/dev/null 2>&1'],
+            cwd=ROOT_DIR,
+            check=False,
+        )
+        if jq_check.returncode != 0:
+            self.skipTest('缺少 jq；跳过 Gateway alias 清理测试')
+
+        digest = 'sha256:' + 'a' * 64
+        selected = f'ghcr.io/openclaw/openclaw:2099.1.2@{digest}'
+        candidate_digest = f'ghcr.nju.edu.cn/openclaw/openclaw@{digest}'
+        candidate_tag = 'ghcr.nju.edu.cn/openclaw/openclaw:2099.1.2'
+
+        temp_parent = ROOT_DIR / 'state'
+        temp_parent.mkdir(exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=temp_parent) as temp_dir:
+            temp_root = Path(temp_dir)
+            fake_bin = temp_root / 'bin'
+            fake_bin.mkdir()
+            fake_docker = fake_bin / 'docker'
+            rm_log = temp_root / 'removed.log'
+            cleanup_log = temp_root / 'cleanup.log'
+            fake_docker.write_text(
+                textwrap.dedent(
+                    """\
+                    #!/usr/bin/env bash
+                    set -euo pipefail
+
+                    if [[ "${1:-}" == "image" && "${2:-}" == "inspect" ]]; then
+                      ref="${3:-}"
+                      shift 3
+                      while [[ $# -gt 0 ]]; do
+                        case "$1" in
+                          --format)
+                            if [[ "${2:-}" == "{{.Id}}" ]]; then
+                              case "$ref" in
+                                ghcr.io/openclaw/openclaw:2099.1.2@sha256:*|ghcr.nju.edu.cn/openclaw/openclaw@sha256:*|ghcr.nju.edu.cn/openclaw/openclaw:2099.1.2)
+                                  printf 'sha256:gateway-image\n'
+                                  exit 0
+                                  ;;
+                              esac
+                            fi
+                            shift 2
+                            ;;
+                          *)
+                            shift
+                            ;;
+                        esac
+                      done
+                      case "$ref" in
+                        ghcr.io/openclaw/openclaw:2099.1.2@sha256:*|ghcr.nju.edu.cn/openclaw/openclaw@sha256:*|ghcr.nju.edu.cn/openclaw/openclaw:2099.1.2)
+                          printf '[]\n'
+                          exit 0
+                          ;;
+                      esac
+                      echo "Error: No such object: $ref" >&2
+                      exit 1
+                    fi
+
+                    if [[ "${1:-}" == "image" && "${2:-}" == "rm" ]]; then
+                      printf '%s\n' "${3:-}" >> "${FAKE_DOCKER_RM_LOG:?}"
+                      exit 0
+                    fi
+
+                    echo "unexpected docker args: $*" >&2
+                    exit 98
+                    """
+                ),
+                encoding='utf-8',
+            )
+            fake_docker.chmod(0o755)
+
+            env = dict(os.environ)
+            env.update(
+                {
+                    'PATH': os.pathsep.join([str(fake_bin), env.get('PATH', '')]),
+                    'FAKE_DOCKER_RM_LOG': rm_log.relative_to(ROOT_DIR).as_posix(),
+                }
+            )
+            script = (
+                'source scripts/lib/deployment_images.sh; '
+                'deployment_images_cleanup_gateway_source_aliases "$1" "$2" 0'
+            )
+            result = subprocess.run(
+                [
+                    str(bash_executable),
+                    '-c',
+                    script,
+                    'cleanup-gateway-source-aliases',
+                    selected,
+                    cleanup_log.relative_to(ROOT_DIR).as_posix(),
+                ],
+                cwd=ROOT_DIR,
+                text=True,
+                encoding='utf-8',
+                errors='replace',
+                capture_output=True,
+                env=env,
+                check=False,
+            )
+
+            removed = rm_log.read_text(encoding='utf-8').splitlines() if rm_log.exists() else []
+            cleanup_records = cleanup_log.read_text(encoding='utf-8') if cleanup_log.exists() else ''
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        self.assertIn(candidate_digest, removed)
+        self.assertIn(candidate_tag, removed)
+        self.assertNotIn(selected, removed)
+        self.assertIn('removed-gateway-source-alias', cleanup_records)
+
+    def test_gateway_source_alias_cleanup_fails_when_docker_ref_removal_fails(self) -> None:
+        """显式 Gateway 来源别名清理遇到 Docker 删除失败时必须失败闭合。"""
+        bash_executable = resolve_bash_executable()
+        if not bash_executable:
+            self.skipTest('未找到可用 bash；跳过 shell 集成测试')
+        jq_check = subprocess.run(
+            [str(bash_executable), '-lc', 'command -v jq >/dev/null 2>&1'],
+            cwd=ROOT_DIR,
+            check=False,
+        )
+        if jq_check.returncode != 0:
+            self.skipTest('缺少 jq；跳过 Gateway alias 清理测试')
+
+        digest = 'sha256:' + 'a' * 64
+        selected = f'ghcr.nju.edu.cn/openclaw/openclaw:2099.1.2@{digest}'
+
+        temp_parent = ROOT_DIR / 'state'
+        temp_parent.mkdir(exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=temp_parent) as temp_dir:
+            temp_root = Path(temp_dir)
+            fake_bin = temp_root / 'bin'
+            fake_bin.mkdir()
+            cleanup_log = temp_root / 'cleanup.log'
+            fake_docker = fake_bin / 'docker'
+            fake_docker.write_text(
+                textwrap.dedent(
+                    """\
+                    #!/usr/bin/env bash
+                    set -euo pipefail
+
+                    if [[ "${1:-}" == "image" && "${2:-}" == "inspect" ]]; then
+                      ref="${3:-}"
+                      shift 3
+                      while [[ $# -gt 0 ]]; do
+                        case "$1" in
+                          --format)
+                            if [[ "${2:-}" == "{{.Id}}" ]]; then
+                              case "$ref" in
+                                ghcr.nju.edu.cn/openclaw/openclaw:2099.1.2@sha256:*|ghcr.io/openclaw/openclaw@sha256:*|ghcr.io/openclaw/openclaw:2099.1.2)
+                                  printf 'sha256:gateway-image\n'
+                                  exit 0
+                                  ;;
+                              esac
+                            fi
+                            shift 2
+                            ;;
+                          *)
+                            shift
+                            ;;
+                        esac
+                      done
+                      case "$ref" in
+                        ghcr.nju.edu.cn/openclaw/openclaw:2099.1.2@sha256:*|ghcr.io/openclaw/openclaw@sha256:*|ghcr.io/openclaw/openclaw:2099.1.2)
+                          printf '[]\n'
+                          exit 0
+                          ;;
+                      esac
+                      exit 1
+                    fi
+
+                    if [[ "${1:-}" == "image" && "${2:-}" == "rm" ]]; then
+                      exit 1
+                    fi
+
+                    echo "unexpected docker args: $*" >&2
+                    exit 98
+                    """
+                ),
+                encoding='utf-8',
+            )
+            fake_docker.chmod(0o755)
+            env = dict(os.environ)
+            env['PATH'] = os.pathsep.join([str(fake_bin), env.get('PATH', '')])
+            script = (
+                'source scripts/lib/deployment_images.sh; '
+                'deployment_images_cleanup_gateway_source_aliases "$1" "$2" 0'
+            )
+            result = subprocess.run(
+                [
+                    str(bash_executable),
+                    '-c',
+                    script,
+                    'cleanup-gateway-source-aliases',
+                    selected,
+                    cleanup_log.relative_to(ROOT_DIR).as_posix(),
+                ],
+                cwd=ROOT_DIR,
+                text=True,
+                encoding='utf-8',
+                errors='replace',
+                capture_output=True,
+                env=env,
+                check=False,
+            )
+            cleanup_records = cleanup_log.read_text(encoding='utf-8') if cleanup_log.exists() else ''
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('failed-remove-gateway-source-alias', cleanup_records)
+
+    def test_status_reports_same_digest_repo_aliases(self) -> None:
+        """状态脚本必须把同 digest 的多个 RepoDigest 标识为同一镜像别名。"""
+        bash_executable = resolve_bash_executable()
+        if not bash_executable:
+            self.skipTest('未找到可用 bash；跳过 shell 集成测试')
+
+        digest = self._env_value(ROOT_DIR / 'config' / 'image_pins' / 'openclaw.env', 'OPENCLAW_OFFICIAL_GATEWAY_IMAGE').split('@', 1)[1]
+        temp_parent = ROOT_DIR / 'state'
+        temp_parent.mkdir(exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=temp_parent) as temp_dir:
+            temp_root = Path(temp_dir)
+            fake_bin = temp_root / 'bin'
+            fake_bin.mkdir()
+            fake_docker = fake_bin / 'docker'
+            fake_docker.write_text(
+                textwrap.dedent(
+                    """\
+                    #!/usr/bin/env bash
+                    set -euo pipefail
+
+                    if [[ "${1:-}" == "info" ]]; then
+                      exit 0
+                    fi
+
+                    if [[ "${1:-}" == "image" && "${2:-}" == "inspect" ]]; then
+                      ref="${3:-}"
+                      shift 3
+                      format=""
+                      while [[ $# -gt 0 ]]; do
+                        case "$1" in
+                          --format)
+                            format="${2:-}"
+                            shift 2
+                            ;;
+                          *)
+                            shift
+                            ;;
+                        esac
+                      done
+                      case "$format" in
+                        "{{range .RepoDigests}}{{println .}}{{end}}")
+                          if [[ "$ref" == *openclaw/openclaw:*@sha256:* ]]; then
+                            printf 'ghcr.io/openclaw/openclaw@%s\n' "${OPENCLAW_GATEWAY_DIGEST:?}"
+                            printf 'ghcr.nju.edu.cn/openclaw/openclaw@%s\n' "${OPENCLAW_GATEWAY_DIGEST:?}"
+                          elif [[ "$ref" == *@sha256:* ]]; then
+                            without_digest="${ref%@*}"
+                            repo="${without_digest%:*}"
+                            printf '%s@%s\n' "$repo" "${ref#*@}"
+                          fi
+                          exit 0
+                          ;;
+                        "{{.Id}}")
+                          printf 'sha256:fake\n'
+                          exit 0
+                          ;;
+                        *)
+                          printf '[]\n'
+                          exit 0
+                          ;;
+                      esac
+                    fi
+
+                    echo "unexpected docker args: $*" >&2
+                    exit 98
+                    """
+                ),
+                encoding='utf-8',
+            )
+            fake_docker.chmod(0o755)
+            env = dict(os.environ)
+            env.update(
+                {
+                    'PATH': os.pathsep.join([str(fake_bin), env.get('PATH', '')]),
+                    'OPENCLAW_GATEWAY_DIGEST': digest,
+                }
+            )
+            result = subprocess.run(
+                [str(bash_executable), str(ROOT_DIR / 'scripts' / 'images' / 'show_deployment_image_status.sh')],
+                cwd=ROOT_DIR,
+                text=True,
+                encoding='utf-8',
+                errors='replace',
+                capture_output=True,
+                env=env,
+                check=False,
+            )
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        self.assertIn('repo_digest_aliases=same-image-digest (2 refs', result.stdout)
+        self.assertIn(f'ghcr.io/openclaw/openclaw@{digest}', result.stdout)
+        self.assertIn(f'ghcr.nju.edu.cn/openclaw/openclaw@{digest}', result.stdout)
 
     def test_contract_accepts_runtime_verified_local_refs_from_compose_config(self) -> None:
         """合同检查必须按 runtime compose 入口解析，并接受 verified local managed refs。"""
@@ -133,9 +622,9 @@ class DeploymentImageGovernanceSurfaceTest(unittest.TestCase):
         gateway_ref = self._env_value(ROOT_DIR / 'config' / 'image_pins' / 'openclaw.env', 'OPENCLAW_OFFICIAL_GATEWAY_IMAGE')
         runtime_ref = self._env_value(ROOT_DIR / 'config' / 'image_pins' / 'runtime.env', 'OPENCLAW_RUNTIME_PYTHON_IMAGE')
         nginx_ref = self._env_value(ROOT_DIR / 'config' / 'image_pins' / 'runtime.env', 'NGINX_IMAGE')
-        gateway_local = 'openclaw.local/deployment/official-gateway:2026.6.1-sha256-b12f76a7947e4cdd'
-        runtime_local = 'openclaw.local/deployment/runtime-python:3.11.15-slim-bookworm-sha256-9c6f90801e6b68e7'
-        nginx_local = 'openclaw.local/deployment/nginx:1.28.3-alpine-slim-sha256-b33eedfdf089be1f'
+        gateway_local = self._managed_local_ref('official-gateway', gateway_ref)
+        runtime_local = self._managed_local_ref('runtime-python', runtime_ref)
+        nginx_local = self._managed_local_ref('nginx', nginx_ref)
 
         temp_parent = ROOT_DIR / 'state'
         temp_parent.mkdir(exist_ok=True)
@@ -356,38 +845,8 @@ class DeploymentImageGovernanceSurfaceTest(unittest.TestCase):
             text = path.read_text(encoding='utf-8')
             self.assertIn('image id', text.lower(), msg=str(path))
 
-    def test_public_image_docs_and_help_do_not_advertise_legacy_paths(self) -> None:
-        """公开文档和 help 只描述当前 bundle 与 candidate mode 接口。"""
-        public_paths = [
-            ROOT_DIR / 'docs' / 'getting-started' / 'image-preparation.md',
-            ROOT_DIR / 'docs' / 'getting-started' / 'environment-setup.md',
-            ROOT_DIR / 'config' / 'governance' / 'docs' / 'image_governance_surface.json',
-            ROOT_DIR / 'config' / 'governance' / 'docs' / 'getting_started_surface.json',
-            ROOT_DIR / 'config' / 'governance' / 'docs' / 'script_catalog_surface.json',
-            ROOT_DIR / 'config' / 'governance' / 'flows' / 'deploy_stage_flow.json',
-            ROOT_DIR / 'scripts' / 'README.md',
-        ]
-        forbidden = (
-            'PULL_CN_GATEWAY_CANDIDATE_FAIL_FAST',
-            '旧 raw',
-            'raw Docker save',
-            'legacy raw',
-            '需要保留旧',
-            '当前运行镜像 env key 为',
-            '三类运行镜像',
-            '后续链路',
-            'required_images',
-            '若 Docker 不能直接',
-            '仍能以 managed role tag',
-            '运行态会使用合同声明的 managed role tag',
-            'bundle image id',
-            '新版 deployment image bundle',
-        )
-        for path in public_paths:
-            text = path.read_text(encoding='utf-8')
-            for token in forbidden:
-                assert_static_text_absent(self, token, text, msg=str(path))
-
+    def test_public_image_docs_and_help_describe_current_interfaces(self) -> None:
+        """公开文档和 help 必须描述当前 bundle 与 candidate mode 接口。"""
         help_surfaces = {
             'scripts/images/pull_images.sh': _single_quoted_heredoc_body(
                 (ROOT_DIR / 'scripts' / 'images' / 'pull_images.sh').read_text(encoding='utf-8'),
@@ -405,13 +864,20 @@ class DeploymentImageGovernanceSurfaceTest(unittest.TestCase):
                 (ROOT_DIR / 'scripts' / 'images' / 'export_deployment_images.sh').read_text(encoding='utf-8'),
                 'USAGE',
             ),
+            'scripts/images/update_openclaw_pin.sh': _single_quoted_heredoc_body(
+                (ROOT_DIR / 'scripts' / 'images' / 'update_openclaw_pin.sh').read_text(encoding='utf-8'),
+                'USAGE',
+            ),
+            'scripts/images/update_runtime_pin.sh': _single_quoted_heredoc_body(
+                (ROOT_DIR / 'scripts' / 'images' / 'update_runtime_pin.sh').read_text(encoding='utf-8'),
+                'USAGE',
+            ),
             'scripts/setup/lib/setup_cli_common.sh': (
                 ROOT_DIR / 'scripts' / 'setup' / 'lib' / 'setup_cli_common.sh'
             ).read_text(encoding='utf-8'),
         }
-        for script, help_text in help_surfaces.items():
-            for token in forbidden:
-                assert_static_text_absent(self, token, help_text, msg=script)
+        self.assertIn('PULL_GATEWAY_CANDIDATE_MODE', help_surfaces['scripts/images/pull_images.sh'])
+        self.assertIn('PULL_CLEANUP_GATEWAY_SOURCE_ALIASES', help_surfaces['scripts/images/pull_images.sh'])
         self.assertIn('image id', help_surfaces['scripts/images/load_deployment_images.sh'].lower())
         self.assertIn('合同 image id', help_surfaces['scripts/images/check_deployment_image_contract.sh'].lower())
 

@@ -1,2 +1,2 @@
 #!/usr/bin/env python3
-"""Grouped control-plane CLI registration helpers."""
+"""提供OpenClaw 控制平面子系统的生产实现。"""

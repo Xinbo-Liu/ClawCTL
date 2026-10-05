@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Resolved-registry alignment checks for the agent governance doctor."""
+"""提供OpenClaw doctor子系统的生产实现。"""
 from __future__ import annotations
 
 from pathlib import Path
@@ -232,8 +232,22 @@ def _registry_views(registry_payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def load_resolved_registry_views(resolved_config_path: Path) -> dict[str, Any]:
-    return _registry_views(load_registry(resolved_config_path))
+def load_resolved_registry_views(
+    resolved_config_path: Path,
+    *,
+    registry_payload: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """构建治理校验使用的 registry 索引视图。
+
+    参数：
+        resolved_config_path（Path）：已解析的控制平面服务配置路径。
+        registry_payload（dict[str, Any] | None）：调用方已加载的 registry；为空时按配置加载。
+
+    返回：
+        dict[str, Any]：agent、group 与 module 的合并索引视图。
+    """
+    registry = load_registry(resolved_config_path) if registry_payload is None else registry_payload
+    return _registry_views(registry)
 
 
 def validate_resolved_registry_views(views: dict[str, Any], errors: list[str]) -> list[str]:
@@ -251,8 +265,26 @@ def validate_resolved_registry_views(views: dict[str, Any], errors: list[str]) -
     return checked_modules
 
 
-def validate_governance_registry_alignment(resolved_config_path: Path, errors: list[str]) -> dict[str, Any]:
-    views = load_resolved_registry_views(resolved_config_path)
+def validate_governance_registry_alignment(
+    resolved_config_path: Path,
+    errors: list[str],
+    *,
+    registry_payload: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """校验治理桥接页、模块布局与指定 registry 是否一致。
+
+    参数：
+        resolved_config_path（Path）：已解析的控制平面服务配置路径。
+        errors（list[str]）：累积结构与引用错误的可变列表。
+        registry_payload（dict[str, Any] | None）：调用方已加载的 registry；为空时按配置加载。
+
+    返回：
+        dict[str, Any]：校验使用的索引视图与已检查模块清单。
+
+    副作用：
+        将发现的治理不一致追加到 ``errors``。
+    """
+    views = load_resolved_registry_views(resolved_config_path, registry_payload=registry_payload)
     checked_modules = validate_resolved_registry_views(views, errors)
     return {
         'views': views,

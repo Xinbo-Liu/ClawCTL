@@ -6,6 +6,7 @@ import json
 import os
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from openclaw.lib.repo.layout import CONTROL_PLANE_CONTAINER_REPO_ROOT, resolve_repo_root
 from tempfile import TemporaryDirectory
 from unittest import mock
@@ -77,6 +78,69 @@ class ControlPlaneReadonlySmokeTest(unittest.TestCase):
         self.assertEqual(stderr.getvalue(), '')
         self.assertEqual(ready.get('status'), 'ready')
         self.assertTrue(((ready.get('checks') or {}).get('schedulerHeartbeat') or {}).get('ok'))
+
+    def test_run_job_once_reports_contract_dimensions_and_rejects_unaccepted_result(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            files = SimpleNamespace(state_dir=root / 'scheduler', locks_dir=root / 'locks')
+            files.state_dir.mkdir(parents=True)
+            files.locks_dir.mkdir(parents=True)
+            job = {
+                'id': 'delivery_job',
+                'enabled': True,
+                'schedule': {'tz': 'Asia/Shanghai'},
+            }
+            config = {'jobs': [job], 'defaults': {'timezone': 'Asia/Shanghai'}}
+            args = SimpleNamespace(
+                run_job_once='delivery_job',
+                business_run_id='2026-07-21',
+                operator_reason='controlled recovery test',
+                recovery_of_run_id='origin-run-1',
+                maintenance_override=False,
+                run_all_once=False,
+                once=False,
+                interval_seconds=15.0,
+                heartbeat_interval_seconds=60.0,
+            )
+            for accepted_by_ledger, expected_exit in ((True, 0), (False, 6)):
+                with self.subTest(accepted_by_ledger=accepted_by_ledger):
+                    result = {
+                        'status': 'succeeded' if accepted_by_ledger else 'blocked',
+                        'business_status': 'sent' if accepted_by_ledger else 'blocked',
+                        'failure_class': None if accepted_by_ledger else 'target_contract_violation',
+                        'process_accepted': True,
+                        'contract_accepted': accepted_by_ledger,
+                        'artifact_accepted': accepted_by_ledger,
+                        'execution_accepted': accepted_by_ledger,
+                        'accepted_by_ledger': accepted_by_ledger,
+                        'reason': None,
+                        'run_dir': str(root / 'run'),
+                    }
+                    stdout = io.StringIO()
+                    with mock.patch.object(scheduler_runtime, 'read_scheduler_maintenance', return_value={}):
+                        with mock.patch.object(scheduler_runtime, 'read_json', return_value={'jobs': {}}):
+                            with mock.patch.object(scheduler_runtime, 'prune_scheduler_state_jobs'):
+                                with mock.patch.object(scheduler_runtime.scheduler_locking, 'acquire_lock', return_value=True):
+                                    with mock.patch.object(scheduler_runtime.scheduler_locking, 'release_lock'):
+                                        with mock.patch.object(scheduler_runtime, 'execute_job_once', return_value=result):
+                                            with mock.patch.object(scheduler_runtime, 'write_json'):
+                                                with mock.patch.object(scheduler_runtime, '_sync_gateway_cron_jobs_projection'):
+                                                    with mock.patch.object(scheduler_runtime, 'append_jsonl'):
+                                                        with contextlib.redirect_stdout(stdout):
+                                                            exit_code = scheduler_runtime._run_job_once_entry(
+                                                                args=args,
+                                                                config=config,
+                                                                files=files,
+                                                                state_root=root,
+                                                            )
+
+                    payload = json.loads(stdout.getvalue())
+                    self.assertEqual(exit_code, expected_exit)
+                    self.assertEqual(payload['processAccepted'], True)
+                    self.assertEqual(payload['contractAccepted'], accepted_by_ledger)
+                    self.assertEqual(payload['artifactAccepted'], accepted_by_ledger)
+                    self.assertEqual(payload['executionAccepted'], accepted_by_ledger)
+                    self.assertEqual(payload['acceptedByLedger'], accepted_by_ledger)
 
     def test_scheduler_runtime_maps_container_config_path_on_host(self) -> None:
         with TemporaryDirectory() as tmpdir:

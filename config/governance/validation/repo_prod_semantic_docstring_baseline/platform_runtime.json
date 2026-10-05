@@ -1,0 +1,1855 @@
+{
+  "fileBaselines": {
+    "python/openclaw/runtime/__init__.py": {
+      "itemBaselines": {
+        "module:<module>": {
+          "issues": [],
+          "kind": "module",
+          "qualname": "<module>"
+        }
+      },
+      "moduleHasChineseDocstring": true,
+      "semanticIssueItems": 0,
+      "semanticIssues": 0
+    },
+    "python/openclaw/runtime/compose_mount_registry.py": {
+      "itemBaselines": {
+        "function:_compose_service_fragment_text": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_compose_service_fragment_text"
+        },
+        "function:_enabled_extension_ids": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_enabled_extension_ids"
+        },
+        "function:_indent_block": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_indent_block"
+        },
+        "function:_merge_mount_rows": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_merge_mount_rows"
+        },
+        "function:_merge_service_rows": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_merge_service_rows"
+        },
+        "function:_merge_unique_dict_entries": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_merge_unique_dict_entries"
+        },
+        "function:_mount_is_enabled": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_mount_is_enabled"
+        },
+        "function:_read_json": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_read_json"
+        },
+        "function:_required_extension_ids": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_required_extension_ids"
+        },
+        "function:_resolve_config_path": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_resolve_config_path"
+        },
+        "function:_runtime_entry_container_path": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_runtime_entry_container_path"
+        },
+        "function:_runtime_entry_host_template": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_runtime_entry_host_template"
+        },
+        "function:_service_index": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_service_index"
+        },
+        "function:_service_is_enabled": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_service_is_enabled"
+        },
+        "function:_sync_extension_service_blocks": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_sync_extension_service_blocks"
+        },
+        "function:compose_file_path": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "compose_file_path"
+        },
+        "function:fail": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "fail"
+        },
+        "function:load_manifest": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "load_manifest"
+        },
+        "function:main": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "main"
+        },
+        "function:marker_prefix": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "marker_prefix"
+        },
+        "function:render_container_path": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "render_container_path"
+        },
+        "function:render_mount_line": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "render_mount_line"
+        },
+        "function:render_mount_suffix": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "render_mount_suffix"
+        },
+        "function:render_source_path": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "render_source_path"
+        },
+        "function:services": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "services"
+        },
+        "function:sync_compose": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "sync_compose"
+        },
+        "function:sync_compose_entry": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "sync_compose_entry"
+        },
+        "module:<module>": {
+          "issues": [],
+          "kind": "module",
+          "qualname": "<module>"
+        }
+      },
+      "moduleHasChineseDocstring": true,
+      "semanticIssueItems": 27,
+      "semanticIssues": 27
+    },
+    "python/openclaw/runtime/compose_mounts/__init__.py": {
+      "itemBaselines": {
+        "module:<module>": {
+          "issues": [],
+          "kind": "module",
+          "qualname": "<module>"
+        }
+      },
+      "moduleHasChineseDocstring": true,
+      "semanticIssueItems": 0,
+      "semanticIssues": 0
+    },
+    "python/openclaw/runtime/compose_mounts/manifest.py": {
+      "itemBaselines": {
+        "function:compose_file_path": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "compose_file_path"
+        },
+        "function:enabled_extension_ids_for": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "enabled_extension_ids_for"
+        },
+        "function:load_manifest": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "load_manifest"
+        },
+        "function:marker_prefix": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "marker_prefix"
+        },
+        "function:merge_mount_rows": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "merge_mount_rows"
+        },
+        "function:merge_service_rows": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "merge_service_rows"
+        },
+        "function:merge_unique_dict_entries": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "merge_unique_dict_entries"
+        },
+        "function:mount_is_enabled": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "mount_is_enabled"
+        },
+        "function:read_json": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "read_json"
+        },
+        "function:required_extension_ids": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "required_extension_ids"
+        },
+        "function:resolve_config_path": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "resolve_config_path"
+        },
+        "function:service_is_enabled": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "service_is_enabled"
+        },
+        "function:services": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "services"
+        },
+        "module:<module>": {
+          "issues": [],
+          "kind": "module",
+          "qualname": "<module>"
+        }
+      },
+      "moduleHasChineseDocstring": true,
+      "semanticIssueItems": 13,
+      "semanticIssues": 13
+    },
+    "python/openclaw/runtime/compose_mounts/render.py": {
+      "itemBaselines": {
+        "function:render_container_path": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "render_container_path"
+        },
+        "function:render_mount_line": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "render_mount_line"
+        },
+        "function:render_mount_suffix": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "render_mount_suffix"
+        },
+        "function:render_source_path": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "render_source_path"
+        },
+        "function:runtime_entry_container_path": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "runtime_entry_container_path"
+        },
+        "function:runtime_entry_host_template": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "runtime_entry_host_template"
+        },
+        "module:<module>": {
+          "issues": [],
+          "kind": "module",
+          "qualname": "<module>"
+        }
+      },
+      "moduleHasChineseDocstring": true,
+      "semanticIssueItems": 6,
+      "semanticIssues": 6
+    },
+    "python/openclaw/runtime/compose_mounts/sync.py": {
+      "itemBaselines": {
+        "function:_default_route_interface": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_default_route_interface"
+        },
+        "function:_driver_opts_block": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_driver_opts_block"
+        },
+        "function:_driver_opts_mtu_line": {
+          "issues": [],
+          "kind": "function",
+          "qualname": "_driver_opts_mtu_line"
+        },
+        "function:_is_network_entry_line": {
+          "issues": [],
+          "kind": "function",
+          "qualname": "_is_network_entry_line"
+        },
+        "function:_network_block_has_bridge": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_network_block_has_bridge"
+        },
+        "function:_sync_network_block_mtu": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_sync_network_block_mtu"
+        },
+        "function:compose_service_fragment_text": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "compose_service_fragment_text"
+        },
+        "function:default_route_mtu": {
+          "issues": [
+            "missing_return_type:int | None",
+            "missing_side_effect_doc"
+          ],
+          "kind": "function",
+          "qualname": "default_route_mtu"
+        },
+        "function:indent_block": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "indent_block"
+        },
+        "function:requested_docker_network_mtu": {
+          "issues": [
+            "missing_param_doc:fail",
+            "missing_param_type:fail:Callable[[str, int], None]",
+            "missing_return_doc",
+            "missing_return_type:int | None",
+            "missing_side_effect_doc"
+          ],
+          "kind": "function",
+          "qualname": "requested_docker_network_mtu"
+        },
+        "function:sync_bridge_network_mtu": {
+          "issues": [
+            "missing_param_doc:content",
+            "missing_param_type:content:str",
+            "missing_param_doc:mtu",
+            "missing_param_type:mtu:int | None",
+            "missing_return_doc",
+            "missing_return_type:str"
+          ],
+          "kind": "function",
+          "qualname": "sync_bridge_network_mtu"
+        },
+        "function:sync_compose": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "sync_compose"
+        },
+        "function:sync_extension_service_blocks": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "sync_extension_service_blocks"
+        },
+        "module:<module>": {
+          "issues": [],
+          "kind": "module",
+          "qualname": "<module>"
+        }
+      },
+      "moduleHasChineseDocstring": true,
+      "semanticIssueItems": 11,
+      "semanticIssues": 21
+    },
+    "python/openclaw/runtime/generated_paths/__init__.py": {
+      "itemBaselines": {
+        "module:<module>": {
+          "issues": [],
+          "kind": "module",
+          "qualname": "<module>"
+        }
+      },
+      "moduleHasChineseDocstring": true,
+      "semanticIssueItems": 0,
+      "semanticIssues": 0
+    },
+    "python/openclaw/runtime/generated_paths/cli.py": {
+      "itemBaselines": {
+        "function:main": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "main"
+        },
+        "function:parse_args": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "parse_args"
+        },
+        "module:<module>": {
+          "issues": [],
+          "kind": "module",
+          "qualname": "<module>"
+        }
+      },
+      "moduleHasChineseDocstring": true,
+      "semanticIssueItems": 2,
+      "semanticIssues": 2
+    },
+    "python/openclaw/runtime/generated_paths/constants.py": {
+      "itemBaselines": {
+        "module:<module>": {
+          "issues": [],
+          "kind": "module",
+          "qualname": "<module>"
+        }
+      },
+      "moduleHasChineseDocstring": true,
+      "semanticIssueItems": 0,
+      "semanticIssues": 0
+    },
+    "python/openclaw/runtime/generated_paths/env.py": {
+      "itemBaselines": {
+        "function:_view_runtime_env_specs": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_view_runtime_env_specs"
+        },
+        "function:build_env_outputs": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "build_env_outputs"
+        },
+        "function:build_internal_api_env_output": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "build_internal_api_env_output"
+        },
+        "function:build_internal_api_runtime_contract": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "build_internal_api_runtime_contract"
+        },
+        "function:build_internal_api_runtime_exports": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "build_internal_api_runtime_exports"
+        },
+        "function:container_config_path": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "container_config_path"
+        },
+        "function:env_lines": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "env_lines"
+        },
+        "function:env_targets": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "env_targets"
+        },
+        "function:internal_api_contract_path": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "internal_api_contract_path"
+        },
+        "function:load_internal_api_contract": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "load_internal_api_contract"
+        },
+        "function:render_envs": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "render_envs"
+        },
+        "module:<module>": {
+          "issues": [],
+          "kind": "module",
+          "qualname": "<module>"
+        }
+      },
+      "moduleHasChineseDocstring": true,
+      "semanticIssueItems": 11,
+      "semanticIssues": 11
+    },
+    "python/openclaw/runtime/generated_paths/gateway/__init__.py": {
+      "itemBaselines": {
+        "module:<module>": {
+          "issues": [],
+          "kind": "module",
+          "qualname": "<module>"
+        }
+      },
+      "moduleHasChineseDocstring": true,
+      "semanticIssueItems": 0,
+      "semanticIssues": 0
+    },
+    "python/openclaw/runtime/generated_paths/gateway/config.py": {
+      "itemBaselines": {
+        "function:_gateway_interactive_defaults": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_gateway_interactive_defaults"
+        },
+        "function:_gateway_model_entry": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_gateway_model_entry"
+        },
+        "function:_model_remote_name": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_model_remote_name"
+        },
+        "function:_official_gateway_pin_version": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_official_gateway_pin_version"
+        },
+        "function:_used_model_refs": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_used_model_refs"
+        },
+        "function:build_gateway_model_projection": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "build_gateway_model_projection"
+        },
+        "function:build_gateway_model_runtime_env_lines": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "build_gateway_model_runtime_env_lines"
+        },
+        "function:build_public_openclaw_config_output": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "build_public_openclaw_config_output"
+        },
+        "function:ensure_gateway_config_meta": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "ensure_gateway_config_meta"
+        },
+        "function:gateway_skill_governance_contract_path": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "gateway_skill_governance_contract_path"
+        },
+        "function:load_gateway_skill_governance": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "load_gateway_skill_governance"
+        },
+        "function:merge_gateway_agent_projection": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "merge_gateway_agent_projection"
+        },
+        "function:merge_gateway_model_projection": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "merge_gateway_model_projection"
+        },
+        "function:merge_gateway_skill_governance": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "merge_gateway_skill_governance"
+        },
+        "function:public_openclaw_source_path": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "public_openclaw_source_path"
+        },
+        "function:public_openclaw_state_path": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "public_openclaw_state_path"
+        },
+        "function:render_public_openclaw_config": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "render_public_openclaw_config"
+        },
+        "module:<module>": {
+          "issues": [],
+          "kind": "module",
+          "qualname": "<module>"
+        }
+      },
+      "moduleHasChineseDocstring": true,
+      "semanticIssueItems": 17,
+      "semanticIssues": 17
+    },
+    "python/openclaw/runtime/generated_paths/gateway/constants.py": {
+      "itemBaselines": {
+        "module:<module>": {
+          "issues": [],
+          "kind": "module",
+          "qualname": "<module>"
+        }
+      },
+      "moduleHasChineseDocstring": true,
+      "semanticIssueItems": 0,
+      "semanticIssues": 0
+    },
+    "python/openclaw/runtime/generated_paths/gateway/cron.py": {
+      "itemBaselines": {
+        "function:_coerce_aware_datetime": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_coerce_aware_datetime"
+        },
+        "function:_cron_schedule": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_cron_schedule"
+        },
+        "function:_cron_sort_key": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_cron_sort_key"
+        },
+        "function:_gateway_cron_display_state": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_gateway_cron_display_state"
+        },
+        "function:_gateway_cron_next_run_at_ms": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_gateway_cron_next_run_at_ms"
+        },
+        "function:_gateway_status_from_scheduler_status": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_gateway_status_from_scheduler_status"
+        },
+        "function:_iso_to_epoch_ms": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_iso_to_epoch_ms"
+        },
+        "function:build_gateway_cron_jobs_output": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "build_gateway_cron_jobs_output"
+        },
+        "function:build_gateway_cron_jobs_payload": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "build_gateway_cron_jobs_payload"
+        },
+        "function:build_gateway_cron_jobs_projection": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "build_gateway_cron_jobs_projection"
+        },
+        "function:gateway_cron_jobs_state_path": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "gateway_cron_jobs_state_path"
+        },
+        "function:gateway_cron_jobs_state_path_from_gateway_state_root": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "gateway_cron_jobs_state_path_from_gateway_state_root"
+        },
+        "function:prune_stale_gateway_cron_migration_paths": {
+          "issues": [],
+          "kind": "function",
+          "qualname": "prune_stale_gateway_cron_migration_paths"
+        },
+        "function:prune_stale_gateway_cron_migration_paths_from_gateway_state_root": {
+          "issues": [],
+          "kind": "function",
+          "qualname": "prune_stale_gateway_cron_migration_paths_from_gateway_state_root"
+        },
+        "function:render_gateway_cron_jobs": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "render_gateway_cron_jobs"
+        },
+        "function:stale_gateway_cron_migration_paths": {
+          "issues": [],
+          "kind": "function",
+          "qualname": "stale_gateway_cron_migration_paths"
+        },
+        "function:stale_gateway_cron_migration_paths_from_gateway_state_root": {
+          "issues": [],
+          "kind": "function",
+          "qualname": "stale_gateway_cron_migration_paths_from_gateway_state_root"
+        },
+        "module:<module>": {
+          "issues": [],
+          "kind": "module",
+          "qualname": "<module>"
+        }
+      },
+      "moduleHasChineseDocstring": true,
+      "semanticIssueItems": 13,
+      "semanticIssues": 13
+    },
+    "python/openclaw/runtime/generated_paths/gateway/workspace.py": {
+      "itemBaselines": {
+        "function:_agent_capability_lines": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_agent_capability_lines"
+        },
+        "function:_agent_entrypoint_kind": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_agent_entrypoint_kind"
+        },
+        "function:_agent_io_lines": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_agent_io_lines"
+        },
+        "function:_agent_job_lines": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_agent_job_lines"
+        },
+        "function:_agent_jobs": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_agent_jobs"
+        },
+        "function:_agent_model_profile": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_agent_model_profile"
+        },
+        "function:_agent_runtime_adapter": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_agent_runtime_adapter"
+        },
+        "function:_agent_runtime_module": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_agent_runtime_module"
+        },
+        "function:_contains_gateway_generated_marker": {
+          "issues": [],
+          "kind": "function",
+          "qualname": "_contains_gateway_generated_marker"
+        },
+        "function:_gateway_agent_dir_host_path": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_gateway_agent_dir_host_path"
+        },
+        "function:_gateway_agent_dir_path": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_gateway_agent_dir_path"
+        },
+        "function:_gateway_agent_file_header": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_gateway_agent_file_header"
+        },
+        "function:_gateway_agent_interactive_defaults": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_gateway_agent_interactive_defaults"
+        },
+        "function:_gateway_agent_root_paths": {
+          "issues": [],
+          "kind": "function",
+          "qualname": "_gateway_agent_root_paths"
+        },
+        "function:_gateway_agent_sessions_host_path": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_gateway_agent_sessions_host_path"
+        },
+        "function:_gateway_agent_sessions_path": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_gateway_agent_sessions_path"
+        },
+        "function:_gateway_agent_workspace_host_path": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_gateway_agent_workspace_host_path"
+        },
+        "function:_gateway_agent_workspace_path": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_gateway_agent_workspace_path"
+        },
+        "function:_gateway_default_session_has_empty_transcript": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_gateway_default_session_has_empty_transcript"
+        },
+        "function:_gateway_default_session_id": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_gateway_default_session_id"
+        },
+        "function:_gateway_default_session_key": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_gateway_default_session_key"
+        },
+        "function:_gateway_default_session_metadata": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_gateway_default_session_metadata"
+        },
+        "function:_gateway_default_session_seed_time_ms": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_gateway_default_session_seed_time_ms"
+        },
+        "function:_gateway_router_workspace_host_path": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_gateway_router_workspace_host_path"
+        },
+        "function:_gateway_router_workspace_path": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_gateway_router_workspace_path"
+        },
+        "function:_gateway_workspace_paths": {
+          "issues": [],
+          "kind": "function",
+          "qualname": "_gateway_workspace_paths"
+        },
+        "function:_remove_tree_under_gateway_root": {
+          "issues": [],
+          "kind": "function",
+          "qualname": "_remove_tree_under_gateway_root"
+        },
+        "function:build_gateway_agent_core_files": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "build_gateway_agent_core_files"
+        },
+        "function:build_gateway_agent_projection": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "build_gateway_agent_projection"
+        },
+        "function:gateway_agent_core_file_targets": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "gateway_agent_core_file_targets"
+        },
+        "function:gateway_agent_state_dir_targets": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "gateway_agent_state_dir_targets"
+        },
+        "function:gateway_default_session_targets": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "gateway_default_session_targets"
+        },
+        "function:gateway_default_session_transcript_targets": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "gateway_default_session_transcript_targets"
+        },
+        "function:gateway_healthcheck_script_source_path": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "gateway_healthcheck_script_source_path"
+        },
+        "function:gateway_healthcheck_script_targets": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "gateway_healthcheck_script_targets"
+        },
+        "function:gateway_router_agent_file_targets": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "gateway_router_agent_file_targets"
+        },
+        "function:gateway_router_workspace_file_targets": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "gateway_router_workspace_file_targets"
+        },
+        "function:prune_stale_gateway_agent_state_dirs": {
+          "issues": [],
+          "kind": "function",
+          "qualname": "prune_stale_gateway_agent_state_dirs"
+        },
+        "function:render_gateway_agent_state_dirs": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "render_gateway_agent_state_dirs"
+        },
+        "function:render_gateway_default_sessions": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "render_gateway_default_sessions"
+        },
+        "function:render_gateway_exec_approvals": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "render_gateway_exec_approvals"
+        },
+        "function:stale_gateway_agent_state_dirs": {
+          "issues": [],
+          "kind": "function",
+          "qualname": "stale_gateway_agent_state_dirs"
+        },
+        "module:<module>": {
+          "issues": [],
+          "kind": "module",
+          "qualname": "<module>"
+        }
+      },
+      "moduleHasChineseDocstring": true,
+      "semanticIssueItems": 36,
+      "semanticIssues": 36
+    },
+    "python/openclaw/runtime/generated_paths/io.py": {
+      "itemBaselines": {
+        "function:read_json": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "read_json"
+        },
+        "function:read_text": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "read_text"
+        },
+        "function:write_text": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "write_text"
+        },
+        "module:<module>": {
+          "issues": [],
+          "kind": "module",
+          "qualname": "<module>"
+        }
+      },
+      "moduleHasChineseDocstring": true,
+      "semanticIssueItems": 3,
+      "semanticIssues": 3
+    },
+    "python/openclaw/runtime/generated_paths/path_index.py": {
+      "itemBaselines": {
+        "function:_view_column_label": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_view_column_label"
+        },
+        "function:build_path_index_outputs": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "build_path_index_outputs"
+        },
+        "function:render_path_index": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "render_path_index"
+        },
+        "module:<module>": {
+          "issues": [],
+          "kind": "module",
+          "qualname": "<module>"
+        }
+      },
+      "moduleHasChineseDocstring": true,
+      "semanticIssueItems": 3,
+      "semanticIssues": 3
+    },
+    "python/openclaw/runtime/generated_paths/registry.py": {
+      "itemBaselines": {
+        "function:_deploy_env_values": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_deploy_env_values"
+        },
+        "function:_is_unresolved_runtime_value": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_is_unresolved_runtime_value"
+        },
+        "function:_load_registry": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_load_registry"
+        },
+        "function:_registry_owned_index": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_registry_owned_index"
+        },
+        "function:_registry_rows": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_registry_rows"
+        },
+        "function:_runtime_value": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_runtime_value"
+        },
+        "module:<module>": {
+          "issues": [],
+          "kind": "module",
+          "qualname": "<module>"
+        }
+      },
+      "moduleHasChineseDocstring": true,
+      "semanticIssueItems": 6,
+      "semanticIssues": 6
+    },
+    "python/openclaw/runtime/generated_paths/rendering.py": {
+      "itemBaselines": {
+        "function:_generated_content_matches": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_generated_content_matches"
+        },
+        "function:_normalized_gateway_cron_jobs_for_check": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_normalized_gateway_cron_jobs_for_check"
+        },
+        "function:_normalized_public_openclaw_for_check": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_normalized_public_openclaw_for_check"
+        },
+        "function:check_generated_outputs": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "check_generated_outputs"
+        },
+        "function:render_generated_outputs": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "render_generated_outputs"
+        },
+        "module:<module>": {
+          "issues": [],
+          "kind": "module",
+          "qualname": "<module>"
+        }
+      },
+      "moduleHasChineseDocstring": true,
+      "semanticIssueItems": 5,
+      "semanticIssues": 5
+    },
+    "python/openclaw/runtime/generated_paths/shared.py": {
+      "itemBaselines": {
+        "function:_json_object": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_json_object"
+        },
+        "function:_json_object_rows": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_json_object_rows"
+        },
+        "function:_line_text": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_line_text"
+        },
+        "function:_markdown_inline_values": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_markdown_inline_values"
+        },
+        "function:_positive_int": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_positive_int"
+        },
+        "function:_string_rows": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_string_rows"
+        },
+        "function:_text": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_text"
+        },
+        "module:<module>": {
+          "issues": [],
+          "kind": "module",
+          "qualname": "<module>"
+        }
+      },
+      "moduleHasChineseDocstring": true,
+      "semanticIssueItems": 7,
+      "semanticIssues": 7
+    },
+    "python/openclaw/runtime/healthcheck.py": {
+      "itemBaselines": {
+        "function:build_dispatch_summary": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "build_dispatch_summary"
+        },
+        "function:command_dispatch_json": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "command_dispatch_json"
+        },
+        "function:command_dispatch_summary": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "command_dispatch_summary"
+        },
+        "function:command_http_ready": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "command_http_ready"
+        },
+        "function:fail": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "fail"
+        },
+        "function:load_dispatch_contract": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "load_dispatch_contract"
+        },
+        "function:main": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "main"
+        },
+        "module:<module>": {
+          "issues": [],
+          "kind": "module",
+          "qualname": "<module>"
+        }
+      },
+      "moduleHasChineseDocstring": true,
+      "semanticIssueItems": 7,
+      "semanticIssues": 7
+    },
+    "python/openclaw/runtime/path_lint.py": {
+      "itemBaselines": {
+        "function:_is_excluded_surface_path": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_is_excluded_surface_path"
+        },
+        "function:_iter_surface_files": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_iter_surface_files"
+        },
+        "function:_known_runtime_env_files": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_known_runtime_env_files"
+        },
+        "function:_normalized_repo_ref": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_normalized_repo_ref"
+        },
+        "function:_path_index_expected_header": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_path_index_expected_header"
+        },
+        "function:_profile_registry_paths": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_profile_registry_paths"
+        },
+        "function:_runtime_image_pin_rel": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_runtime_image_pin_rel"
+        },
+        "function:_scan_structured_surface_refs": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_scan_structured_surface_refs"
+        },
+        "function:_validate_profile_registry_coverage": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_validate_profile_registry_coverage"
+        },
+        "function:_validate_workspace_templates": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_validate_workspace_templates"
+        },
+        "function:assert_view_contract": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "assert_view_contract"
+        },
+        "function:main": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "main"
+        },
+        "function:parse_args": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "parse_args"
+        },
+        "module:<module>": {
+          "issues": [],
+          "kind": "module",
+          "qualname": "<module>"
+        }
+      },
+      "moduleHasChineseDocstring": true,
+      "semanticIssueItems": 13,
+      "semanticIssues": 13
+    },
+    "python/openclaw/runtime/path_resolve_cli.py": {
+      "itemBaselines": {
+        "function:build_merged_env": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "build_merged_env"
+        },
+        "function:fail": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "fail"
+        },
+        "function:load_env_file": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "load_env_file"
+        },
+        "function:main": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "main"
+        },
+        "function:parse_args": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "parse_args"
+        },
+        "function:resolve_config_path": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "resolve_config_path"
+        },
+        "module:<module>": {
+          "issues": [],
+          "kind": "module",
+          "qualname": "<module>"
+        }
+      },
+      "moduleHasChineseDocstring": true,
+      "semanticIssueItems": 6,
+      "semanticIssues": 6
+    },
+    "python/openclaw/runtime/path_surface.py": {
+      "itemBaselines": {
+        "function:cmd_check_generated": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "cmd_check_generated"
+        },
+        "function:cmd_render_generated": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "cmd_render_generated"
+        },
+        "function:cmd_resolve": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "cmd_resolve"
+        },
+        "function:cmd_show_entry": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "cmd_show_entry"
+        },
+        "function:cmd_show_index": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "cmd_show_index"
+        },
+        "function:fail": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "fail"
+        },
+        "function:main": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "main"
+        },
+        "function:parse_repo_root_arg": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "parse_repo_root_arg"
+        },
+        "function:read_config": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "read_config"
+        },
+        "function:usage": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "usage"
+        },
+        "module:<module>": {
+          "issues": [],
+          "kind": "module",
+          "qualname": "<module>"
+        }
+      },
+      "moduleHasChineseDocstring": true,
+      "semanticIssueItems": 10,
+      "semanticIssues": 10
+    },
+    "python/openclaw/runtime/path_view.py": {
+      "itemBaselines": {
+        "function:_active_view_contract": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_active_view_contract"
+        },
+        "function:_repo_root": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_repo_root"
+        },
+        "function:detect_runtime_path_view": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "detect_runtime_path_view"
+        },
+        "function:normalize_runtime_path_view": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "normalize_runtime_path_view"
+        },
+        "module:<module>": {
+          "issues": [],
+          "kind": "module",
+          "qualname": "<module>"
+        }
+      },
+      "moduleHasChineseDocstring": true,
+      "semanticIssueItems": 4,
+      "semanticIssues": 4
+    },
+    "python/openclaw/runtime/workspace_templates.py": {
+      "itemBaselines": {
+        "function:_expected_tree": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_expected_tree"
+        },
+        "function:_remove_empty_dirs": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "_remove_empty_dirs"
+        },
+        "function:compare_dirs": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "compare_dirs"
+        },
+        "function:load_manifest": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "load_manifest"
+        },
+        "function:main": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "main"
+        },
+        "function:manifest_pairs": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "manifest_pairs"
+        },
+        "function:parse_args": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "parse_args"
+        },
+        "function:sync_tree": {
+          "issues": [
+            "missing_docstring"
+          ],
+          "kind": "function",
+          "qualname": "sync_tree"
+        },
+        "module:<module>": {
+          "issues": [],
+          "kind": "module",
+          "qualname": "<module>"
+        }
+      },
+      "moduleHasChineseDocstring": true,
+      "semanticIssueItems": 8,
+      "semanticIssues": 8
+    }
+  },
+  "kind": "openclaw_repo_prod_semantic_docstring_baseline_shard",
+  "policy": {
+    "mode": "semantic-baseline-ratchet",
+    "newFilesRequireZeroSemanticIssues": true,
+    "scope": "repo-prod",
+    "trackedItemKinds": [
+      "module",
+      "class",
+      "function"
+    ]
+  },
+  "schemaVersion": 2,
+  "shardKey": "platform_runtime"
+}

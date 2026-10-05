@@ -37,16 +37,13 @@ USAGE
   esac
   shift
 done
-
 fail() {
   echo "[python_runtime_verify][FAIL] $1" >&2
   exit "${2:-2}"
 }
-
 note() {
   echo "[python_runtime_verify] $1"
 }
-
 verify_scheduler_source_mount_consistency() {
   local container_name="${OPENCLAW_CONTROL_PLANE_SCHEDULER_CONTAINER_NAME:-openclaw-control-plane-scheduler}"
   local container_tools_root="${OPENCLAW_CONTROL_PLANE_CONTAINER_TOOLS_ROOT:-/opt/openclaw-tools}"

@@ -17,6 +17,7 @@ from openclaw.lib.testing.acceptance.state import (
     write_deployment_acceptance_state,
 )
 from openclaw.lib.testing.acceptance.summary import (
+    acceptance_summary_blocking_reasons,
     build_acceptance_summary,
     build_official_cli_summary,
     build_runtime_acceptance_summary,
@@ -64,10 +65,24 @@ def main(argv: list[str] | None = None) -> int:
         base_root = Path(opts.get('--root', str(ROOT_DIR))).resolve()
         summary = build_acceptance_summary(base_root)
         fmt = opts.get('--format', 'text')
+        strict = parse_bool(opts.get('--strict', 'false'), '--strict')
+        blocking_reasons = acceptance_summary_blocking_reasons(summary) if strict else []
         if fmt == 'json':
+            if strict:
+                summary = {
+                    **summary,
+                    'strict_acceptance': {
+                        'accepted': not blocking_reasons,
+                        'blocking_reasons': blocking_reasons,
+                    },
+                }
             sys.stdout.write(json.dumps(summary, ensure_ascii=False, indent=2) + '\n')
-            return 0
+            return 1 if blocking_reasons else 0
         sys.stdout.write(render_acceptance_summary_text(summary))
+        if blocking_reasons:
+            for reason in blocking_reasons:
+                sys.stderr.write(f'[acceptance_surface][FAIL] {reason}\n')
+            return 1
         return 0
     if command == 'write-deployment-acceptance-state':
         opts = parse_kv_args(args)

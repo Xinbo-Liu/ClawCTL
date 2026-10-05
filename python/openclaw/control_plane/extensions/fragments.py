@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Iterators for extension-owned surface and governance fragments."""
+"""提供OpenClaw 控制平面子系统的生产实现。"""
 from __future__ import annotations
 
 from pathlib import Path
@@ -10,7 +10,6 @@ from openclaw.control_plane.manifest_fields import fragment_group_field
 
 
 def enabled_extension_ids(*, config_path: Path | None = None) -> set[str]:
-    """Return enabled extension ids for the current control-plane config."""
     return {
         str(extension.get('id') or '').strip()
         for extension in enabled_extensions_from_config(config_path)
@@ -24,7 +23,6 @@ def iter_extension_fragment_paths(
     group: str,
     key: str,
 ) -> Iterator[tuple[str, Path]]:
-    """Yield fragment paths declared under the requested fragment group."""
     field = fragment_group_field(group)
     for extension in enabled_extensions_from_config(config_path):
         extension_id = str(extension.get('id') or '').strip()
@@ -39,7 +37,6 @@ def iter_surface_fragment_paths(
     config_path: Path | None = None,
     key: str,
 ) -> Iterator[tuple[str, Path]]:
-    """Yield paths declared under `surfaceFragments` for one key."""
     yield from iter_extension_fragment_paths(config_path=config_path, group='surface', key=key)
 
 
@@ -48,5 +45,4 @@ def iter_governance_fragment_paths(
     config_path: Path | None = None,
     key: str,
 ) -> Iterator[tuple[str, Path]]:
-    """Yield paths declared under `governanceSurfaces` for one key."""
     yield from iter_extension_fragment_paths(config_path=config_path, group='governance', key=key)

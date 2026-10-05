@@ -122,7 +122,7 @@ def render_help() -> str:
         '',
         '默认行为（在线模式）：',
         '  前置门禁：本脚本会校验同一 env/mode 的 latest basic gate proof；若 proof 缺失或已过期，默认自动补跑 one_click_test_basic.sh',
-        '  部署闭环：runtime 服务启动后，若当前 profile/extension 声明 required run ledger jobs，会先受控执行 run_control_plane_run_all_once.sh，再自动执行 one_click_test_full.sh 并导出 runtime acceptance evidence',
+        '  部署闭环：runtime 服务启动后，若平台 deployment acceptance manifest 声明 required run ledger jobs，会先受控执行 run_control_plane_run_all_once.sh，再自动执行 one_click_test_full.sh 并导出 runtime acceptance evidence',
         '  实际执行：通过统一容器化 Python 控制面进入 Docker；若缺少 Docker / Docker daemon / docker compose，或当前用户无权访问 Docker daemon（如 /var/run/docker.sock 权限不足），主路径会失败；部署摘要由控制面统一写出',
         '  权限前置：真正进入控制面前，会先检查仓库 / deploy / state 路径的读写执行权限',
         '  权限边界：当前脚本不会自动 sudo 或 chown；deploy/.env、deploy/site.env、启用扩展内部 agent/extensions/<extension-id>/deploy/extension.env、deploy/targets.d、state/ 与当前 host state root（默认值由 runtime_paths 真源派生）必须由当前部署用户可管理',
@@ -184,7 +184,7 @@ def render_explain(options: dict[str, str]) -> str:
         '  - 流程会停在 compose 渲染检查，不执行 runtime 服务启动；不能视为调度已上线。',
         '',
         '部署成功后的默认下一步：',
-        f"  - 若当前 profile / extension 声明 required_run_ledger_jobs，默认部署链会先执行 run_all_once，再执行 `{deployment_baseline_surface.post_deploy_default_command()}` 并导出 runtime acceptance evidence；",
+        f"  - 若平台 deployment acceptance manifest 声明 required_run_ledger_jobs，默认部署链会先执行 run_all_once，再执行 `{deployment_baseline_surface.post_deploy_default_command()}` 并导出 runtime acceptance evidence；",
         '  - 需要快速恢复或只做 compose 修复时，可加 --skip-acceptance；该模式只代表服务启动链执行完成，deployment acceptance 与 runtime evidence 均未闭合；',
         '  - dispatch doctor / preflight / send/retry dry-run 只在需要确认调度上线或排查 dispatch 问题时再补做。',
         '',
@@ -224,6 +224,11 @@ def render_next_commands(stage: str, options: dict[str, str]) -> str:
 
 
 def validate_resume(options: dict[str, str]) -> None:
+    """校验resume。
+
+    参数：
+        options（dict[str, str]）：options。
+    """
     stages = effective_stages(options)
     if not options['stage']:
         fail('[deploy_flow_control_plane] --stage 缺少阶段名')

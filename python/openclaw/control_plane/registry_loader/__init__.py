@@ -19,20 +19,19 @@ from openclaw.control_plane.registry_loader.virtual_surfaces import (
     _ensure_agent_control_plane_registry,
     _ensure_agent_internal_assembly_registry,
 )
+from openclaw.lib.repo.bootstrap import bootstrap_sys_path
 
 
 def ensure_agent_internal_assembly_registry(config_path: Path, *, sync: bool = False) -> dict[str, object]:
-    """确保 agent internal assembly registry 与派生结果一致。"""
     return _ensure_agent_internal_assembly_registry(config_path, sync=sync)
 
 
 def ensure_agent_control_plane_registry(config_path: Path, *, sync: bool = False) -> dict[str, object]:
-    """确保 agent control-plane registry 与派生结果一致。"""
     return _ensure_agent_control_plane_registry(config_path, sync=sync)
 
 
 def load_registry_from_context(context: dict[str, object]) -> dict[str, object]:
-    """从已解析的 service context 装配完整 registry。"""
+    bootstrap_sys_path(Path(str(context['path'])), config_path=Path(str(context['path'])))
     collections = _load_registry_collections(context)
     runtime_state = _derive_registry_runtime_state(context, collections)
     _validate_registry_collections(context, collections, runtime_state)
@@ -44,5 +43,4 @@ def load_registry_from_context(context: dict[str, object]) -> dict[str, object]:
 
 
 def load_registry_from_path(config_path: Path) -> dict[str, object]:
-    """从 service 配置路径装配完整 registry。"""
     return load_registry_from_context(load_registry_service_context(config_path))

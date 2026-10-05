@@ -36,6 +36,8 @@ from openclaw.runtime.generated_paths.gateway.constants import (
     GATEWAY_ROUTER_WORKSPACE_ID,
 )
 from openclaw.runtime.generated_paths.gateway.cron import build_gateway_cron_jobs_output
+from openclaw.runtime.generated_paths.gateway.cron import prune_stale_gateway_cron_migration_paths
+from openclaw.runtime.generated_paths.gateway.cron import stale_gateway_cron_migration_paths
 from openclaw.runtime.generated_paths.gateway.workspace import (
     gateway_agent_core_file_targets,
     gateway_agent_state_dir_targets,
@@ -44,7 +46,9 @@ from openclaw.runtime.generated_paths.gateway.workspace import (
     gateway_healthcheck_script_targets,
     gateway_router_agent_file_targets,
     gateway_router_workspace_file_targets,
+    prune_stale_gateway_agent_state_dirs,
     render_gateway_default_sessions,
+    stale_gateway_agent_state_dirs,
 )
 from openclaw.tests.support.managed_extensions import (
     cron_jobs,
@@ -53,12 +57,13 @@ from openclaw.tests.support.managed_extensions import (
     managed_extensions,
     managed_extension_agent_ids,
     registry_rows,
+    representative_managed_extension,
     representative_managed_extension_registry,
 )
 
 ROOT_DIR = resolve_repo_root(Path(__file__))
 MANAGED_EXTENSIONS = tuple(sorted(managed_extensions(ROOT_DIR), key=lambda row: row.id))
-MANAGED_EXTENSION = MANAGED_EXTENSIONS[0] if MANAGED_EXTENSIONS else None
+MANAGED_EXTENSION = representative_managed_extension(ROOT_DIR) if MANAGED_EXTENSIONS else None
 MANAGED_EXTENSION_CONFIG_PATH = MANAGED_EXTENSION.default_service_config_path if MANAGED_EXTENSION is not None else None
 TEST_OLLAMA_BASE_URL = 'http://ollama.local:11434'
 TEST_OLLAMA_MODEL_REF = 'qwen-local:32b'
@@ -97,6 +102,17 @@ def _ollama_env(model: dict[str, Any]) -> dict[str, str]:
 
 def _session_key(agent_id: str) -> str:
     return f'agent:{agent_id}:{GATEWAY_DEFAULT_SESSION_LABEL}'
+
+
+def _has_explicit_agent_workspace(agent_id: str, resolver: Any) -> bool:
+    return f'workspace_{agent_id}' in resolver.entries
+
+
+def _agent_workspace_host_path(agent_id: str, resolver: Any) -> Path:
+    entry_id = f'workspace_{agent_id}'
+    if entry_id in resolver.entries:
+        return resolver.absolute_host_path(entry_id)
+    return resolver.absolute_host_path('gateway_host_state_dir') / f'workspace-{agent_id}'
 
 
 class RuntimePathViewTest(unittest.TestCase):
@@ -167,9 +183,13 @@ class RuntimePathViewTest(unittest.TestCase):
         payload = json.loads(build_public_openclaw_config_output(ROOT_DIR, resolver, MANAGED_EXTENSION_CONFIG_PATH))
         agents = payload['agents']['list']
         agent_ids = {agent['id'] for agent in agents}
+        explicit_workspace_agent_ids = [
+            agent_id for agent_id in business_agent_ids if _has_explicit_agent_workspace(agent_id, resolver)
+        ]
 
         self.assertTrue(business_agent_ids)
-        self.assertIn(f'workspace_{business_agent_ids[0]}', resolver.entries)
+        self.assertTrue(explicit_workspace_agent_ids)
+        self.assertIn(f'workspace_{explicit_workspace_agent_ids[0]}', resolver.entries)
         self.assertEqual(agent_ids, {GATEWAY_MAIN_AGENT_ID, *business_agent_ids})
         self.assertEqual([agent['id'] for agent in agents], [GATEWAY_MAIN_AGENT_ID, *business_agent_ids])
         main_agent = payload['agents']['list'][0]
@@ -362,7 +382,7 @@ class RuntimePathViewTest(unittest.TestCase):
         self.assertIn("net.connect({ host: '127.0.0.1', port: 18789 })", healthcheck_targets[healthcheck_path])
 
         for agent_id in business_agent_ids:
-            workspace = resolver.absolute_host_path(f'workspace_{agent_id}')
+            workspace = _agent_workspace_host_path(agent_id, resolver)
             files = {path.name: content for path, content in targets.items() if path.parent == workspace}
             agent_dir = resolver.absolute_host_path('gateway_host_state_dir') / 'agents' / agent_id / 'agent'
             agent_files = {path.name: content for path, content in targets.items() if path.parent == agent_dir}
@@ -396,7 +416,7 @@ class RuntimePathViewTest(unittest.TestCase):
 
         sample_agent = next(agent for agent in registry_rows(registry, 'agents') if _agent_id(agent))
         sample_agent_id = _agent_id(sample_agent)
-        sample_workspace = resolver.absolute_host_path(f'workspace_{sample_agent_id}')
+        sample_workspace = _agent_workspace_host_path(sample_agent_id, resolver)
         sample_files = {path.name: content for path, content in targets.items() if path.parent == sample_workspace}
         self.assertIn(_text(sample_agent.get('title')), sample_files['IDENTITY.md'])
         sample_jobs = jobs_for_agent(registry, sample_agent_id)
@@ -412,7 +432,7 @@ class RuntimePathViewTest(unittest.TestCase):
         )
         if model_agent is not None:
             model_agent_id = _agent_id(model_agent)
-            model_workspace = resolver.absolute_host_path(f'workspace_{model_agent_id}')
+            model_workspace = _agent_workspace_host_path(model_agent_id, resolver)
             model_files = {path.name: content for path, content in targets.items() if path.parent == model_workspace}
             self.assertIn('modelRequired', model_files['TOOLS.md'])
 
@@ -428,13 +448,71 @@ class RuntimePathViewTest(unittest.TestCase):
                 mock.patch.object(gateway_workspace, 'gateway_router_workspace_file_targets', return_value={}),
                 mock.patch.object(gateway_workspace, 'gateway_router_agent_file_targets', return_value={}),
                 mock.patch.object(gateway_workspace, 'gateway_agent_core_file_targets', return_value={}),
+                mock.patch.object(gateway_workspace, 'prune_stale_gateway_agent_state_dirs', return_value=[]) as prune_mock,
                 mock.patch.object(gateway_workspace, 'render_gateway_default_sessions') as sessions_mock,
             ):
                 gateway_workspace.render_gateway_agent_state_dirs(ROOT_DIR, resolver, MANAGED_EXTENSION_CONFIG_PATH)
 
                 self.assertTrue(target_dir.is_dir())
                 load_mock.assert_called_once_with(MANAGED_EXTENSION_CONFIG_PATH)
+                prune_mock.assert_called_once_with({'agents': []}, resolver)
                 sessions_mock.assert_called_once()
+
+    def test_gateway_agent_state_prunes_dirs_outside_current_registry(self) -> None:
+        registry = _managed_registry()
+        resolver = _managed_resolver()
+        with TemporaryDirectory() as tmpdir:
+            gateway_root = Path(tmpdir) / 'gateway'
+            stale_agent_root = gateway_root / 'agents' / 'obsolete_business_agent'
+            stale_agent_dir = stale_agent_root / 'agent'
+            stale_workspace = gateway_root / 'workspace-obsolete_business_agent'
+            stale_agent_dir.mkdir(parents=True)
+            stale_workspace.mkdir(parents=True)
+            marker = f'> 由 `{gateway_workspace.RENDER_GENERATED_RUNTIME_PATHS_CMD}` 根据 active control-plane registry 生成；\n'
+            (stale_agent_dir / 'AGENTS.md').write_text(marker, encoding='utf-8')
+            (stale_workspace / 'AGENTS.md').write_text(marker, encoding='utf-8')
+            (stale_agent_root / 'sessions').mkdir()
+            original_absolute_host_path = resolver.absolute_host_path
+
+            with mock.patch.object(resolver, 'absolute_host_path') as absolute_host_path:
+                absolute_host_path.side_effect = (
+                    lambda entry_id: gateway_root
+                    if entry_id == 'gateway_host_state_dir'
+                    else original_absolute_host_path(entry_id)
+                )
+
+                stale = stale_gateway_agent_state_dirs(registry, resolver)
+                self.assertEqual({path.name for path in stale}, {'obsolete_business_agent', 'workspace-obsolete_business_agent'})
+
+                removed = prune_stale_gateway_agent_state_dirs(registry, resolver)
+
+            self.assertEqual({path.name for path in removed}, {'obsolete_business_agent', 'workspace-obsolete_business_agent'})
+            self.assertFalse(stale_agent_root.exists())
+            self.assertFalse(stale_workspace.exists())
+
+    def test_gateway_cron_state_prunes_migration_backups(self) -> None:
+        resolver = _managed_resolver()
+        with TemporaryDirectory() as tmpdir:
+            gateway_root = Path(tmpdir) / 'gateway'
+            cron_dir = gateway_root / 'cron'
+            cron_dir.mkdir(parents=True)
+            stale_path = cron_dir / 'jobs.json.migrated'
+            current_path = cron_dir / 'jobs.json'
+            stale_path.write_text('{}\n', encoding='utf-8')
+            current_path.write_text('{}\n', encoding='utf-8')
+            original_absolute_host_path = resolver.absolute_host_path
+
+            with mock.patch.object(resolver, 'absolute_host_path') as absolute_host_path:
+                absolute_host_path.side_effect = (
+                    lambda entry_id: gateway_root
+                    if entry_id == 'gateway_host_state_dir'
+                    else original_absolute_host_path(entry_id)
+                )
+                self.assertEqual(stale_gateway_cron_migration_paths(resolver), [stale_path])
+                self.assertEqual(prune_stale_gateway_cron_migration_paths(resolver), [stale_path])
+
+            self.assertFalse(stale_path.exists())
+            self.assertTrue(current_path.exists())
 
     def test_gateway_default_session_render_refreshes_empty_placeholder_time(self) -> None:
         sample_agent_id = managed_extension_agent_ids(_managed_registry())[0]

@@ -29,7 +29,6 @@ from openclaw.control_plane.cli_support.module_handlers import (
 from openclaw.control_plane.cli_support.readonly_handlers import (
     cmd_agent_access_log,
     cmd_agent_group_access,
-    cmd_agent_group_acceptance_bindings,
     cmd_agent_group_release_gates,
     cmd_agent_groups,
     cmd_agent_modules,

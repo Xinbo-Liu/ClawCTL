@@ -104,7 +104,7 @@ def make_lightweight_discovery_candidate(repo_root: Path, extension_id: str):
         'agent/modules',
     ):
         (package_root / rel_path).mkdir(parents=True, exist_ok=True)
-    write_json(package_root / 'agent' / 'control_plane' / 'registries' / 'dispatch_targets.json', {'version': 7, 'targets': []})
+    write_json(package_root / 'agent' / 'control_plane' / 'registries' / 'dispatch_targets.json', {'version': 8, 'targets': []})
     write_text(package_root / 'python' / PROBE_PACKAGE_NAME / '__init__.py', '')
     return SimpleNamespace(
         extension_id=extension_id,
@@ -414,8 +414,8 @@ class ControlPlaneConfigSurfaceTest(unittest.TestCase):
             'no_self': 'service profile must enable extension id',
             'path_escape': 'escapes extension root',
             'manifest_source': 'service profile must load own manifest from convention path',
-            'extra_enabled': 'may only enable agent_platform and extension id',
-            'extra_manifest_dir': 'may only load platform and own manifest dirs',
+            'extra_enabled': 'may only enable agent_platform, required dependencies, and extension id',
+            'extra_manifest_dir': 'may only load platform, required dependency, and own manifest dirs',
             'registry_file_escape': 'manifest registry.dispatchTargetRegistryPaths[0] escapes extension root',
             'surface_escape': 'manifest surfaceFragments.runtimePathsPath escapes extension root',
             'unknown_manifest_field': 'unsupported manifest field(s): sampleContract',

@@ -31,6 +31,8 @@ HTTP profile 必须声明 `baseUrlEnv`；生产外部 provider 应声明 `auth.r
 
 ## 示例
 
+下面展示模型通道片段，不是可直接登记的完整 model profile。正式对象仍需满足 model schema，声明 identity、activation 和上述 `costPolicy`；完整作者合同见 [扩展挂载指南](../../../docs/architecture/explicit-extension-packages.md)。
+
 Ollama HTTP：
 
 ```json

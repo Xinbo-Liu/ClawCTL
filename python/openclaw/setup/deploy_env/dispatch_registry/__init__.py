@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Dispatch registry helpers for deploy env control plane."""
+"""提供OpenClaw setup子系统的生产实现。"""
 from __future__ import annotations
 
 from openclaw.setup.deploy_env.dispatch_registry.common import (

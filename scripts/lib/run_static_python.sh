@@ -14,7 +14,6 @@ WORKDIR="$ROOT_DIR"
 EXTRA_ENVS=()
 EXTRA_MOUNTS=()
 READINESS_LABEL="${OPENCLAW_STATIC_PYTHON_READINESS_LABEL:-当前静态检查入口}"
-
 usage() {
   cat <<'USAGE'
 用法：
@@ -28,11 +27,9 @@ usage() {
   - 若只缺少控制面镜像，执行 bash ./scripts/setup/prepare_control_plane_medium.sh，离线场景追加 --offline --image-archive <local-path>。
 USAGE
 }
-
 readiness_next_step() {
   echo "[run_static_python][NEXT] $*" >&2
 }
-
 ensure_static_python_readiness() {
   local docker_info_output=''
 

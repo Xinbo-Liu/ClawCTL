@@ -286,8 +286,8 @@ class ExtensionConflictValidationTest(unittest.TestCase):
             self._write_json(workspace_b, {'control_plane': [{'template': 'same_template', 'target_entry': 'same_target'}], 'stale_dirs': []})
             self._write_json(docs_a, {'pages': [{'path': 'docs/same.md'}]})
             self._write_json(docs_b, {'pages': [{'path': 'docs/same.md'}]})
-            self._write_json(testing_a, {'groups': [{'id': 'same_group'}], 'checks': [{'id': 'same_check'}]})
-            self._write_json(testing_b, {'groups': [{'id': 'same_group'}], 'checks': [{'id': 'same_check'}]})
+            self._write_json(testing_a, {'release_gate_checks': [{'id': 'same_release_check'}]})
+            self._write_json(testing_b, {'release_gate_checks': [{'id': 'same_release_check'}]})
             self._write_json(runtime_a, {'targets': [{'target': 'same_target'}]})
             self._write_json(runtime_b, {'targets': [{'target': 'same_target'}]})
             self._write_json(path_a, {'entrypoints': {'same_entry': {'title': 'A'}}, 'common_entries': [{'entry_id': 'same_entry', 'title': 'A'}]})
@@ -331,7 +331,6 @@ class ExtensionConflictValidationTest(unittest.TestCase):
                 'extension job runner id',
                 'extension workspace template',
                 'extension docs registry page path',
-                'extension testing manifest group id',
                 'extension runtime service registry target',
                 'extension path entrypoint id',
             ))

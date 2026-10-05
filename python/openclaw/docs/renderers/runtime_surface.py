@@ -25,8 +25,7 @@ from openclaw.lib.repo.static_truth import (
 
 ROOT_DIR = resolve_repo_root(Path(__file__))
 RENDER_RUNTIME_SURFACE_CMD = canonical_cli_command('docs', 'render-runtime-surface')
-ACCEPTANCE_SUMMARY_CMD = host_wrapper_command('runtime', 'acceptance', 'acceptance-summary')
-AGENT_GROUP_ACCEPTANCE_BINDINGS_CMD = host_wrapper_command('control-plane', 'evidence', 'agent-group-acceptance-bindings')
+ACCEPTANCE_SUMMARY_CMD = host_wrapper_command('runtime', 'acceptance', 'acceptance-summary') + ' --strict true'
 
 
 def load_testing_manifest(*, config_path: Path | None = None) -> dict[str, Any]:
@@ -65,7 +64,6 @@ def render_doc(manifest: dict[str, Any]) -> str:
         manifest,
         managed_note_text=managed_note(),
         acceptance_summary_cmd=ACCEPTANCE_SUMMARY_CMD,
-        agent_group_acceptance_bindings_cmd=AGENT_GROUP_ACCEPTANCE_BINDINGS_CMD,
         format_markdown_tables_fn=format_markdown_tables,
     )
 

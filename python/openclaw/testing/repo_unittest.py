@@ -9,16 +9,18 @@ from __future__ import annotations
 
 import argparse
 import importlib.util
+import json
 import os
 import shutil
-import subprocess
 import sys
+import tempfile
 import time
 import types
 import unittest
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, Sequence
+from typing import Any, Iterable, Sequence
 
 from openclaw.testing.bootstrap_support import ensure_repo_pythonpath, prepend_sys_path_entries
 
@@ -26,11 +28,65 @@ from openclaw.testing.bootstrap_support import ensure_repo_pythonpath, prepend_s
 BOOTSTRAP_ROOT = ensure_repo_pythonpath(Path(__file__))
 
 from openclaw.lib.repo.layout import resolve_repo_root
-from openclaw.lib.repo.managed_extensions import managed_extension_test_roots
+from openclaw.lib.repo.managed_extensions import (
+    ManagedExtensionRow,
+    managed_explicit_extensions,
+    managed_extension_test_roots,
+)
+from openclaw.lib.runtime.bounded_process import run_bounded_process, truncate_process_output
 
 
 SKIP_BYTECODE_CLEANUP_ENV = 'OPENCLAW_REPO_UNITTEST_SKIP_BYTECODE_CLEANUP'
 DEFAULT_START_DIR = 'python/openclaw/tests'
+DEFAULT_WORKER_TIMEOUT_SECONDS = 300.0
+DEFAULT_SUITE_TIMEOUT_SECONDS = 900.0
+DEFAULT_WORK_UNITS_PER_JOB = 2
+WORKER_TIMEOUT_ENV = 'OPENCLAW_REPO_UNITTEST_WORKER_TIMEOUT_SECONDS'
+SUITE_TIMEOUT_ENV = 'OPENCLAW_REPO_UNITTEST_SUITE_TIMEOUT_SECONDS'
+
+
+@dataclass(frozen=True)
+class TestFile:
+    """记录无需导入即可完成分桶的测试文件与静态权重。"""
+
+    selector: str
+    estimated_cases: int
+
+
+def _require_managed_extension_row(row: object) -> ManagedExtensionRow:
+    """确认受管扩展枚举返回完整的仓库合同记录。
+
+    参数：
+        row（object）：来自 ``managed_explicit_extensions`` 的扩展记录对象。
+
+    返回：
+        ManagedExtensionRow：可直接用于测试导入路径和 wheelhouse 解析的扩展记录。
+
+    异常：
+        TypeError：当调用方或测试替身没有遵守受管扩展记录契约时抛出清晰错误。
+    """
+    if isinstance(row, ManagedExtensionRow):
+        return row
+    extension_id = str(getattr(row, 'id', '<unknown>') or '<unknown>')
+    raise TypeError(
+        'managed_explicit_extensions() must return ManagedExtensionRow objects; '
+        f'got {type(row).__name__} for extension {extension_id}'
+    )
+
+
+def _managed_extension_import_entries(root: Path) -> tuple[Path, ...]:
+    entries: list[Path] = []
+    for raw_row in managed_explicit_extensions(root):
+        row = _require_managed_extension_row(raw_row)
+        for python_root in row.python_roots:
+            if python_root.is_dir() and python_root not in entries:
+                entries.append(python_root)
+        wheelhouse = row.root_dir / 'offline_wheelhouse'
+        if wheelhouse.is_dir():
+            for wheel in sorted(wheelhouse.glob('*.whl')):
+                if wheel not in entries:
+                    entries.append(wheel)
+    return tuple(entries)
 
 
 def repo_root() -> Path:
@@ -120,8 +176,14 @@ def add_parser_arguments(parser: argparse.ArgumentParser, *, include_selectors: 
     )
     parser.add_argument('--import-mode', default='')
     parser.add_argument('--durations', type=int, default=0, help='print the N slowest tests; disables worker parallelism for accurate timings')
+    parser.add_argument('--report-json', default='', help='write the deterministic machine execution report to this path')
+    parser.add_argument('--list-tests', action='store_true', help='list deterministic test IDs without running tests')
+    parser.add_argument('--json', dest='json_output', action='store_true', help='emit --list-tests output as JSON')
     parser.add_argument('-s', '--start-dir', default=DEFAULT_START_DIR, action=StartDirAction)
     parser.add_argument('-p', '--pattern', default='test_*.py')
+    parser.add_argument('--worker-mode', choices=('run', 'list'), default='', help=argparse.SUPPRESS)
+    parser.add_argument('--worker-report', default='', help=argparse.SUPPRESS)
+    parser.add_argument('--worker-index', type=int, default=0, help=argparse.SUPPRESS)
     if include_selectors:
         parser.add_argument('selectors', nargs='*')
     return parser
@@ -172,6 +234,11 @@ def _bind_test_support_package(support_root: Path) -> None:
         existing_paths = [Path(item).resolve() for item in getattr(existing, '__path__', []) if str(item).strip()]
         if support_path in existing_paths:
             return
+        for module_name in sorted(
+            [name for name in sys.modules if name == 'support' or name.startswith('support.')],
+            reverse=True,
+        ):
+            sys.modules.pop(module_name, None)
     package = types.ModuleType('support')
     package.__path__ = [str(support_path)]  # type: ignore[attr-defined]
     sys.modules['support'] = package
@@ -276,14 +343,52 @@ def _suite_from_start_dirs(root: Path, start_dirs: Sequence[Path], pattern: str)
     return suite
 
 
-def _suite_from_args(args: argparse.Namespace, root: Path) -> unittest.TestSuite:
-    selectors = [str(item).strip() for item in list(args.selectors or []) if str(item).strip()]
-    if selectors:
-        return _suite_from_selectors(selectors, root)
+def _default_start_dirs(args: argparse.Namespace, root: Path) -> tuple[Path, ...]:
     start_dir = (root / str(args.start_dir)).resolve()
     if not bool(getattr(args, 'start_dir_explicit', False)) and str(args.start_dir) == DEFAULT_START_DIR:
-        return _suite_from_start_dirs(root, [start_dir, *managed_extension_test_roots(root)], str(args.pattern))
-    return _suite_from_start_dirs(root, [start_dir], str(args.pattern))
+        return (start_dir, *managed_extension_test_roots(root))
+    return (start_dir,)
+
+
+def _estimate_test_cases(path: Path) -> int:
+    try:
+        source = path.read_text(encoding='utf-8')
+    except (OSError, UnicodeError):
+        return 1
+    return max(1, sum(1 for line in source.splitlines() if line.lstrip().startswith('def test_')))
+
+
+def _test_file_inventory(args: argparse.Namespace, root: Path) -> tuple[TestFile, ...]:
+    """仅枚举测试文件并估算分桶权重，不在父进程导入测试模块。
+
+    参数：
+        args（argparse.Namespace）：包含 start-dir、pattern 和 selector 的 runner 参数。
+        root（Path）：仓库根目录。
+
+    返回：
+        tuple[TestFile, ...]：按仓库相对路径稳定排序且排除聚合入口的测试文件。
+    """
+    if list(getattr(args, 'selectors', []) or []):
+        return ()
+    rows: dict[str, TestFile] = {}
+    for start_dir in _default_start_dirs(args, root):
+        if not start_dir.is_dir():
+            continue
+        for path in sorted(start_dir.rglob(str(args.pattern))):
+            if not path.is_file() or path.name == 'test_all.py':
+                continue
+            selector = path.resolve().relative_to(root.resolve()).as_posix()
+            rows[selector] = TestFile(selector=selector, estimated_cases=_estimate_test_cases(path))
+    return tuple(rows[key] for key in sorted(rows))
+
+
+def _suite_from_args(args: argparse.Namespace, root: Path) -> unittest.TestSuite:
+    selectors = [str(item).strip() for item in list(args.selectors or []) if str(item).strip()]
+    prepend_sys_path_entries(_managed_extension_import_entries(root))
+    if selectors:
+        return _suite_from_selectors(selectors, root)
+    inventory = _test_file_inventory(args, root)
+    return _suite_from_selectors([row.selector for row in inventory], root)
 
 
 def _iter_test_cases(suite: unittest.TestSuite) -> Iterable[unittest.TestCase]:
@@ -398,6 +503,36 @@ def _build_parallel_buckets(selector_counts: dict[str, int], jobs: int) -> list[
     return [tuple(bucket['selectors']) for bucket in buckets if bucket['selectors']]
 
 
+def _build_file_buckets(inventory: Sequence[TestFile], jobs: int) -> list[tuple[str, ...]]:
+    """按静态测试方法数平衡文件清单，不触发测试模块导入。"""
+    if jobs < 1:
+        raise ValueError('jobs must be >= 1')
+    if not inventory:
+        return []
+    buckets: list[dict[str, object]] = [
+        {'selectors': [], 'weight': 0}
+        for _ in range(min(jobs, len(inventory)))
+    ]
+    for row in sorted(inventory, key=lambda item: (-item.estimated_cases, item.selector)):
+        bucket = min(buckets, key=lambda item: (int(item['weight']), len(item['selectors'])))  # type: ignore[arg-type]
+        selectors = bucket['selectors']
+        assert isinstance(selectors, list)
+        selectors.append(row.selector)
+        bucket['weight'] = int(bucket['weight']) + row.estimated_cases
+    return [tuple(str(selector) for selector in bucket['selectors']) for bucket in buckets if bucket['selectors']]
+
+
+def _inventory_work_unit_count(file_count: int, jobs: int, *, list_only: bool) -> int:
+    if file_count < 1 or jobs < 1:
+        raise ValueError('file_count and jobs must be >= 1')
+    multiplier = 1 if list_only else DEFAULT_WORK_UNITS_PER_JOB
+    return min(file_count, jobs * multiplier)
+
+
+def _remaining_worker_timeout(worker_timeout: float, suite_deadline: float, *, now: float) -> float:
+    return max(0.0, min(worker_timeout, suite_deadline - now))
+
+
 def _parallelizable_suite(args: argparse.Namespace, suite: unittest.TestSuite) -> bool:
     test_count = suite.countTestCases()
     if int(getattr(args, 'durations', 0) or 0) > 0 or _parallel_jobs_for(args) <= 1 or test_count <= 1:
@@ -411,6 +546,7 @@ class TimingTextTestResult(unittest.TextTestResult):
     def __init__(self, *args: object, **kwargs: object) -> None:
         super().__init__(*args, **kwargs)
         self.test_durations: list[tuple[float, str, str]] = []
+        self.test_statuses: dict[str, str] = {}
         self._openclaw_test_started_at = 0.0
 
     def startTest(self, test: unittest.TestCase) -> None:
@@ -422,7 +558,32 @@ class TimingTextTestResult(unittest.TextTestResult):
         test_id = str(test.id()).strip() or repr(test)
         module_name = str(test.__class__.__module__).strip() or '<unknown>'
         self.test_durations.append((elapsed, test_id, module_name))
+        self.test_statuses.setdefault(test_id, 'PASS')
         super().stopTest(test)
+
+    def addError(self, test: unittest.TestCase, err: tuple[type[BaseException], BaseException, object]) -> None:
+        self.test_statuses[str(test.id())] = 'ERROR'
+        super().addError(test, err)  # type: ignore[arg-type]
+
+    def addFailure(self, test: unittest.TestCase, err: tuple[type[BaseException], BaseException, object]) -> None:
+        self.test_statuses[str(test.id())] = 'FAIL'
+        super().addFailure(test, err)  # type: ignore[arg-type]
+
+    def addSkip(self, test: unittest.TestCase, reason: str) -> None:
+        self.test_statuses[str(test.id())] = 'SKIP'
+        super().addSkip(test, reason)
+
+    def addExpectedFailure(
+        self,
+        test: unittest.TestCase,
+        err: tuple[type[BaseException], BaseException, object],
+    ) -> None:
+        self.test_statuses[str(test.id())] = 'EXPECTED_FAILURE'
+        super().addExpectedFailure(test, err)  # type: ignore[arg-type]
+
+    def addUnexpectedSuccess(self, test: unittest.TestCase) -> None:
+        self.test_statuses[str(test.id())] = 'UNEXPECTED_SUCCESS'
+        super().addUnexpectedSuccess(test)
 
 
 class TimingTextTestRunner(unittest.TextTestRunner):
@@ -459,12 +620,17 @@ def _serial_runner_for(args: argparse.Namespace) -> unittest.TextTestRunner:
     durations = int(getattr(args, 'durations', 0) or 0)
     if durations < 0:
         raise ValueError('durations must be >= 0')
-    if durations > 0:
-        return TimingTextTestRunner(verbosity=1 if args.quiet else 2, durations=durations)
-    return unittest.TextTestRunner(verbosity=1 if args.quiet else 2)
+    return TimingTextTestRunner(verbosity=1 if args.quiet else 2, durations=durations)
 
 
-def _worker_command(args: argparse.Namespace, selectors: Sequence[str]) -> list[str]:
+def _worker_command(
+    args: argparse.Namespace,
+    selectors: Sequence[str],
+    *,
+    worker_mode: str = '',
+    worker_report: Path | None = None,
+    worker_index: int = 0,
+) -> list[str]:
     command = [
         sys.executable,
         '-B',
@@ -478,12 +644,294 @@ def _worker_command(args: argparse.Namespace, selectors: Sequence[str]) -> list[
         str(args.pattern),
     ]
     command.append('--quiet')
+    if worker_mode:
+        command.extend(['--worker-mode', worker_mode, '--worker-index', str(worker_index)])
+    if worker_report is not None:
+        command.extend(['--worker-report', str(worker_report)])
     command.extend(selectors)
     return command
 
 
 def _should_clean_bytecode_residue() -> bool:
     return str(os.environ.get(SKIP_BYTECODE_CLEANUP_ENV) or '').strip().lower() not in {'1', 'true', 'yes'}
+
+
+def _positive_timeout(name: str, default: float) -> float:
+    raw = str(os.environ.get(name) or '').strip()
+    if not raw:
+        return default
+    try:
+        value = float(raw)
+    except ValueError:
+        return default
+    return value if value > 0 else default
+
+
+def _test_identity_rows(suite: unittest.TestSuite) -> list[dict[str, str]]:
+    rows = [
+        {
+            'id': str(test.id()).strip() or repr(test),
+            'module': str(test.__class__.__module__).strip() or '<unknown>',
+        }
+        for test in _iter_test_cases(suite)
+    ]
+    return sorted(rows, key=lambda item: (item['id'], item['module']))
+
+
+def _write_json_report(path: Path, payload: dict[str, Any]) -> None:
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+
+
+def _worker_result_payload(
+    *,
+    args: argparse.Namespace,
+    selectors: Sequence[str],
+    result: TimingTextTestResult,
+    duration_seconds: float,
+) -> dict[str, Any]:
+    tests = [
+        {
+            'id': test_id,
+            'module': module_name,
+            'worker': int(args.worker_index),
+            'durationSeconds': round(elapsed, 6),
+            'status': result.test_statuses.get(test_id, 'PASS'),
+        }
+        for elapsed, test_id, module_name in result.test_durations
+    ]
+    tests.sort(key=lambda item: str(item['id']))
+    return {
+        'worker': int(args.worker_index),
+        'selectors': list(selectors),
+        'modules': sorted({str(item['module']) for item in tests}),
+        'testCount': result.testsRun,
+        'durationSeconds': round(duration_seconds, 3),
+        'exitCode': 0 if result.wasSuccessful() else 1,
+        'timedOut': False,
+        'status': 'PASS' if result.wasSuccessful() else 'FAIL',
+        'tests': tests,
+    }
+
+
+def _run_worker(args: argparse.Namespace, root: Path, suite: unittest.TestSuite) -> int:
+    report_path = Path(str(args.worker_report)).resolve() if str(args.worker_report).strip() else None
+    selectors = [str(item) for item in list(args.selectors or [])]
+    if args.worker_mode == 'list':
+        tests = _test_identity_rows(suite)
+        payload = {
+            'worker': int(args.worker_index),
+            'selectors': selectors,
+            'modules': sorted({item['module'] for item in tests}),
+            'testCount': len(tests),
+            'durationSeconds': 0.0,
+            'exitCode': 0,
+            'timedOut': False,
+            'status': 'PASS',
+            'tests': tests,
+        }
+        if report_path is None:
+            raise ValueError('--worker-report is required for worker mode')
+        _write_json_report(report_path, payload)
+        return 0
+
+    started = time.perf_counter()
+    runner = _serial_runner_for(args)
+    result = runner.run(suite)
+    if not isinstance(result, TimingTextTestResult):
+        raise TypeError('repo unittest worker requires TimingTextTestResult')
+    payload = _worker_result_payload(
+        args=args,
+        selectors=selectors,
+        result=result,
+        duration_seconds=time.perf_counter() - started,
+    )
+    if report_path is None:
+        raise ValueError('--worker-report is required for worker mode')
+    _write_json_report(report_path, payload)
+    return int(payload['exitCode'])
+
+
+def _read_worker_report(path: Path) -> dict[str, Any]:
+    payload = json.loads(path.read_text(encoding='utf-8'))
+    if not isinstance(payload, dict):
+        raise ValueError(f'worker report must be a JSON object: {path}')
+    return payload
+
+
+def _aggregate_worker_reports(
+    *,
+    reports: Sequence[dict[str, Any]],
+    duration_seconds: float,
+    timed_out: bool,
+) -> dict[str, Any]:
+    ordered_reports = sorted(reports, key=lambda item: int(item.get('worker') or 0))
+    tests = [dict(test) for report in ordered_reports for test in list(report.get('tests') or [])]
+    tests.sort(key=lambda item: str(item.get('id') or ''))
+    test_id_counts: dict[str, int] = {}
+    for item in tests:
+        test_id = str(item.get('id') or '')
+        test_id_counts[test_id] = test_id_counts.get(test_id, 0) + 1
+    duplicate_test_ids = sorted(test_id for test_id, count in test_id_counts.items() if test_id and count > 1)
+    exit_code = (
+        1
+        if timed_out
+        or duplicate_test_ids
+        or any(int(item.get('exitCode') or 0) != 0 for item in ordered_reports)
+        else 0
+    )
+    return {
+        'suite': 'repo_unittest',
+        'status': 'PASS' if exit_code == 0 else 'FAIL',
+        'summary': {
+            'tests': len(tests),
+            'workers': len(ordered_reports),
+            'durationSeconds': round(duration_seconds, 3),
+            'exitCode': exit_code,
+            'timedOut': timed_out,
+            'duplicateTestIds': duplicate_test_ids,
+        },
+        'workers': ordered_reports,
+        'tests': tests,
+    }
+
+
+def _run_inventory(args: argparse.Namespace, root: Path, inventory: Sequence[TestFile]) -> int:
+    started = time.monotonic()
+    jobs = min(_parallel_jobs_for(args), max(1, len(inventory)))
+    work_units = _inventory_work_unit_count(len(inventory), jobs, list_only=bool(args.list_tests))
+    buckets = _build_file_buckets(inventory, work_units)
+    worker_timeout = _positive_timeout(WORKER_TIMEOUT_ENV, DEFAULT_WORKER_TIMEOUT_SECONDS)
+    suite_timeout = _positive_timeout(SUITE_TIMEOUT_ENV, DEFAULT_SUITE_TIMEOUT_SECONDS)
+    suite_deadline = started + suite_timeout
+    worker_mode = 'list' if args.list_tests else 'run'
+    reports: list[dict[str, Any]] = []
+    failures: list[dict[str, Any]] = []
+
+    with tempfile.TemporaryDirectory(prefix='openclaw_repo_unittest_reports_') as temp_dir:
+        report_root = Path(temp_dir)
+
+        def run_bucket(index: int, selectors: Sequence[str]) -> dict[str, Any]:
+            report_path = report_root / f'worker-{index:03d}.json'
+            effective_timeout = _remaining_worker_timeout(
+                worker_timeout,
+                suite_deadline,
+                now=time.monotonic(),
+            )
+            if effective_timeout <= 0:
+                return {
+                    'worker': index,
+                    'selectors': list(selectors),
+                    'modules': [],
+                    'testCount': 0,
+                    'durationSeconds': 0.0,
+                    'exitCode': 1,
+                    'timedOut': True,
+                    'status': 'TIMEOUT',
+                    'tests': [],
+                    'output': 'repo unittest suite exceeded its internal timeout before this work unit started',
+                }
+            outcome = run_bounded_process(
+                _worker_command(
+                    args,
+                    selectors,
+                    worker_mode=worker_mode,
+                    worker_report=report_path,
+                    worker_index=index,
+                ),
+                cwd=root,
+                env=dict(os.environ, PYTHONDONTWRITEBYTECODE='1', **{SKIP_BYTECODE_CLEANUP_ENV: '1'}),
+                timeout_seconds=effective_timeout,
+                heartbeat_label=f'repo-unittest-worker-{index}',
+            )
+            payload: dict[str, Any]
+            if report_path.is_file():
+                payload = _read_worker_report(report_path)
+            else:
+                payload = {
+                    'worker': index,
+                    'selectors': list(selectors),
+                    'modules': [],
+                    'testCount': 0,
+                    'durationSeconds': outcome.duration_seconds,
+                    'exitCode': outcome.exit_code,
+                    'timedOut': outcome.timed_out,
+                    'status': 'TIMEOUT' if outcome.timed_out else 'FAIL',
+                    'tests': [],
+                }
+            payload['durationSeconds'] = outcome.duration_seconds
+            payload['exitCode'] = outcome.exit_code if outcome.exit_code is not None else 1
+            payload['timedOut'] = outcome.timed_out
+            if outcome.exit_code != 0 or outcome.timed_out:
+                payload['status'] = 'TIMEOUT' if outcome.timed_out else 'FAIL'
+                payload['output'] = truncate_process_output(
+                    '\n'.join(
+                        part
+                        for part in [str(outcome.stdout or '').strip(), str(outcome.stderr or '').strip()]
+                        if part
+                    ).strip()
+                )
+            return payload
+
+        with ThreadPoolExecutor(max_workers=jobs) as executor:
+            futures = [executor.submit(run_bucket, index, selectors) for index, selectors in enumerate(buckets, start=1)]
+            for future in futures:
+                payload = future.result()
+                reports.append(payload)
+                if str(payload.get('status')) not in {'PASS'}:
+                    failures.append(payload)
+
+    total_elapsed = time.monotonic() - started
+    suite_timed_out = total_elapsed > suite_timeout or any(bool(item.get('timedOut')) for item in reports)
+    aggregate = _aggregate_worker_reports(
+        reports=reports,
+        duration_seconds=total_elapsed,
+        timed_out=suite_timed_out,
+    )
+    aggregate['summary']['parallelJobs'] = jobs
+    aggregate['summary']['workUnits'] = len(reports)
+    report_path = str(args.report_json or '').strip()
+    if report_path:
+        _write_json_report(Path(report_path).resolve(), aggregate)
+
+    if args.list_tests:
+        if args.json_output:
+            print(json.dumps({'suite': 'repo_unittest_inventory', 'tests': aggregate['tests']}, ensure_ascii=False))
+        else:
+            for item in aggregate['tests']:
+                print(item['id'])
+        return int(aggregate['summary']['exitCode'])
+
+    duplicate_test_ids = list(aggregate['summary'].get('duplicateTestIds') or [])
+    aggregate_failed = bool(failures or duplicate_test_ids)
+    stream = sys.stderr if aggregate_failed else sys.stdout
+    if not args.quiet:
+        stream.write(
+            f"Parallel repo unittest: {aggregate['summary']['tests']} tests, "
+            f"{len(reports)} work units, max {jobs} concurrent workers\n"
+        )
+        for item in sorted(reports, key=lambda row: int(row.get('worker') or 0)):
+            stream.write(
+                f"[worker {item['worker']}] {item.get('testCount', 0)} tests "
+                f"in {float(item.get('durationSeconds') or 0):.3f}s status={item.get('status')}\n"
+            )
+    for item in failures:
+        stream.write(f"\n=== worker {item.get('worker')} {item.get('status')} ===\n")
+        if item.get('output'):
+            stream.write(str(item['output']).rstrip() + '\n')
+    if duplicate_test_ids:
+        stream.write('\n=== duplicate test IDs ===\n')
+        for test_id in duplicate_test_ids:
+            stream.write(str(test_id) + '\n')
+    if aggregate_failed:
+        stream.write(
+            f"\nFAILED (workers={len(failures)}/{len(reports)}, tests={aggregate['summary']['tests']}, "
+            f"elapsed={total_elapsed:.3f}s)\n"
+        )
+    else:
+        stream.write(f"Ran {aggregate['summary']['tests']} tests in {total_elapsed:.3f}s\n\nOK\n")
+    return int(aggregate['summary']['exitCode'])
 
 
 def _run_parallel_suite(args: argparse.Namespace, root: Path, suite: unittest.TestSuite) -> int:
@@ -500,23 +948,21 @@ def _run_parallel_suite(args: argparse.Namespace, root: Path, suite: unittest.Te
 
     def run_bucket(index: int, selectors: Sequence[str]) -> dict[str, object]:
         started = time.perf_counter()
-        completed = subprocess.run(
+        completed = run_bounded_process(
             _worker_command(args, selectors),
             cwd=root,
-            text=True,
-            capture_output=True,
-            encoding='utf-8',
-            errors='replace',
-            check=False,
             env=dict(os.environ, PYTHONDONTWRITEBYTECODE='1', **{SKIP_BYTECODE_CLEANUP_ENV: '1'}),
+            timeout_seconds=_positive_timeout(WORKER_TIMEOUT_ENV, DEFAULT_WORKER_TIMEOUT_SECONDS),
+            heartbeat_label=f'repo-unittest-selector-worker-{index + 1}',
         )
         return {
             'index': index,
             'selectors': tuple(selectors),
             'case_count': sum(selector_counts[selector] for selector in selectors),
-            'returncode': completed.returncode,
+            'returncode': completed.exit_code if completed.exit_code is not None else 1,
             'stdout': completed.stdout,
             'stderr': completed.stderr,
+            'timed_out': completed.timed_out,
             'elapsed': time.perf_counter() - started,
         }
 
@@ -544,6 +990,8 @@ def _run_parallel_suite(args: argparse.Namespace, root: Path, suite: unittest.Te
             stream.write(f"\n=== worker {int(item['index']) + 1} failed ===\n")
             stdout = str(item['stdout'])
             stderr = str(item['stderr'])
+            if bool(item.get('timed_out')):
+                stream.write('[repo_unittest][FAIL] worker exceeded its internal timeout\n')
             if stdout:
                 stream.write(stdout.rstrip() + '\n')
             if stderr:
@@ -559,22 +1007,66 @@ def _run_parallel_suite(args: argparse.Namespace, root: Path, suite: unittest.Te
     return 0
 
 
+def _run_serial_suite(args: argparse.Namespace, suite: unittest.TestSuite) -> int:
+    if args.list_tests:
+        tests = _test_identity_rows(suite)
+        payload = {'suite': 'repo_unittest_inventory', 'tests': tests}
+        if str(args.report_json or '').strip():
+            _write_json_report(Path(str(args.report_json)).resolve(), payload)
+        if args.json_output:
+            print(json.dumps(payload, ensure_ascii=False))
+        else:
+            for item in tests:
+                print(item['id'])
+        return 0
+    started = time.perf_counter()
+    runner = _serial_runner_for(args)
+    result = runner.run(suite)
+    if not isinstance(result, TimingTextTestResult):
+        raise TypeError('repo unittest requires TimingTextTestResult')
+    worker_payload = _worker_result_payload(
+        args=argparse.Namespace(worker_index=0),
+        selectors=list(args.selectors or []),
+        result=result,
+        duration_seconds=time.perf_counter() - started,
+    )
+    aggregate = _aggregate_worker_reports(
+        reports=[worker_payload],
+        duration_seconds=float(worker_payload['durationSeconds']),
+        timed_out=False,
+    )
+    if str(args.report_json or '').strip():
+        _write_json_report(Path(str(args.report_json)).resolve(), aggregate)
+    return int(worker_payload['exitCode'])
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     os.environ['PYTHONDONTWRITEBYTECODE'] = '1'
     sys.dont_write_bytecode = True
-    args = build_parser().parse_args(list(argv or sys.argv[1:]))
+    args = build_parser().parse_args(list(sys.argv[1:] if argv is None else argv))
+    if args.json_output and not args.list_tests:
+        raise SystemExit('--json is only valid with --list-tests')
+    if args.worker_mode and not str(args.worker_report).strip():
+        raise SystemExit('--worker-report is required with --worker-mode')
+    if args.list_tests and int(args.durations or 0) > 0:
+        raise SystemExit('--durations cannot be combined with --list-tests')
     root = repo_root()
     ensure_repo_pythonpath(root)
     clean_bytecode_residue = _should_clean_bytecode_residue()
     if clean_bytecode_residue:
         _clean_repo_bytecode_residue(root)
     try:
+        inventory = _test_file_inventory(args, root)
+        if inventory and int(args.durations or 0) == 0 and not args.worker_mode:
+            return _run_inventory(args, root, inventory)
         suite = _suite_from_args(args, root)
+        if args.worker_mode:
+            return _run_worker(args, root, suite)
+        if args.list_tests or str(args.report_json or '').strip():
+            return _run_serial_suite(args, suite)
         if _parallelizable_suite(args, suite):
             return _run_parallel_suite(args, root, suite)
-        runner = _serial_runner_for(args)
-        result = runner.run(suite)
-        return 0 if result.wasSuccessful() else 1
+        return _run_serial_suite(args, suite)
     finally:
         if clean_bytecode_residue:
             _clean_repo_bytecode_residue(root)

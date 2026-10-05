@@ -1,5 +1,9 @@
+"""提供OpenClaw lib 子系统的生产实现。"""
+
 from __future__ import annotations
 
+import os
+import uuid
 from pathlib import Path
 from typing import Any, Callable
 
@@ -34,9 +38,14 @@ def run_target_operation(
         operation=operation,
         extra_args=extra_args,
     )
-    process = subprocess_run(command, check=False)
+    operation_run_id = f'target-operation-{uuid.uuid4().hex}'
+    child_env = dict(os.environ)
+    child_env['OPENCLAW_CONTROL_PLANE_SCHEDULER_RUN_ID'] = operation_run_id
+    child_env['OPENCLAW_CONTROL_PLANE_RUN_ID'] = operation_run_id
+    process = subprocess_run(command, check=False, env=child_env)
     return {
         'operation': operation,
+        'operation_run_id': operation_run_id,
         'command': command,
         'exit_code': int(process.returncode),
         'status': 'pass' if int(process.returncode) == 0 else 'fail',

@@ -29,7 +29,6 @@ done
 exit "$status"
 ' _ "$mode" {} +
 }
-
 runtime_permissions_abs_path() {
   local root="$1"
   local value="$2"
@@ -46,7 +45,6 @@ runtime_permissions_abs_path() {
   fi
   printf '%s\n' "$candidate"
 }
-
 runtime_permissions_host_state_root() {
   local root="$1"
   local default_state_root=""
@@ -54,7 +52,6 @@ runtime_permissions_host_state_root() {
   local state_dir="${HOST_STATE_DIR:-${OPENCLAW_STATE_DIR:-$root/${default_state_root#./}}}"
   runtime_permissions_abs_path "$root" "$state_dir"
 }
-
 runtime_permissions_assert_access_mode() {
   local path="$1"
   local mode="$2"
@@ -78,7 +75,6 @@ runtime_permissions_assert_access_mode() {
       ;;
   esac
 }
-
 runtime_permissions_assert_dir_manageable_or_creatable() {
   local dir="$1"
   local label="$2"
@@ -91,7 +87,6 @@ runtime_permissions_assert_dir_manageable_or_creatable() {
   [[ -d "$parent" ]] || { runtime_permissions_warn "$label 的父目录不存在：$parent；当前脚本不会自动越级补建目录。"; return 4; }
   runtime_permissions_assert_access_mode "$parent" rwx "$label 的父目录"
 }
-
 runtime_permissions_assert_file_manageable_or_creatable() {
   local path="$1"
   local label="$2"
@@ -105,7 +100,6 @@ runtime_permissions_assert_file_manageable_or_creatable() {
   [[ -d "$parent" ]] || { runtime_permissions_warn "$label 的父目录不存在：$parent；当前脚本不会自动越级补建目录。"; return 4; }
   runtime_permissions_assert_access_mode "$parent" rwx "$label 的父目录"
 }
-
 runtime_permissions_seed_json_if_missing() {
   local path="$1"
   local content="$2"
@@ -113,7 +107,6 @@ runtime_permissions_seed_json_if_missing() {
   mkdir -p "$(dirname "$path")"
   printf '%s\n' "$content" >"$path"
 }
-
 runtime_permissions_prepare_repo_support_dirs() {
   local root="$1"
   local state_dir=""
@@ -123,7 +116,6 @@ runtime_permissions_prepare_repo_support_dirs() {
   runtime_permissions_mkdir_chmod 755 "$state_dir/logs/nginx-gateway"
   runtime_permissions_mkdir_chmod 755 "$root/state/image_artifacts"
 }
-
 runtime_permissions_collect_manifest_host_bootstrap_entries() {
   local root="$1"
   local manifest="$root/$(repo_contract_relpath runtime.paths)"
@@ -213,7 +205,6 @@ runtime_permissions_collect_manifest_host_bootstrap_entries() {
     }
   ' "$manifest" | awk '!seen[$0]++'
 }
-
 runtime_permissions_render_compose_host_source() {
   local root="$1"
   local value="$2"
@@ -224,7 +215,6 @@ runtime_permissions_render_compose_host_source() {
   value="${value//$plain_token/$host_state_root}"
   printf '%s\n' "$value"
 }
-
 runtime_permissions_prepare_manifest_host_layout() {
   local root="$1"
   local action=""
@@ -237,7 +227,6 @@ runtime_permissions_prepare_manifest_host_layout() {
     esac
   done < <(runtime_permissions_collect_manifest_host_bootstrap_entries "$root")
 }
-
 runtime_permissions_collect_compose_host_bind_targets() {
   local root="$1"
   local compose="$root/deploy/docker-compose.yml"
@@ -292,7 +281,6 @@ runtime_permissions_collect_compose_host_bind_targets() {
     esac
   done | awk '!seen[$0]++'
 }
-
 runtime_permissions_align_repo_local_runtime_bind_owner() {
   local root="$1"
   local dir="$2"
@@ -322,7 +310,6 @@ runtime_permissions_align_repo_local_runtime_bind_owner() {
   chown -R "$uid:$gid" "$abs_dir"
   runtime_permissions_align_openclaw_owner_only "$abs_dir"
 }
-
 runtime_permissions_prepare_compose_bind_layout() {
   local root="$1"
   local action=""
@@ -345,36 +332,29 @@ runtime_permissions_prepare_compose_bind_layout() {
   done < <(runtime_permissions_collect_compose_host_bind_targets "$root")
   runtime_permissions_align_repo_local_runtime_bind_owner "$root" "$root/deploy/nginx/certs"
 }
-
 runtime_permissions_host_state_file() {
   local root="$1"
   local rel="$2"
   printf '%s/%s\n' "$(runtime_permissions_host_state_root "$root")" "${rel#./}"
 }
-
-
 runtime_permissions_host_gateway_state_dir() {
   local root="$1"
   printf '%s/gateway\n' "$(runtime_permissions_host_state_root "$root")"
 }
-
 runtime_permissions_host_control_plane_state_dir() {
   local root="$1"
   printf '%s/control_plane\n' "$(runtime_permissions_host_state_root "$root")"
 }
-
 runtime_permissions_host_gateway_file() {
   local root="$1"
   local rel="$2"
   printf '%s/%s\n' "$(runtime_permissions_host_gateway_state_dir "$root")" "${rel#./}"
 }
-
 runtime_permissions_host_control_plane_file() {
   local root="$1"
   local rel="$2"
   printf '%s/%s\n' "$(runtime_permissions_host_control_plane_state_dir "$root")" "${rel#./}"
 }
-
 runtime_permissions_prepare_control_plane_setup_layout() {
   local root="$1"
   local state_dir=""
@@ -391,7 +371,6 @@ runtime_permissions_prepare_control_plane_setup_layout() {
   runtime_permissions_mkdir_chmod 700 "$host_setup_dir"
   runtime_permissions_mkdir_chmod 700 "$setup_dir"
 }
-
 runtime_permissions_prepare_openclaw_state_layout() {
   local root="$1"
   local state_dir=""
@@ -417,7 +396,6 @@ runtime_permissions_prepare_openclaw_state_layout() {
   runtime_permissions_chmod_if_exists 600 "$setup_dir/one_click_deploy.latest.summary.json"
   runtime_permissions_chmod_if_exists 600 "$setup_dir/one_click_deploy.latest.summary.md"
 }
-
 runtime_permissions_prepare_image_state_layout() {
   local root="$1"
   runtime_permissions_mkdir_chmod 700 "$root/state/image_artifacts"
@@ -434,7 +412,6 @@ runtime_permissions_prepare_image_state_layout() {
     runtime_permissions_chmod_if_exists 600 "$root/state/image_pull/pulled_images.txt"
   fi
 }
-
 runtime_permissions_prepare_release_evidence_layout() {
   local root="$1"
   local evidence_dir=""
@@ -442,7 +419,6 @@ runtime_permissions_prepare_release_evidence_layout() {
   runtime_permissions_mkdir_chmod 700 "$(dirname "$evidence_dir")"
   runtime_permissions_mkdir_chmod 700 "$evidence_dir"
 }
-
 runtime_permissions_governed_release_paths() {
   local root="$1"
   local object_families=""
@@ -457,7 +433,6 @@ runtime_permissions_governed_release_paths() {
     | select((test("(^|/)\\.\\.(/|$)") | not))
   ' "$object_families" | awk 'NF && !seen[$0]++'
 }
-
 runtime_permissions_harden_deploy_inputs() {
   local root="$1"
   runtime_permissions_chmod_if_exists 600 "$root/deploy/.env"
@@ -469,7 +444,6 @@ runtime_permissions_harden_deploy_inputs() {
     find "$root/agent/extensions" -path '*/deploy/extension.env' -type f -exec chmod 600 {} +
   fi
 }
-
 runtime_permissions_deploy_env_value() {
   local root="$1"
   local key="$2"
@@ -489,7 +463,6 @@ runtime_permissions_deploy_env_value() {
     }
   ' "$env_file" | tail -n 1
 }
-
 runtime_permissions_validate_runtime_uid_gid_pair() {
   local uid="$1"
   local gid="$2"
@@ -504,7 +477,6 @@ runtime_permissions_validate_runtime_uid_gid_pair() {
   runtime_permissions_warn "$source_label 中的 OPENCLAW_RUNTIME_UID/GID 不完整或不是数字：${uid:-<empty>}:${gid:-<empty>}"
   return 4
 }
-
 runtime_permissions_running_runtime_uid_gid() {
   command -v docker >/dev/null 2>&1 || return 1
   local name=""
@@ -529,7 +501,6 @@ runtime_permissions_running_runtime_uid_gid() {
   runtime_permissions_warn "未从环境或 deploy/.env 读取到 OPENCLAW_RUNTIME_UID/GID，使用正在运行的 runtime 容器用户 $resolved 收口 host state owner。"
   printf '%s\n' "$resolved"
 }
-
 runtime_permissions_resolve_runtime_uid_gid() {
   local root="$1"
   local uid="${OPENCLAW_RUNTIME_UID:-}"
@@ -575,13 +546,11 @@ runtime_permissions_resolve_runtime_uid_gid() {
 
   printf '%s:%s\n' "$(id -u)" "$(id -g)"
 }
-
 runtime_permissions_assert_root_runtime_uid_gid_resolvable() {
   local root="$1"
   [[ "$(id -u)" == '0' ]] || return 0
   runtime_permissions_resolve_runtime_uid_gid "$root" >/dev/null
 }
-
 runtime_permissions_align_openclaw_owner_only() {
   local dir="$1"
   [[ -d "$dir" ]] || return 0
@@ -589,7 +558,6 @@ runtime_permissions_align_openclaw_owner_only() {
   runtime_permissions_find_chmod_existing 600 "$dir" -type f
   runtime_permissions_restore_extension_env_exec_bits "$dir"
 }
-
 runtime_permissions_align_repo_local_state_owner_only() {
   local root="$1"
   local dir="$2"
@@ -621,7 +589,6 @@ runtime_permissions_align_repo_local_state_owner_only() {
   chown -R "$uid:$gid" "$abs_dir"
   runtime_permissions_align_openclaw_owner_only "$abs_dir"
 }
-
 runtime_permissions_restore_extension_env_exec_bits() {
   local dir="$1"
   local extension_envs_dir="$dir/control_plane/extension_envs"
@@ -629,7 +596,6 @@ runtime_permissions_restore_extension_env_exec_bits() {
   runtime_permissions_find_chmod_existing 700 "$extension_envs_dir" -type d
   runtime_permissions_find_chmod_existing 700 "$extension_envs_dir" -path '*/bin/*' -type f
 }
-
 runtime_permissions_align_openclaw_runtime_owner_only() {
   local root="$1"
   local dir="$2"
@@ -659,7 +625,6 @@ runtime_permissions_align_openclaw_runtime_owner_only() {
   chown -R "$uid:$gid" "$abs_dir"
   runtime_permissions_align_openclaw_owner_only "$abs_dir"
 }
-
 runtime_permissions_harden_bootstrap_outputs() {
   local root="$1"
   local state_dir=""
@@ -694,7 +659,6 @@ runtime_permissions_harden_bootstrap_outputs() {
     runtime_permissions_find_chmod_existing 600 "$local_ro_dir" -type f
   fi
 }
-
 runtime_permissions_align_release_evidence_readable() {
   local root="$1"
   local rel=""
@@ -718,7 +682,6 @@ runtime_permissions_align_release_evidence_readable() {
     fi
   done < <(runtime_permissions_governed_release_paths "$root")
 }
-
 runtime_permissions_collect_repo_exec_candidates() {
   local root="$1"
   local path=''
@@ -751,7 +714,6 @@ runtime_permissions_collect_repo_exec_candidates() {
     esac
   done | awk -v RS='\0' 'NF { if (!seen[$0]++) printf "%s%c", $0, 0 }'
 }
-
 runtime_permissions_mark_shebang_executable() {
   local root="$1"
   local file=""
@@ -767,7 +729,6 @@ runtime_permissions_mark_shebang_executable() {
     chmod 755 "${batch[@]}"
   fi
 }
-
 runtime_permissions_harden_certs() {
   local root="$1"
   if [[ -d "$root/deploy/nginx/certs" ]]; then
@@ -777,14 +738,12 @@ runtime_permissions_harden_certs() {
     find "$root/deploy/nginx/certs" -type f -exec chmod 600 {} +
   fi
 }
-
 runtime_permissions_require_setfacl() {
   command -v setfacl >/dev/null 2>&1 || {
-    runtime_permissions_warn '缺少 setfacl；无法为 cap-drop 后的 private ingress 容器授予证书读取与 nginx 日志写入 ACL。请先执行 prepare_docker_host.sh --install-base-tools 或安装 acl 包。'
+    runtime_permissions_warn '缺少 setfacl；无法为 cap-drop 后的 private ingress 容器授予证书读取与 nginx 日志写入 ACL。请先执行 prepare_docker_host.sh --os auto --install-base-tools 或安装 acl 包。'
     return 4
   }
 }
-
 runtime_permissions_apply_acl() {
   local acl_spec="$1"
   local path="$2"
@@ -792,14 +751,12 @@ runtime_permissions_apply_acl() {
   runtime_permissions_require_setfacl || return $?
   setfacl -m "$acl_spec" "$path"
 }
-
 runtime_permissions_selinux_active() {
   command -v getenforce >/dev/null 2>&1 || return 1
   local mode=""
   mode="$(getenforce 2>/dev/null || true)"
   [[ "$mode" == "Enforcing" || "$mode" == "Permissive" ]]
 }
-
 runtime_permissions_apply_container_selinux_context() {
   local path="$1"
   [[ -e "$path" ]] || return 0
@@ -820,7 +777,6 @@ runtime_permissions_apply_container_selinux_context() {
     }
   fi
 }
-
 runtime_permissions_prepare_runtime_bind_mount_selinux_contexts() {
   local root="$1"
   local state_root=""
@@ -839,7 +795,6 @@ runtime_permissions_prepare_runtime_bind_mount_selinux_contexts() {
     runtime_permissions_apply_container_selinux_context "$path" || return $?
   done
 }
-
 runtime_permissions_prepare_ingress_nginx_conf_acl() {
   local root="$1"
   local nginx_conf=""
@@ -853,7 +808,6 @@ runtime_permissions_prepare_ingress_nginx_conf_acl() {
   runtime_permissions_apply_acl u:0:r "$nginx_conf" || return $?
   runtime_permissions_apply_container_selinux_context "$nginx_conf" || return $?
 }
-
 runtime_permissions_prepare_ingress_log_acl() {
   local root="$1"
   local nginx_log_dir=""
@@ -868,7 +822,6 @@ runtime_permissions_prepare_ingress_log_acl() {
   runtime_permissions_apply_acl u:0:rw "$nginx_log_dir/error.log" || return $?
   runtime_permissions_apply_container_selinux_context "$nginx_log_dir" || return $?
 }
-
 runtime_permissions_prepare_ingress_cert_acl() {
   local root="$1"
   local cert_dir="$root/deploy/nginx/certs"
@@ -883,7 +836,6 @@ runtime_permissions_prepare_ingress_cert_acl() {
   done < <(find "$cert_dir" -type f \( -name '*.crt' -o -name '*.key' -o -name '*.pem' \) -print0)
   runtime_permissions_apply_container_selinux_context "$cert_dir" || return $?
 }
-
 runtime_permissions_prepare_ingress_cap_drop_mount_access() {
   local root="$1"
   runtime_permissions_prepare_ingress_nginx_conf_acl "$root"

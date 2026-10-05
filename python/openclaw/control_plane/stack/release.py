@@ -62,7 +62,7 @@ BASE_RELEASE_EXCLUDED_ROOT_DIRS = {
     'state',
     'tmp',
 }
-BASE_RELEASE_EXCLUDED_ANY_PARTS = {'__pycache__', '.pytest_cache', '.mypy_cache'}
+BASE_RELEASE_EXCLUDED_ANY_PARTS = {'__pycache__', '.pytest_cache', '.mypy_cache', '.ruff_cache'}
 
 
 class StackReleaseError(RuntimeError):
@@ -183,7 +183,6 @@ def _project_version(repo_root: Path) -> str:
 
 
 def platform_version_payload(repo_root: Path) -> dict[str, str]:
-    """读取平台版本真源，返回 stack lock 使用的 control plane/schema/runtime 版本。"""
     path = repo_root / PLATFORM_VERSION_REL_PATH
     fallback_version = _project_version(repo_root)
     payload = _read_json_object(path, default={})
@@ -215,10 +214,11 @@ def _base_release_git_pathspecs() -> list[str]:
     pathspecs = ['.']
     pathspecs.extend(f':(exclude){rel_path}' for rel_path in sorted(BASE_RELEASE_EXCLUDED_EXACT_PATHS))
     pathspecs.extend(f':(exclude){rel_dir}/**' for rel_dir in sorted(BASE_RELEASE_EXCLUDED_ROOT_DIRS))
+    pathspecs.extend(
+        f':(glob,exclude)**/{part}/**'
+        for part in sorted(BASE_RELEASE_EXCLUDED_ANY_PARTS)
+    )
     pathspecs.extend([
-        ':(glob,exclude)**/__pycache__/**',
-        ':(glob,exclude)**/.pytest_cache/**',
-        ':(glob,exclude)**/.mypy_cache/**',
         ':(glob,exclude)**/*.pyc',
         ':(glob,exclude)**/*.pyo',
     ])
@@ -226,7 +226,6 @@ def _base_release_git_pathspecs() -> list[str]:
 
 
 def base_release_bundle_hash(repo_root: Path) -> str:
-    """计算平台基座层源码 hash，排除扩展包、运行态 state、证书和临时产物。"""
     hasher = hashlib.sha256()
     paths = [
         path
@@ -329,7 +328,6 @@ def update_stack_source_provenance(
     source_metadata_path: str | Path | None = None,
     source_metadata: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """把升级或物化得到的来源元数据写回 provenance 真源。"""
     repo_root = Path(repo_root).resolve()
     explicit_metadata = _explicit_source_metadata(source_metadata_path, source_metadata)
     metadata = _merge_source_metadata(_stack_source_provenance_metadata(repo_root), explicit_metadata)
@@ -640,15 +638,6 @@ def build_stack_lock_payload(
     base_commit: str = '',
     base_tag: str = '',
 ) -> dict[str, Any]:
-    """构建当前物化 stack lock 载荷。
-
-    参数说明：
-    - repo_root：仓库根目录。
-    - source_metadata_path/source_metadata：显式来源元数据，二者会与仓内 provenance 合并。
-    - base_repo/base_commit/base_tag：手工指定基座来源，不能和 metadata.base 同时使用。
-
-    返回用于写入 stack.lock 的字典；来源元数据冲突或缺失时抛出 StackReleaseError。
-    """
     repo_root = Path(repo_root).resolve()
     explicit_metadata = _explicit_source_metadata(source_metadata_path, source_metadata)
     metadata = _merge_source_metadata(_stack_source_provenance_metadata(repo_root), explicit_metadata)
@@ -760,7 +749,6 @@ def _release_equivalent_base_commit_mismatch(
     actual_payload: dict[str, Any],
     source_metadata: dict[str, Any],
 ) -> bool:
-    """Return true when the checked lock and current HEAD describe the same base files."""
     actual_base = actual_payload.get('base') if isinstance(actual_payload.get('base'), dict) else {}
     expected_commit = str(expected_base.get('commit') or '').strip()
     actual_commit = str(actual_base.get('commit') or '').strip()
@@ -943,16 +931,6 @@ def verify_stack_lock(
     source_metadata: dict[str, Any] | None = None,
     strict_release: bool = False,
 ) -> dict[str, Any]:
-    """校验已登记 stack lock 是否匹配当前物化树。
-
-    参数说明：
-    - repo_root：仓库根目录。
-    - lock_path：可选 stack lock 路径，缺省读取仓库固定位置。
-    - source_metadata_path/source_metadata：用于复现期望 lock 的来源元数据。
-    - strict_release：为 True 时额外要求完整 release 来源证明。
-
-    返回包含 ok、issues 和期望/实际摘要的字典；lock 文件不存在或 JSON 非对象时抛错。
-    """
     repo_root = Path(repo_root).resolve()
     resolved_lock_path = repo_root / STACK_LOCK_REL_PATH if not str(lock_path or '').strip() else Path(lock_path).resolve()
     actual = _read_json_object(resolved_lock_path)
@@ -1031,7 +1009,6 @@ def write_stack_lock(
     base_commit: str = '',
     base_tag: str = '',
 ) -> dict[str, Any]:
-    """生成并写出 stack lock；output_path 为空时写入仓库默认锁文件。"""
     repo_root = Path(repo_root).resolve()
     resolved_output = repo_root / STACK_LOCK_REL_PATH if not str(output_path or '').strip() else Path(output_path).resolve()
     payload = build_stack_lock_payload(
@@ -1227,7 +1204,6 @@ def materialize_stack(
     output_path: str | Path | None = None,
     source_metadata_path: str | Path | None = None,
 ) -> dict[str, Any]:
-    """按 composition 物化扩展源码，并刷新 extensions index、profile registry 与 stack lock。"""
     repo_root = Path(repo_root).resolve()
     if not refresh_current and not composition_path:
         raise StackReleaseError('materialize 需要 --composition 或 --refresh-current')
@@ -1340,7 +1316,6 @@ def _emit_text(payload: dict[str, Any]) -> int:
 
 
 def cmd_show(args: argparse.Namespace) -> int:
-    """处理 show 子命令，只计算并输出 stack lock payload，不写文件。"""
     if str(args.source_metadata or '').strip() and any(
         str(value or '').strip()
         for value in (args.base_repo, args.base_commit, args.base_tag)
@@ -1357,13 +1332,13 @@ def cmd_show(args: argparse.Namespace) -> int:
 
 
 def cmd_lock(args: argparse.Namespace) -> int:
-    """处理 lock 子命令；dry-run 只输出 payload，正式模式会写 stack lock。"""
     repo_root = _repo_root(args.repo_root)
     has_source_metadata = bool(str(args.source_metadata or '').strip())
     has_base_overrides = any(
         str(value or '').strip()
         for value in (args.base_repo, args.base_commit, args.base_tag)
     )
+    worktree_metadata: dict[str, Any] = {}
     if str(args.source_metadata or '').strip() and any(
         str(value or '').strip()
         for value in (args.base_repo, args.base_commit, args.base_tag)
@@ -1371,12 +1346,17 @@ def cmd_lock(args: argparse.Namespace) -> int:
         raise StackReleaseError('base source metadata cannot be mixed with --base-repo/--base-commit/--base-tag')
     if bool(args.update_source_provenance) and not str(args.source_metadata or '').strip():
         raise StackReleaseError('--update-source-provenance 需要同时提供 --source-metadata')
+    if not has_source_metadata and not has_base_overrides:
+        worktree_metadata = _current_worktree_source_metadata(repo_root)
+        if not worktree_metadata:
+            raise StackReleaseError(
+                '当前目录缺少可读取的 Git 来源；请通过 --source-metadata 提供 source_sync_metadata.json '
+                '并在正式刷新时同时使用 --update-source-provenance'
+            )
     if bool(args.update_source_provenance) and not bool(args.dry_run):
         update_stack_source_provenance(repo_root, source_metadata_path=args.source_metadata)
-    elif not bool(args.dry_run) and not has_source_metadata and not has_base_overrides:
-        worktree_metadata = _current_worktree_source_metadata(repo_root)
-        if worktree_metadata:
-            update_stack_source_provenance(repo_root, source_metadata=worktree_metadata)
+    elif not bool(args.dry_run) and worktree_metadata:
+        update_stack_source_provenance(repo_root, source_metadata=worktree_metadata)
     payload = build_stack_lock_payload(
         repo_root,
         source_metadata_path=args.source_metadata,
@@ -1395,18 +1375,19 @@ def cmd_lock(args: argparse.Namespace) -> int:
 
 
 def cmd_verify(args: argparse.Namespace) -> int:
-    """处理 verify 子命令，比较当前仓库事实与已提交 stack lock 是否一致。"""
     payload = verify_stack_lock(
         _repo_root(args.repo_root),
         lock_path=args.lock_path,
         source_metadata_path=args.source_metadata,
         strict_release=bool(args.strict_release),
     )
-    return _print_json(payload) if bool(args.json) else _emit_text(payload)
+    if bool(args.json):
+        _print_json(payload)
+        return 0 if str(payload.get('status') or '').strip().lower() == 'ok' else 1
+    return _emit_text(payload)
 
 
 def cmd_materialize(args: argparse.Namespace) -> int:
-    """处理 materialize 子命令，按组合清单同步扩展源码并刷新派生真源。"""
     payload = materialize_stack(
         _repo_root(args.repo_root),
         composition_path=args.composition,
@@ -1431,7 +1412,6 @@ def _add_base_overrides(parser: argparse.ArgumentParser) -> None:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    """构造 stack release CLI 参数解析器，注册 show/lock/verify/materialize 子命令。"""
     parser = argparse.ArgumentParser(prog='python -m openclaw.cli control-plane stack')
     subparsers = parser.add_subparsers(dest='command', required=True)
 
@@ -1467,7 +1447,6 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
-    """执行 stack release CLI，并把可预期异常转换为统一失败码。"""
     parser = build_parser()
     args = parser.parse_args(sys.argv[1:] if argv is None else argv)
     try:

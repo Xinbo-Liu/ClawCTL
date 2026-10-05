@@ -60,13 +60,11 @@ _JSON_CACHE_INVALID = object()
 
 
 def _prune_lru_cache(cache: OrderedDict[Any, Any], max_entries: int) -> None:
-    """把缓存裁剪到允许的最大条目数。"""
     while len(cache) > max_entries:
         cache.popitem(last=False)
 
 
 def _path_key(path: Path) -> str:
-    """为路径生成缓存键。"""
     try:
         return str(path.resolve())
     except (OSError, RuntimeError):
@@ -74,7 +72,6 @@ def _path_key(path: Path) -> str:
 
 
 def _file_signature(path: Path) -> _FileSignature:
-    """生成文件签名，用于缓存命中判断。"""
     try:
         stat = path.stat()
     except FileNotFoundError:
@@ -83,14 +80,12 @@ def _file_signature(path: Path) -> _FileSignature:
 
 
 def _invalidate_json_cache(path: Path) -> None:
-    """失效指定路径的 JSON 缓存。"""
     key = _path_key(path)
     with _JSON_CACHE_LOCK:
         _JSON_CACHE.pop(key, None)
 
 
 def _update_json_cache(path: Path, payload: Any) -> None:
-    """更新指定路径的 JSON 缓存。"""
     key = _path_key(path)
     signature = _file_signature(path)
     with _JSON_CACHE_LOCK:
@@ -100,7 +95,6 @@ def _update_json_cache(path: Path, payload: Any) -> None:
 
 
 def _invalidate_history_cache(path: Path) -> None:
-    """失效指定路径的历史尾读缓存。"""
     key = _path_key(path)
     with _HISTORY_CACHE_LOCK:
         stale_keys = [item_key for item_key in _HISTORY_CACHE if item_key[0] == key]
@@ -109,7 +103,6 @@ def _invalidate_history_cache(path: Path) -> None:
 
 
 def read_json(path: Path, default: Any) -> Any:
-    """读取 JSON，并在失败时返回默认值。"""
     key = _path_key(path)
     signature = _file_signature(path)
     with _JSON_CACHE_LOCK:
@@ -141,7 +134,6 @@ def read_json(path: Path, default: Any) -> Any:
 
 
 def write_json(path: Path, payload: Any) -> None:
-    """原子写入 JSON，并刷新相关缓存。"""
     serialized = json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
     write_text_atomic(path, serialized)
     _update_json_cache(path, payload)
@@ -149,14 +141,12 @@ def write_json(path: Path, payload: Any) -> None:
 
 
 def append_jsonl(path: Path, payload: dict[str, Any]) -> None:
-    """向 JSONL 文件追加一行并刷新缓存。"""
     write_jsonl_row(path, payload)
     _invalidate_json_cache(path)
     _invalidate_history_cache(path)
 
 
 def _tail_jsonl_dict_rows(path: Path, limit: int, *, block_size: int = 65536) -> list[dict[str, Any]]:
-    """从 JSONL 文件尾部读取若干字典行。"""
     rows: list[dict[str, Any]] = []
     with path.open('rb') as fh:
         fh.seek(0, os.SEEK_END)
@@ -196,7 +186,6 @@ def _tail_jsonl_dict_rows(path: Path, limit: int, *, block_size: int = 65536) ->
 
 
 def tail_history(path: Path, limit: int = 20) -> list[dict[str, Any]]:
-    """读取 history JSONL 的尾部记录。"""
     if limit <= 0:
         return []
     key = (_path_key(path), int(limit))
@@ -229,7 +218,6 @@ def tail_history(path: Path, limit: int = 20) -> list[dict[str, Any]]:
 
 
 def runtime_files(state_root: Path, config: dict[str, Any]) -> RuntimeFiles:
-    """根据 state 根目录与 service 配置推导运行态文件路径。"""
     service = json_object(config.get('service'))
     state_dir_name = str(service.get('stateDirName') or 'control_plane_scheduler').strip()
     heartbeat_name = str(service.get('heartbeatFile') or 'control_plane_scheduler_heartbeat.json').strip()

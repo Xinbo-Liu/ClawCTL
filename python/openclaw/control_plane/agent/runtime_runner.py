@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Neutral runner for extension-owned agent bindings."""
+"""提供OpenClaw 控制平面子系统的生产实现。"""
 from __future__ import annotations
 
 from datetime import datetime
@@ -11,7 +11,7 @@ from openclaw.control_plane.registry.job_execution_plans import (
 )
 from openclaw.lib.cli.common import CliError
 from openclaw.lib.io.json_access import json_array, json_object
-from openclaw.scheduler.runtime import run_subprocess_job
+from openclaw.scheduler.engine import run_subprocess_job
 
 
 def prepare_job(*, job: dict[str, Any], config: dict[str, Any]) -> dict[str, Any]:

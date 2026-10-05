@@ -22,7 +22,6 @@ OUT_JSON="$(runtime_permissions_host_control_plane_file "$ROOT_DIR" setup/ingres
 WRITE_OUTPUT=1
 REQUIRE_NGINX_POLICY=0
 REPO_PYTHON_ENV_ARGS=()
-
 usage() {
   cat <<'USAGE'
 用法：
@@ -47,16 +46,13 @@ usage() {
   -h, --help               显示帮助
 USAGE
 }
-
 fail() {
   echo "[check_ingress_boundary_evidence][FAIL] $*" >&2
   exit 2
 }
-
 note() {
   echo "[check_ingress_boundary_evidence] $*"
 }
-
 align_written_output_owner() {
   if [[ "$WRITE_OUTPUT" != "1" || "$(id -u)" != "0" ]]; then
     return 0
@@ -80,14 +76,12 @@ align_written_output_owner() {
       ;;
   esac
 }
-
 load_repo_python_env_args() {
   REPO_PYTHON_ENV_ARGS=()
   while IFS= read -r -d '' item; do
     REPO_PYTHON_ENV_ARGS+=("$item")
   done < <(openclaw_repo_python_env_args "$ROOT_DIR")
 }
-
 run_ingress_backend() {
   bash "$PYTHON_RUNNER" --workdir "$ROOT_DIR" "${REPO_PYTHON_ENV_ARGS[@]+"${REPO_PYTHON_ENV_ARGS[@]}"}" "$@"
 }
@@ -177,7 +171,6 @@ cleanup() {
   runtime_compose_cleanup_transient_env_files "$ROOT_DIR" "$compose_tmp_dir"
 }
 trap cleanup EXIT
-
 capture_command_snapshot_entry() {
   local key="$1"
   shift
@@ -199,7 +192,6 @@ capture_command_snapshot_entry() {
   mv "$update_path" "$command_snapshot_json"
   rm -f "$stdout_path" "$stderr_path"
 }
-
 capture_host_command_snapshot() {
   printf '{}\n' > "$command_snapshot_json"
   capture_command_snapshot_entry 'iptables-save' iptables-save

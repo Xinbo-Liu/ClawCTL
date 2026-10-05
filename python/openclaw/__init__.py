@@ -26,5 +26,5 @@ atexit.register(_cleanup_local_bytecode_residue)
 if __name__ == 'python.openclaw':
     raise ImportError(
         '禁止通过 `python.openclaw...` 导入 OpenClaw；请改用 `openclaw...`，'
-        '例如 `python -m unittest openclaw.tests...` 或 `python -m openclaw.testing.repo_host ...`。'
+        '正式命令通过 `scripts/runtime/run_openclaw_python_tool.sh` 或仓库测试 shell wrapper 进入容器。'
     )

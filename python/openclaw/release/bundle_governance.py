@@ -102,37 +102,41 @@ def _git_index_file_modes() -> dict[str, str]:
     """读取 Git index 中的文件模式。
 
     返回：
-        返回 dict[str, str]，键为仓库相对路径，值为 Git index mode；当 Git 不可用或当前目录不是工作树时返回空字典。
+        返回仓库相对路径到 Git index mode 的映射；无 Git 目录的源码包返回空映射并使用文件权限。
 
     副作用：
-        调用 `git ls-files --stage` 读取工作树 index；Git 不可用或命令失败时回退为空映射。
+        调用 `git ls-files --stage -z` 读取工作树 index；工作树存在但 Git 无法读取时抛出治理错误。
     """
+    if not (ROOT_DIR / '.git').exists():
+        return {}
     try:
         proc = subprocess.run(
-            ['git', 'ls-files', '--stage'],
+            ['git', 'ls-files', '--stage', '-z'],
             cwd=ROOT_DIR,
-            text=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL,
             check=False,
         )
-    except OSError:
-        return {}
+    except OSError as exc:
+        raise BundleGovernanceError('无法读取交付源码的 Git 索引；请准备 Git 后重新导出') from exc
     if proc.returncode != 0:
-        return {}
+        raise BundleGovernanceError(f'读取交付源码 Git 索引失败（exit={proc.returncode}）；请检查工作树后重新导出')
     modes: dict[str, str] = {}
-    for raw_line in proc.stdout.splitlines():
-        if not raw_line.strip() or '\t' not in raw_line:
+    for record in proc.stdout.split(b'\0'):
+        if not record:
             continue
-        metadata, rel_path = raw_line.split('\t', 1)
+        if b'\t' not in record:
+            raise BundleGovernanceError('Git 索引记录格式不合法；请检查工作树后重新导出')
+        metadata, rel_path = record.split(b'\t', 1)
         parts = metadata.split()
-        if not parts:
-            continue
-        modes[rel_path.replace('\\', '/')] = parts[0]
+        if len(parts) != 3 or parts[2] != b'0':
+            raise BundleGovernanceError('Git 索引含未合并或不合法记录；请解决工作树问题后重新导出')
+        modes[rel_path.decode('utf-8', errors='surrogateescape')] = parts[0].decode('ascii')
     return modes
 
 
 def _zip_external_mode(rel_path: str, git_index_modes: dict[str, str]) -> int:
+    """已跟踪普通文件采用索引权限；无 Git 的源码包和未跟踪交付材料保留文件权限。"""
     git_mode = git_index_modes.get(rel_path)
     if git_mode == '100755':
         return 0o100755
@@ -157,10 +161,10 @@ def compute_bom(file_list: list[str]) -> list[dict[str, Any]]:
 
 
 def _write_zip(bundle_id: str, file_list: list[str], output_path: Path) -> dict[str, Any]:
+    git_index_modes = _git_index_file_modes()
     output_path.parent.mkdir(parents=True, exist_ok=True)
     if output_path.exists():
         output_path.unlink()
-    git_index_modes = _git_index_file_modes()
     with zipfile.ZipFile(output_path, 'w', compression=zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
         for rel in file_list:
             src = ROOT_DIR / rel

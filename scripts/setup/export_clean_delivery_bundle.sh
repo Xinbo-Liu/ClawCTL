@@ -169,6 +169,10 @@ run_bundle_python() {
   )
   local mount_dir=''
   add_host_tool_overlay jq 1
+  if [[ -e "$ROOT_DIR/.git" ]]; then
+    # Git 工作树导出按索引保留权限，不能由生成文件的临时落盘权限替代。
+    add_host_tool_overlay git 1
+  fi
   runner_args+=(--mount "$TOOL_OVERLAY_DIR")
   runner_args+=(--env "PATH=$TOOL_OVERLAY_DIR/bin:/usr/local/bin:/usr/bin:/bin")
   runner_args+=(--env "LD_LIBRARY_PATH=$TOOL_OVERLAY_DIR/lib")
